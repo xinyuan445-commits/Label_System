@@ -1,16 +1,18 @@
 export type ShellEnvironment = 'development' | 'test' | 'production'
+export type ScanSoundMode = 'short' | 'soft' | 'double' | 'off'
 
 export interface ShellConfig {
   environment: ShellEnvironment
   developmentUrl: string
   testUrl: string
   productionUrl: string
+  scanSound: ScanSoundMode
   bridgeVersion: string
 }
 
 interface ShellMessage {
   source: 'label-system-pda'
-  type: 'config' | 'config-saved' | 'config-error'
+  type: 'config' | 'config-saved' | 'config-error' | 'sound-tested'
   payload?: unknown
 }
 
@@ -22,11 +24,16 @@ const defaultConfig: ShellConfig = {
   developmentUrl: 'http://172.16.10.45:5173/',
   testUrl: 'http://172.16.10.45:5174/',
   productionUrl: 'http://172.16.10.45:5175/',
+  scanSound: 'short',
   bridgeVersion: 'pda-bridge-v1',
 }
 
 function isEnvironment(value: unknown): value is ShellEnvironment {
   return value === 'development' || value === 'test' || value === 'production'
+}
+
+function isScanSound(value: unknown): value is ScanSoundMode {
+  return value === 'short' || value === 'soft' || value === 'double' || value === 'off'
 }
 
 function normalizeUrl(value: string): string {
@@ -55,6 +62,7 @@ function parseConfig(value: unknown): ShellConfig {
     developmentUrl: normalizeUrl(String(candidate.developmentUrl || '')),
     testUrl: normalizeUrl(String(candidate.testUrl || '')),
     productionUrl: normalizeUrl(String(candidate.productionUrl || '')),
+    scanSound: isScanSound(candidate.scanSound) ? candidate.scanSound : 'short',
     bridgeVersion: String(candidate.bridgeVersion || defaultConfig.bridgeVersion),
   }
 }
@@ -142,6 +150,47 @@ export async function saveShellConfig(value: ShellConfig): Promise<void> {
   await waitForNativeConfig(['config-saved', 'config-error'], () => {
     window.parent.postMessage(
       { source: 'label-system-h5', type: 'config-save', payload: config },
+      nativeBridgeOrigin,
+    )
+  })
+}
+
+function playBrowserTone(mode: ScanSoundMode): void {
+  if (mode === 'off') return
+  const AudioContextClass = window.AudioContext
+  const context = new AudioContextClass()
+  const play = (frequency: number, startAt: number, duration: number): void => {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.frequency.value = frequency
+    gain.gain.setValueAtTime(0.0001, startAt)
+    gain.gain.exponentialRampToValueAtTime(0.28, startAt + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(startAt)
+    oscillator.stop(startAt + duration + 0.02)
+  }
+
+  const now = context.currentTime
+  if (mode === 'double') {
+    play(1800, now, 0.09)
+    play(1800, now + 0.15, 0.09)
+  } else {
+    play(mode === 'soft' ? 1100 : 1900, now, mode === 'soft' ? 0.16 : 0.1)
+  }
+  window.setTimeout(() => void context.close(), 500)
+}
+
+export async function testScanSound(mode: ScanSoundMode): Promise<void> {
+  if (!isNativeShell()) {
+    playBrowserTone(mode)
+    return
+  }
+
+  await waitForNativeConfig(['sound-tested', 'config-error'], () => {
+    window.parent.postMessage(
+      { source: 'label-system-h5', type: 'sound-test', payload: { mode } },
       nativeBridgeOrigin,
     )
   })

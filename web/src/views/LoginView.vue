@@ -3,12 +3,6 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
-import {
-  createDefaultShellConfig,
-  loadShellConfig,
-  saveShellConfig,
-  type ShellConfig,
-} from '@/services/shell-config'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -17,57 +11,11 @@ const username = ref('admin')
 const password = ref('admin')
 const errorMessage = ref('')
 const submitting = ref(false)
-const settingsOpen = ref(false)
-const settingsLoading = ref(false)
-const settingsSaving = ref(false)
-const settingsError = ref('')
-const shellConfig = ref<ShellConfig>(createDefaultShellConfig())
-
-async function openSettings(): Promise<void> {
-  settingsOpen.value = true
-  settingsLoading.value = true
-  settingsError.value = ''
-
-  try {
-    shellConfig.value = await loadShellConfig()
-  } catch (error) {
-    settingsError.value = error instanceof Error ? error.message : '读取失败'
-  } finally {
-    settingsLoading.value = false
-  }
-}
-
-function closeSettings(): void {
-  if (!settingsSaving.value) {
-    settingsOpen.value = false
-  }
-}
-
-async function handleSettingsSave(): Promise<void> {
-  if (settingsSaving.value) {
-    return
-  }
-
-  settingsSaving.value = true
-  settingsError.value = ''
-
-  try {
-    await saveShellConfig(shellConfig.value)
-    settingsOpen.value = false
-  } catch (error) {
-    settingsError.value = error instanceof Error ? error.message : '保存失败'
-  } finally {
-    settingsSaving.value = false
-  }
-}
 
 async function handleSubmit(): Promise<void> {
-  if (submitting.value) {
-    return
-  }
+  if (submitting.value) return
 
   const account = username.value.trim()
-
   if (!account || !password.value) {
     errorMessage.value = '请输入账号和密码'
     return
@@ -75,7 +23,6 @@ async function handleSubmit(): Promise<void> {
 
   submitting.value = true
   errorMessage.value = ''
-
   const result = await authStore.login(account, password.value)
 
   if (!result.success) {
@@ -91,7 +38,12 @@ async function handleSubmit(): Promise<void> {
 <template>
   <main class="login-page">
     <section class="login-panel" aria-labelledby="login-title">
-      <button class="settings-button" type="button" aria-label="设置" @click="openSettings">
+      <button
+        class="settings-button"
+        type="button"
+        aria-label="设置"
+        @click="router.push({ name: 'settings' })"
+      >
         设置
       </button>
 
@@ -124,58 +76,11 @@ async function handleSubmit(): Promise<void> {
         </label>
 
         <p class="form-error" aria-live="polite">{{ errorMessage }}</p>
-
         <button class="primary-button" type="submit" :disabled="submitting">
           {{ submitting ? '登录中' : '登录' }}
         </button>
       </form>
     </section>
-
-    <div v-if="settingsOpen" class="settings-backdrop" @click.self="closeSettings">
-      <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <header class="settings-header">
-          <h2 id="settings-title">地址</h2>
-          <button type="button" class="close-button" aria-label="关闭" @click="closeSettings">×</button>
-        </header>
-
-        <div v-if="!settingsLoading" class="environment-list">
-          <label class="environment-card">
-            <span class="environment-name">
-              <input v-model="shellConfig.environment" type="radio" value="development" />
-              开发
-            </span>
-            <input v-model="shellConfig.developmentUrl" class="url-input" inputmode="url" />
-          </label>
-
-          <label class="environment-card">
-            <span class="environment-name">
-              <input v-model="shellConfig.environment" type="radio" value="test" />
-              测试
-            </span>
-            <input v-model="shellConfig.testUrl" class="url-input" inputmode="url" />
-          </label>
-
-          <label class="environment-card">
-            <span class="environment-name">
-              <input v-model="shellConfig.environment" type="radio" value="production" />
-              生产
-            </span>
-            <input v-model="shellConfig.productionUrl" class="url-input" inputmode="url" />
-          </label>
-        </div>
-
-        <div v-else class="settings-loading">加载中</div>
-        <p class="settings-error" aria-live="polite">{{ settingsError }}</p>
-        <button
-          class="primary-button"
-          type="button"
-          :disabled="settingsLoading || settingsSaving"
-          @click="handleSettingsSave"
-        >
-          {{ settingsSaving ? '切换中' : '切换' }}
-        </button>
-      </section>
-    </div>
   </main>
 </template>
 
@@ -260,7 +165,6 @@ h1 {
   border-radius: 13px;
   background: #fff;
   color: #17233d;
-  font: inherit;
   font-size: 17px;
   font-weight: 500;
   outline: none;
@@ -299,107 +203,6 @@ h1 {
   background: #8db3e2;
   cursor: default;
   box-shadow: none;
-}
-
-.settings-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgba(17, 34, 57, 0.42);
-}
-
-.settings-panel {
-  width: min(100%, 460px);
-  padding: 24px;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 22px 70px rgba(16, 36, 62, 0.28);
-}
-
-.settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
-}
-
-.settings-header h2 {
-  color: #17365d;
-  font-size: 22px;
-}
-
-.close-button {
-  width: 38px;
-  height: 38px;
-  border: 0;
-  border-radius: 10px;
-  background: #f0f4f8;
-  color: #42526a;
-  font-size: 26px;
-  line-height: 1;
-}
-
-.environment-list {
-  display: grid;
-  gap: 12px;
-}
-
-.environment-card {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid #dce5f0;
-  border-radius: 14px;
-  background: #f9fbfd;
-}
-
-.environment-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #24344d;
-  font-weight: 700;
-}
-
-.environment-name input {
-  width: 18px;
-  height: 18px;
-  accent-color: #2368c4;
-}
-
-.url-input {
-  width: 100%;
-  height: 44px;
-  padding: 0 12px;
-  border: 1px solid #d3deeb;
-  border-radius: 10px;
-  background: #fff;
-  color: #17233d;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 13px;
-  outline: none;
-}
-
-.url-input:focus {
-  border-color: #3378cf;
-  box-shadow: 0 0 0 3px rgba(51, 120, 207, 0.1);
-}
-
-.settings-loading {
-  min-height: 210px;
-  display: grid;
-  place-items: center;
-  color: #6b7d93;
-}
-
-.settings-error {
-  min-height: 20px;
-  margin: 10px 0;
-  color: #bf3434;
-  font-size: 14px;
 }
 
 @media (max-width: 480px) {

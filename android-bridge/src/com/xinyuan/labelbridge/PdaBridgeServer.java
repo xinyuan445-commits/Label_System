@@ -2,6 +2,9 @@ package com.xinyuan.labelbridge;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.BufferedReader;
@@ -60,11 +63,11 @@ final class PdaBridgeServer {
         Log.i(TAG, "PDA bridge starting on 127.0.0.1:" + PORT);
     }
 
-    static void publish(String barcode, String action, String field) {
+    static boolean publish(String barcode, String action, String field) {
         long now = System.currentTimeMillis();
         if (now - lastPollAt > ACTIVE_WINDOW_MS) {
             Log.i(TAG, "Scan ignored because H5 bridge is inactive");
-            return;
+            return false;
         }
 
         ScanEvent event = new ScanEvent(
@@ -79,6 +82,8 @@ final class PdaBridgeServer {
             EVENTS.addLast(event);
         }
         Log.i(TAG, "Scan queued for H5; length=" + barcode.length());
+        playConfiguredTone();
+        return true;
     }
 
     private static void runServer() {
@@ -156,6 +161,18 @@ final class PdaBridgeServer {
                     "{\"error\":\"Invalid configuration\"}");
             } else {
                 respond(socket, 200, "application/json; charset=utf-8", config.toJson());
+            }
+            return;
+        }
+        if ("POST".equals(method) && requestTarget.startsWith("/v1/sound")) {
+            String body = readBody(reader, headers.get("content-length"));
+            String mode = parseParameters(body).get("mode");
+            if (!isSoundMode(mode)) {
+                respond(socket, 400, "application/json; charset=utf-8",
+                    "{\"error\":\"Invalid sound mode\"}");
+            } else {
+                playTone(mode);
+                respond(socket, 200, "application/json; charset=utf-8", "{\"played\":true}");
             }
             return;
         }
@@ -253,6 +270,7 @@ final class PdaBridgeServer {
             .putString("developmentUrl", config.developmentUrl)
             .putString("testUrl", config.testUrl)
             .putString("productionUrl", config.productionUrl)
+            .putString("scanSound", config.scanSound)
             .apply();
     }
 
@@ -271,9 +289,14 @@ final class PdaBridgeServer {
             + "app.addEventListener('load',()=>sendConfig());"
             + "window.addEventListener('message',async e=>{if(e.source!==app.contentWindow||!e.data||e.data.source!=='label-system-h5')return;"
             + "let expected='';try{expected=new URL(app.src).origin}catch(x){}if(e.origin!==expected)return;"
-            + "if(e.data.type==='config-request'){sendConfig();return;}if(e.data.type!=='config-save')return;"
+            + "if(e.data.type==='config-request'){sendConfig();return;}"
+            + "if(e.data.type==='sound-test'){try{const body=new URLSearchParams({mode:String(e.data.payload&&e.data.payload.mode||'')});"
+            + "const r=await fetch('/v1/sound',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});"
+            + "if(!r.ok)throw new Error();app.contentWindow.postMessage({source:'label-system-pda',type:'sound-tested',payload:config},'*');}"
+            + "catch(x){app.contentWindow.postMessage({source:'label-system-pda',type:'config-error'},'*')}return;}"
+            + "if(e.data.type!=='config-save')return;"
             + "try{const p=e.data.payload||{},body=new URLSearchParams();"
-            + "for(const k of ['environment','developmentUrl','testUrl','productionUrl'])body.set(k,String(p[k]||''));"
+            + "for(const k of ['environment','developmentUrl','testUrl','productionUrl','scanSound'])body.set(k,String(p[k]||''));"
             + "const r=await fetch('/v1/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});"
             + "if(!r.ok)throw new Error();config=await r.json();sendConfig('config-saved');"
             + "const next=config[config.environment+'Url'];if(next&&next!==app.src)setTimeout(()=>{app.src=next},80);"
@@ -330,6 +353,51 @@ final class PdaBridgeServer {
         }
     }
 
+    private static boolean isSoundMode(String value) {
+        return "short".equals(value)
+            || "soft".equals(value)
+            || "double".equals(value)
+            || "off".equals(value);
+    }
+
+    private static void playConfiguredTone() {
+        SharedPreferences preferences = preferences();
+        String mode = preferences == null ? "short" : preferences.getString("scanSound", "short");
+        playTone(isSoundMode(mode) ? mode : "short");
+    }
+
+    private static void playTone(final String mode) {
+        if ("off".equals(mode)) return;
+        Thread toneThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                ToneGenerator tone = null;
+                try {
+                    tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 85);
+                    if ("double".equals(mode)) {
+                        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 95);
+                        SystemClock.sleep(125L);
+                        tone.stopTone();
+                        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 95);
+                        SystemClock.sleep(105L);
+                    } else if ("soft".equals(mode)) {
+                        tone.startTone(ToneGenerator.TONE_CDMA_PIP, 150);
+                        SystemClock.sleep(165L);
+                    } else {
+                        tone.startTone(ToneGenerator.TONE_PROP_ACK, 85);
+                        SystemClock.sleep(100L);
+                    }
+                } catch (Throwable error) {
+                    Log.w(TAG, "Could not play scan tone", error);
+                } finally {
+                    if (tone != null) tone.release();
+                }
+            }
+        }, "label-scan-tone");
+        toneThread.setDaemon(true);
+        toneThread.start();
+    }
+
     private static String escapeHtml(String value) {
         return value.replace("&", "&amp;")
             .replace("\"", "&quot;")
@@ -350,16 +418,19 @@ final class PdaBridgeServer {
         private final String developmentUrl;
         private final String testUrl;
         private final String productionUrl;
+        private final String scanSound;
 
         private BridgeConfig(
             String environment,
             String developmentUrl,
             String testUrl,
-            String productionUrl) {
+            String productionUrl,
+            String scanSound) {
             this.environment = environment;
             this.developmentUrl = developmentUrl;
             this.testUrl = testUrl;
             this.productionUrl = productionUrl;
+            this.scanSound = scanSound;
         }
 
         private static BridgeConfig defaults() {
@@ -367,7 +438,8 @@ final class PdaBridgeServer {
                 "development",
                 DEFAULT_DEVELOPMENT_URL,
                 DEFAULT_TEST_URL,
-                DEFAULT_PRODUCTION_URL);
+                DEFAULT_PRODUCTION_URL,
+                "short");
         }
 
         private static BridgeConfig fromPreferences(SharedPreferences preferences) {
@@ -375,7 +447,8 @@ final class PdaBridgeServer {
                 environment(preferences.getString("environment", "development")),
                 valueOrDefault(preferences.getString("developmentUrl", null), DEFAULT_DEVELOPMENT_URL),
                 valueOrDefault(preferences.getString("testUrl", null), DEFAULT_TEST_URL),
-                valueOrDefault(preferences.getString("productionUrl", null), DEFAULT_PRODUCTION_URL));
+                valueOrDefault(preferences.getString("productionUrl", null), DEFAULT_PRODUCTION_URL),
+                soundMode(preferences.getString("scanSound", "short")));
         }
 
         private static BridgeConfig fromParameters(Map<String, String> values, boolean allowDefaults) {
@@ -385,6 +458,7 @@ final class PdaBridgeServer {
             String developmentUrl = normalizeUrl(values.get("developmentUrl"));
             String testUrl = normalizeUrl(values.get("testUrl"));
             String productionUrl = normalizeUrl(values.get("productionUrl"));
+            String scanSound = soundMode(values.get("scanSound"));
             String legacyTarget = normalizeUrl(values.get("target"));
             if (allowDefaults) {
                 if (legacyTarget != null && developmentUrl == null) developmentUrl = legacyTarget;
@@ -393,7 +467,7 @@ final class PdaBridgeServer {
                 if (productionUrl == null) productionUrl = DEFAULT_PRODUCTION_URL;
             }
             if (developmentUrl == null || testUrl == null || productionUrl == null) return null;
-            return new BridgeConfig(environment, developmentUrl, testUrl, productionUrl);
+            return new BridgeConfig(environment, developmentUrl, testUrl, productionUrl, scanSound);
         }
 
         private static String environment(String value) {
@@ -405,6 +479,10 @@ final class PdaBridgeServer {
             return "development".equals(value)
                 || "test".equals(value)
                 || "production".equals(value);
+        }
+
+        private static String soundMode(String value) {
+            return isSoundMode(value) ? value : "short";
         }
 
         private static String valueOrDefault(String value, String fallback) {
@@ -423,6 +501,7 @@ final class PdaBridgeServer {
                 + "\",\"developmentUrl\":\"" + escapeJson(developmentUrl)
                 + "\",\"testUrl\":\"" + escapeJson(testUrl)
                 + "\",\"productionUrl\":\"" + escapeJson(productionUrl)
+                + "\",\"scanSound\":\"" + escapeJson(scanSound)
                 + "\",\"bridgeVersion\":\"" + PROTOCOL_VERSION + "\"}";
         }
     }
