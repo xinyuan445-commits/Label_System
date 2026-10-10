@@ -1,43 +1,60 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-import { getPdaBridge, isMockPdaBridge } from '@/bridge/pda-bridge'
-import type { PdaScanEvent } from '@/bridge/types'
-import { getRuntimeConfig } from '@/services/runtime-config'
 import { useAuthStore } from '@/stores/auth'
+import { workspaceGroups, type WorkspaceIcon } from '@/workspace'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const config = getRuntimeConfig()
-const bridge = getPdaBridge()
 
-const lastScan = ref<PdaScanEvent | null>(null)
-const mockBarcode = ref('TEST-CT58C-001')
-const canSimulate = computed(() => isMockPdaBridge(bridge))
+const iconPaths: Record<WorkspaceIcon, string[]> = {
+  receive: [
+    'M5 8.5 12 5l7 3.5v7L12 19l-7-3.5v-7Z',
+    'M12 12v7M5.5 8.7l6.5 3.3 6.5-3.3M12 3v5M9.5 5.5 12 8l2.5-2.5',
+  ],
+  truck: [
+    'M3 6h11v10H3V6ZM14 10h3l3 3v3h-6v-6Z',
+    'M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
+  ],
+  warehouse: [
+    'm3 9 9-5 9 5v11H3V9ZM7 12h10v8H7v-8Z',
+    'M7 15h10M10 12v8M14 12v8',
+  ],
+  document: [
+    'M6 3h8l4 4v14H6V3ZM14 3v5h4',
+    'M9 12h6M9 16h4',
+  ],
+  dispatch: [
+    'M4 8.5 11 5l7 3.5v7L11 19l-7-3.5v-7ZM11 12v7M4.5 8.7 11 12l6.5-3.3',
+    'M16 4h5v5M21 4l-6 6',
+  ],
+  material: [
+    'M4 7h16v12H4V7ZM4 11h16M9 11v8',
+    'M14 4h6v6M20 4l-7 7',
+  ],
+  transfer: ['M7 7h12M16 4l3 3-3 3M17 17H5M8 14l-3 3 3 3'],
+  location: [
+    'M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z',
+    'M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  ],
+  inventory: [
+    'M8 4h8M9 3v3h6V3M6 5h12v16H6V5Z',
+    'm9 14 2 2 4-5',
+  ],
+  approve: [
+    'M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Z',
+    'm8.5 12 2.2 2.2 4.8-5',
+  ],
+}
 
-let stopScanListener: (() => void) | null = null
-
-function simulateScan(): void {
-  if (isMockPdaBridge(bridge)) {
-    bridge.simulateScan(mockBarcode.value)
-  }
+async function openEntry(code: string): Promise<void> {
+  await router.push({ name: 'work-function', params: { code } })
 }
 
 async function logout(): Promise<void> {
   authStore.logout()
   await router.replace({ name: 'login' })
 }
-
-onMounted(() => {
-  stopScanListener = bridge.subscribeScan((event) => {
-    lastScan.value = event
-  })
-})
-
-onBeforeUnmount(() => {
-  stopScanListener?.()
-})
 </script>
 
 <template>
@@ -48,194 +65,186 @@ onBeforeUnmount(() => {
         <span class="username">{{ authStore.session?.username }}</span>
       </div>
 
-      <button class="secondary-button" type="button" @click="logout">退出</button>
+      <button class="logout-button" type="button" @click="logout">退出</button>
     </header>
 
-    <section class="scan-card">
-      <div class="card-heading">
-        <h2>扫码</h2>
-        <span class="bridge-state">{{ bridge.mode === 'mock' ? '模拟' : '设备' }}</span>
-      </div>
+    <div class="group-list">
+      <section
+        v-for="group in workspaceGroups"
+        :key="group.key"
+        class="business-group"
+        :class="`tone-${group.tone}`"
+      >
+        <h2>{{ group.title }}</h2>
 
-      <div class="scan-value" :class="{ empty: !lastScan }">
-        {{ lastScan?.barcode || '等待扫码' }}
-      </div>
-
-      <time v-if="lastScan" :datetime="new Date(lastScan.receivedAt).toISOString()">
-        {{ new Date(lastScan.receivedAt).toLocaleTimeString('zh-CN', { hour12: false }) }}
-      </time>
-    </section>
-
-    <section v-if="canSimulate" class="mock-panel">
-      <input v-model="mockBarcode" aria-label="模拟条码" @keyup.enter="simulateScan" />
-      <button class="primary-button" type="button" @click="simulateScan">模拟扫码</button>
-    </section>
-
-    <footer>{{ config.h5Version }}</footer>
+        <div class="entry-grid">
+          <button
+            v-for="entry in group.entries"
+            :key="entry.code"
+            class="entry-button"
+            type="button"
+            @click="openEntry(entry.code)"
+          >
+            <span class="entry-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path v-for="path in iconPaths[entry.icon]" :key="path" :d="path" />
+              </svg>
+            </span>
+            <span>{{ entry.label }}</span>
+          </button>
+        </div>
+      </section>
+    </div>
   </main>
 </template>
 
 <style scoped>
 .workspace {
   min-height: 100dvh;
-  padding: 28px;
+  padding: 24px 20px 34px;
   background: #f3f6fa;
 }
 
+.topbar,
+.group-list {
+  width: min(100%, 920px);
+  margin-inline: auto;
+}
+
 .topbar {
-  max-width: 920px;
-  margin: 0 auto 28px;
+  min-height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 h1 {
   color: #17365d;
-  font-size: 30px;
+  font-size: 28px;
 }
 
 .username {
   display: block;
-  margin-top: 5px;
-  color: #718096;
-  font-size: 14px;
+  margin-top: 3px;
+  color: #7b899a;
+  font-size: 13px;
 }
 
-.secondary-button,
-.primary-button {
-  min-height: 48px;
-  padding: 0 22px;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.secondary-button {
-  border: 1px solid #d5dfeb;
+.logout-button {
+  min-width: 68px;
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid #d9e2ec;
+  border-radius: 11px;
   background: #fff;
   color: #40516a;
+  font-size: 14px;
+  font-weight: 650;
 }
 
-.primary-button {
-  border: 0;
-  background: #2368c4;
-  color: #fff;
-}
-
-.scan-card,
-.mock-panel {
-  width: min(100%, 920px);
-  margin: 0 auto;
-  border: 1px solid rgba(23, 54, 93, 0.07);
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 12px 34px rgba(23, 54, 93, 0.08);
-}
-
-.scan-card {
-  padding: 28px;
-}
-
-.card-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.group-list {
+  display: grid;
   gap: 16px;
 }
 
-h2 {
-  color: #24344d;
-  font-size: 18px;
-}
-
-.bridge-state {
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #eaf2fc;
-  color: #2862a9;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.scan-value {
-  min-height: 112px;
-  display: flex;
-  align-items: center;
-  margin-top: 22px;
-  padding: 20px;
-  border-radius: 15px;
-  background: #f1f6fc;
-  color: #17365d;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: clamp(22px, 5vw, 34px);
-  font-weight: 750;
-  overflow-wrap: anywhere;
-}
-
-.scan-value.empty {
-  color: #8090a4;
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-time {
-  display: block;
-  margin-top: 12px;
-  color: #7b899a;
-  font-size: 13px;
-  text-align: right;
-}
-
-.mock-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  margin-top: 18px;
+.business-group {
+  --group-color: #2368c4;
+  --group-soft: #e9f2fd;
   padding: 18px;
+  border: 1px solid rgba(23, 54, 93, 0.07);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(23, 54, 93, 0.06);
 }
 
-.mock-panel input {
+.tone-green {
+  --group-color: #16805c;
+  --group-soft: #e6f5ef;
+}
+
+.tone-orange {
+  --group-color: #bb651c;
+  --group-soft: #fff0e3;
+}
+
+.tone-purple {
+  --group-color: #7651b5;
+  --group-soft: #f1ebfb;
+}
+
+h2 {
+  margin-bottom: 15px;
+  color: #24344d;
+  font-size: 17px;
+}
+
+.entry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.entry-button {
   min-width: 0;
-  height: 48px;
-  padding: 0 14px;
-  border: 2px solid #d9e2ef;
-  border-radius: 12px;
-  color: #17233d;
-  font: 600 16px ui-monospace, SFMono-Regular, Consolas, monospace;
-  outline: none;
-}
-
-.mock-panel input:focus {
-  border-color: #3378cf;
-  box-shadow: 0 0 0 4px rgba(51, 120, 207, 0.1);
-}
-
-footer {
-  margin-top: 24px;
-  color: #96a1b0;
-  font-size: 12px;
+  min-height: 94px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 11px 6px;
+  border: 0;
+  border-radius: 14px;
+  background: #f7f9fc;
+  color: #2b3d55;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
   text-align: center;
 }
 
-@media (max-width: 600px) {
+.entry-button:active {
+  background: var(--group-soft);
+}
+
+.entry-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--group-soft);
+  color: var(--group-color);
+}
+
+.entry-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+@media (max-width: 480px) {
   .workspace {
-    padding: 22px 16px;
+    padding: 20px 14px 28px;
   }
 
-  .topbar {
-    align-items: flex-start;
+  .business-group {
+    padding: 16px 12px;
   }
 
-  .scan-card {
-    padding: 22px;
+  .entry-grid {
+    gap: 8px;
   }
 
-  .mock-panel {
-    grid-template-columns: 1fr;
+  .entry-button {
+    min-height: 90px;
+    font-size: 13px;
   }
 }
 </style>

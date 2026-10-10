@@ -38,6 +38,12 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/work/:code',
+      name: 'work-function',
+      component: () => import('@/views/BusinessView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },
