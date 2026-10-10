@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+miniprogram_npm/
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+releases/
+*.apk
+*.aab
+*.apks
+*.idsig
+
+# Android and signing
+.gradle/
+local.properties
+*.keystore
+*.jks
+*.p12
+*.pem
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local.json
+
+# WeChat DevTools private settings
+project.private.config.json
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.cache/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

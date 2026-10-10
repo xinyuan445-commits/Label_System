@@ -1,0 +1,46 @@
+<view class="login-page">
+  <view class="brand">
+    <view class="brand-mark">标</view>
+    <view>
+      <view class="brand-title">标签管理系统</view>
+      <view class="brand-subtitle">PDA 作业端</view>
+    </view>
+  </view>
+
+  <view class="login-card">
+    <view class="card-title">账号登录</view>
+
+    <view class="field">
+      <text class="field-label">账号</text>
+      <input
+        class="field-input"
+        value="{{username}}"
+        placeholder="请输入账号"
+        confirm-type="next"
+        bindinput="onUsernameInput"
+      />
+    </view>
+
+    <view class="field">
+      <text class="field-label">密码</text>
+      <input
+        class="field-input"
+        value="{{password}}"
+        password
+        placeholder="请输入密码"
+        confirm-type="done"
+        bindinput="onPasswordInput"
+        bindconfirm="handleLogin"
+      />
+    </view>
+
+    <view class="error-message">{{errorMessage}}</view>
+
+    <button
+      class="login-button"
+      loading="{{submitting}}"
+      disabled="{{submitting}}"
+      bindtap="handleLogin"
+    >登录</button>
+  </view>
+</view>

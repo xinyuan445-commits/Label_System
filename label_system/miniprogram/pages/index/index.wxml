@@ -1,0 +1,17 @@
+<view class="workspace">
+  <view class="topbar">
+    <view>
+      <view class="page-title">工作台</view>
+      <view class="welcome">你好，{{username}}</view>
+    </view>
+    <button class="logout-button" bindtap="handleLogout">退出</button>
+  </view>
+
+  <view class="status-card">
+    <view class="status-dot"></view>
+    <view>
+      <view class="status-title">系统已就绪</view>
+      <view class="status-text">请选择作业功能</view>
+    </view>
+  </view>
+</view>
