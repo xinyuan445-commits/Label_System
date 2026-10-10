@@ -18,5 +18,6 @@
     <EmbeddedResource Include="..\..\document-contracts\transfer.json" />
     <EmbeddedResource Include="..\..\document-contracts\location-adjustment.json" />
     <EmbeddedResource Include="..\..\document-contracts\inventory-count.json" />
+    <EmbeddedResource Include="..\..\document-contracts\write-policies.json" />
   </ItemGroup>
 </Project>

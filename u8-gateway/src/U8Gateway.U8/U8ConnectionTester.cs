@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using U8Gateway.Contracts;
 
 namespace U8Gateway.U8
 {
@@ -35,7 +36,7 @@ namespace U8Gateway.U8
 
             string accountId = NormalizeAccountId(options.AccountId);
             var loginDate = options.LoginDate == default(DateTime)
-                ? DateTime.Today
+                ? BusinessClock.Today
                 : options.LoginDate.Date;
             U8Login.clsLogin login = null;
             try

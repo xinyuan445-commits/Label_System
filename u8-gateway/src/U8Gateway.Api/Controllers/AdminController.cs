@@ -102,7 +102,7 @@ namespace U8Gateway.Api.Controllers
                     Subsystem = input.U8Subsystem,
                     User = input.U8User,
                     Password = password,
-                    LoginDate = DateTime.Today
+                    LoginDate = BusinessClock.Today
                 }));
             return Ok(ApiResponse<U8ConnectionTestResult>.Ok(
                 result,
@@ -119,7 +119,7 @@ namespace U8Gateway.Api.Controllers
             var settings = new GatewaySettings
             {
                 EnvironmentName = input.EnvironmentName?.Trim(),
-                BusinessTimeZone = input.BusinessTimeZone?.Trim(),
+                BusinessTimeZone = "China Standard Time",
                 SqlServer = input.SqlServer?.Trim(),
                 SqlDatabase = input.SqlDatabase?.Trim(),
                 SqlUser = input.SqlUser?.Trim(),
@@ -191,7 +191,6 @@ namespace U8Gateway.Api.Controllers
         {
             if (input == null ||
                 string.IsNullOrWhiteSpace(input.EnvironmentName) ||
-                string.IsNullOrWhiteSpace(input.BusinessTimeZone) ||
                 string.IsNullOrWhiteSpace(input.SqlServer) ||
                 string.IsNullOrWhiteSpace(input.SqlDatabase) ||
                 string.IsNullOrWhiteSpace(input.SqlUser) ||

@@ -1,0 +1,198 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+
+import {
+  getBusinessDocumentConfig,
+  isBusinessDocumentType,
+} from '@/services/business-document-config'
+import {
+  clearOutboundDocumentWorkingState,
+  deleteOutboundDocument,
+  listOutboundDocuments,
+  requestOutboundDocumentEdit,
+  type OutboundDocumentUploadStatus,
+  type StoredOutboundDocument,
+} from '@/services/outbound-document-drafts'
+import type { OutboundDocumentType } from '@/services/source-document-selection'
+
+const route = useRoute()
+const router = useRouter()
+const activeStatus = ref<OutboundDocumentUploadStatus>('pending')
+const documents = ref<StoredOutboundDocument[]>([])
+const selectedDocument = ref<StoredOutboundDocument | null>(null)
+const message = ref('')
+let allowDocumentReturn = false
+
+const documentType = computed<OutboundDocumentType>(() => {
+  const code = Array.isArray(route.params.code) ? route.params.code[0] : route.params.code
+  return isBusinessDocumentType(code) ? code : 'material-outbound'
+})
+const title = computed(() => {
+  const label = getBusinessDocumentConfig(documentType.value).title
+  return label.endsWith('单') ? `${label}据` : `${label}单据`
+})
+
+function refresh(): void {
+  documents.value = listOutboundDocuments(documentType.value, activeStatus.value)
+  selectedDocument.value = null
+}
+
+function changeStatus(status: OutboundDocumentUploadStatus): void {
+  activeStatus.value = status
+  refresh()
+}
+
+async function continueDocument(document: StoredOutboundDocument): Promise<void> {
+  clearOutboundDocumentWorkingState()
+  requestOutboundDocumentEdit({
+    documentType: documentType.value,
+    documentId: document.id,
+  })
+  await returnToDocument()
+}
+
+async function returnToDocument(): Promise<void> {
+  allowDocumentReturn = true
+  await router.replace({
+    name: 'work-function',
+    params: { code: documentType.value },
+    query: route.query,
+  })
+}
+
+function uploadDocument(): void {
+  message.value = '接口待接入'
+  setTimeout(() => {
+    message.value = ''
+  }, 2200)
+}
+
+function openDocument(document: StoredOutboundDocument): void {
+  if (document.uploadStatus === 'pending') {
+    void continueDocument(document)
+    return
+  }
+  selectedDocument.value = document
+}
+
+function removeDocument(document: StoredOutboundDocument): void {
+  if (!window.confirm('删除这份本地草稿？')) return
+  deleteOutboundDocument(document.id)
+  refresh()
+}
+
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value))
+}
+
+onMounted(refresh)
+
+onBeforeRouteLeave((to) => {
+  if (allowDocumentReturn) {
+    allowDocumentReturn = false
+    return true
+  }
+  if (to.name === 'work-function' && to.params.code === documentType.value) return true
+  return {
+    name: 'work-function',
+    params: { code: documentType.value },
+    query: route.query,
+    replace: true,
+  }
+})
+</script>
+
+<template>
+  <main class="manager-page">
+    <header class="topbar-shell">
+      <div class="topbar">
+        <button class="back-button" type="button" aria-label="返回" @click="returnToDocument">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <h1>{{ title }}</h1>
+      </div>
+    </header>
+
+    <div class="page-content">
+      <nav class="status-tabs" aria-label="上传状态">
+        <button
+          type="button"
+          :class="{ active: activeStatus === 'pending' }"
+          @click="changeStatus('pending')"
+        >
+          未上传
+        </button>
+        <button
+          type="button"
+          :class="{ active: activeStatus === 'uploaded' }"
+          @click="changeStatus('uploaded')"
+        >
+          已上传
+        </button>
+      </nav>
+
+      <section v-if="documents.length" class="document-list">
+        <article
+          v-for="document in documents"
+          :key="document.id"
+          class="document-card"
+          role="button"
+          tabindex="0"
+          @click="openDocument(document)"
+          @keydown.enter="openDocument(document)"
+        >
+          <div class="document-heading">
+            <div>
+              <strong>{{ document.summary.sourceDocumentNo || '无源单' }}</strong>
+              <span>{{ document.summary.sourceTypeLabel || title }}</span>
+            </div>
+            <time>{{ formatTime(document.updatedAt) }}</time>
+          </div>
+
+          <dl>
+            <div><dt>日期</dt><dd>{{ document.summary.documentDate }}</dd></div>
+            <div><dt>明细</dt><dd>{{ document.summary.lineCount }}项</dd></div>
+            <div><dt>数量</dt><dd>{{ document.summary.totalQty }}</dd></div>
+          </dl>
+
+          <div v-if="activeStatus === 'pending'" class="card-actions pending-actions">
+            <button type="button" @click.stop="uploadDocument">上传</button>
+            <button class="danger" type="button" @click.stop="removeDocument(document)">删除</button>
+          </div>
+          <div v-else class="card-actions">
+            <button type="button" @click.stop="selectedDocument = document">查看</button>
+          </div>
+        </article>
+      </section>
+
+      <div v-else class="empty-state">暂无单据</div>
+    </div>
+
+    <div v-if="selectedDocument" class="detail-mask" @click.self="selectedDocument = null">
+      <section class="detail-sheet">
+        <header><h2>单据详情</h2><button type="button" @click="selectedDocument = null">×</button></header>
+        <dl>
+          <div><dt>源单</dt><dd>{{ selectedDocument.summary.sourceDocumentNo || '--' }}</dd></div>
+          <div><dt>类型</dt><dd>{{ selectedDocument.summary.sourceTypeLabel || '--' }}</dd></div>
+          <div><dt>日期</dt><dd>{{ selectedDocument.summary.documentDate }}</dd></div>
+          <div><dt>明细</dt><dd>{{ selectedDocument.summary.lineCount }}项</dd></div>
+          <div><dt>数量</dt><dd>{{ selectedDocument.summary.totalQty }}</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <div v-if="message" class="toast-message" role="status">{{ message }}</div>
+  </main>
+</template>
+
+<style scoped>
+.manager-page{min-height:100dvh;padding-top:72px;background:#f3f6fa;color:#21324a}.topbar-shell{position:fixed;z-index:20;top:0;right:0;left:0;height:72px;border-bottom:1px solid #e4ebf3;background:#fff;box-shadow:0 3px 12px rgba(23,54,93,.05)}.topbar,.page-content{width:min(100%,760px);margin-inline:auto}.topbar{height:100%;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:12px;padding:0 18px}.back-button{width:42px;height:42px;display:grid;place-items:center;border:0;border-radius:12px;background:#f3f6fa;color:#365678}.back-button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2}h1{overflow:hidden;color:#17365d;font-size:21px;text-overflow:ellipsis;white-space:nowrap}.page-content{display:grid;gap:14px;padding:16px}.status-tabs{display:grid;grid-template-columns:1fr 1fr;padding:4px;border:1px solid #dce5ef;border-radius:13px;background:#e9eff6}.status-tabs button{height:40px;border:0;border-radius:9px;background:transparent;color:#6c7b8e;font-size:14px;font-weight:750}.status-tabs button.active{background:#fff;color:#2368c4;box-shadow:0 2px 8px rgba(23,54,93,.1)}.document-list{display:grid;gap:11px}.document-card{padding:15px;border:1px solid rgba(23,54,93,.08);border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(23,54,93,.055);cursor:pointer}.document-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.document-heading>div{min-width:0;display:grid;gap:4px}.document-heading strong{overflow-wrap:anywhere;color:#203552;font:700 15px ui-monospace,SFMono-Regular,Consolas,monospace}.document-heading span,.document-heading time{color:#7b899b;font-size:12px}.document-card dl,.detail-sheet dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0;padding:12px;border-radius:11px;background:#f7f9fc}.document-card dl div,.detail-sheet dl div{min-width:0;display:grid;gap:4px}.document-card dt,.document-card dd,.detail-sheet dt,.detail-sheet dd{margin:0;font-size:12px}.document-card dt,.detail-sheet dt{color:#8491a2}.document-card dd,.detail-sheet dd{overflow:hidden;color:#33465e;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.card-actions{display:flex;justify-content:flex-end;gap:8px}.card-actions button{min-width:72px;height:38px;border:0;border-radius:9px;background:#e9f2fd;color:#2368c4;font-size:13px;font-weight:750}.card-actions button:nth-child(2){background:#2368c4;color:#fff}.card-actions button.danger{background:#fbecec;color:#b64141}.empty-state{min-height:180px;display:grid;place-items:center;border:1px dashed #cbd7e4;border-radius:16px;background:rgba(255,255,255,.62);color:#8b98a8;font-size:14px}.toast-message{position:fixed;z-index:50;right:18px;bottom:28px;left:18px;width:fit-content;margin-inline:auto;padding:10px 15px;border-radius:10px;background:#31445e;color:#fff;font-size:13px;font-weight:650;box-shadow:0 8px 22px rgba(23,54,93,.2)}.detail-mask{position:fixed;z-index:40;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:18px;background:rgba(20,32,48,.38)}.detail-sheet{width:min(100%,560px);padding:18px;border-radius:18px;background:#fff;box-shadow:0 16px 40px rgba(23,54,93,.2)}.detail-sheet header{display:flex;align-items:center;justify-content:space-between}.detail-sheet h2{color:#24344d;font-size:17px}.detail-sheet header button{width:36px;height:36px;border:0;border-radius:9px;background:#f1f4f8;color:#718096;font-size:22px}.detail-sheet dl{grid-template-columns:1fr 1fr;margin-bottom:0}@media(max-width:560px){.topbar{padding:0 14px}.page-content{padding:14px 12px}.document-card dl{grid-template-columns:repeat(3,minmax(0,1fr))}.pending-actions{display:grid;grid-template-columns:1fr 1fr}.card-actions button{min-width:0}}
+</style>

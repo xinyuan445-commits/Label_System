@@ -8,6 +8,7 @@ namespace U8Gateway.Contracts.Metadata
         public string DocumentType { get; set; }
         public string Title { get; set; }
         public string Status { get; set; }
+        public string WritePolicyStatus { get; set; }
         public DocumentCapabilities Capabilities { get; set; }
     }
 
@@ -19,8 +20,19 @@ namespace U8Gateway.Contracts.Metadata
         public string Status { get; set; }
         public U8DocumentMapping U8 { get; set; }
         public DocumentCapabilities Capabilities { get; set; }
+        public string WritePolicyStatus { get; set; }
+        public List<DocumentScopeWritePolicy> WriteScopes { get; set; } =
+            new List<DocumentScopeWritePolicy>();
         public List<DocumentFieldDefinition> Fields { get; set; } =
             new List<DocumentFieldDefinition>();
+    }
+
+    public sealed class DocumentScopeWritePolicy
+    {
+        public string Scope { get; set; }
+        public List<string> MatchKeys { get; set; } = new List<string>();
+        public bool AllowCreateRows { get; set; }
+        public bool AllowDeleteRows { get; set; }
     }
 
     public sealed class U8DocumentMapping
@@ -69,6 +81,8 @@ namespace U8Gateway.Contracts.Metadata
         public bool UpdateWritable { get; set; }
         public bool Clearable { get; set; }
         public string ValueSource { get; set; }
+        public object DefaultValue { get; set; }
+        public string DefaultRule { get; set; }
         public string U8Field { get; set; }
         public string Validation { get; set; }
         public bool Returnable { get; set; }

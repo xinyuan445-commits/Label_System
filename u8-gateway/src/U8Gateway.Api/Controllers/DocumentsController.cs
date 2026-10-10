@@ -34,15 +34,32 @@ namespace U8Gateway.Api.Controllers
 
         [HttpPost]
         [Route("{documentType}/validate")]
-        public Task<IHttpActionResult> Validate(
+        public IHttpActionResult Validate(
             string documentType,
             DocumentOperationRequest request,
-            CancellationToken cancellationToken)
+            [FromUri] string operation = "add")
         {
-            return ExecuteRead(
-                documentType,
-                capabilities => capabilities.Validate,
-                adapter => adapter.ValidateAsync(request, cancellationToken));
+            DocumentDefinition definition = AppRuntime.Definitions.Get(documentType);
+            if (definition == null)
+                return Error(HttpStatusCode.NotFound, "DOCUMENT_TYPE_NOT_FOUND", "单据类型不存在。");
+
+            var preparer = new DocumentWritePreparer();
+            DocumentPreparationResult result;
+            if (string.Equals(operation, "edit", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(operation, "update", StringComparison.OrdinalIgnoreCase))
+                result = preparer.PreparePatch(definition, request, AppRuntime.BusinessNow());
+            else if (string.Equals(operation, "add", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(operation, "create", StringComparison.OrdinalIgnoreCase))
+                result = preparer.PrepareCreate(definition, request, AppRuntime.BusinessNow());
+            else
+                return Error(HttpStatusCode.BadRequest, "VALIDATION_OPERATION_INVALID",
+                    "operation 只允许 add 或 edit。");
+
+            if (!result.IsValid) return ValidationError(result);
+            return Ok(ApiResponse<DocumentPreparationResult>.Ok(
+                result,
+                GatewayRequestContext.Id,
+                "字段校验通过"));
         }
 
         [HttpPost]
@@ -183,6 +200,30 @@ namespace U8Gateway.Api.Controllers
                     "该操作尚未通过测试账套验证。");
             }
 
+            string requestError = ValidateWriteRequest(request);
+            if (requestError != null)
+            {
+                return Error(HttpStatusCode.BadRequest, "INVALID_OPERATION_REQUEST", requestError);
+            }
+
+            if (string.Equals(operationType, DocumentOperationCodes.Add,
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(operationType, DocumentOperationCodes.Edit,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                var preparer = new DocumentWritePreparer();
+                DocumentPreparationResult prepared = string.Equals(
+                    operationType, DocumentOperationCodes.Add,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? preparer.PrepareCreate(definition, request, AppRuntime.BusinessNow())
+                    : preparer.PreparePatch(definition, request, AppRuntime.BusinessNow());
+                if (!prepared.IsValid) return ValidationError(prepared);
+                request.Header = prepared.Payload.Header;
+                request.Lines = prepared.Payload.Lines;
+                request.Positions = prepared.Payload.Positions;
+                request.Auxiliary = prepared.Payload.Auxiliary;
+            }
+
             try
             {
                 AppRuntime.EnsureU8WriteAllowed();
@@ -193,12 +234,6 @@ namespace U8Gateway.Api.Controllers
                     HttpStatusCode.Conflict,
                     "U8_WRITE_GUARD_BLOCKED",
                     exception.Message);
-            }
-
-            string requestError = ValidateWriteRequest(request);
-            if (requestError != null)
-            {
-                return Error(HttpStatusCode.BadRequest, "INVALID_OPERATION_REQUEST", requestError);
             }
 
             object payload = new
@@ -645,8 +680,22 @@ namespace U8Gateway.Api.Controllers
                 Code = code,
                 Message = message,
                 RequestId = GatewayRequestContext.Id,
-                ServerTime = DateTimeOffset.Now
+                ServerTime = BusinessClock.Now
             });
+        }
+
+        private IHttpActionResult ValidationError(DocumentPreparationResult result)
+        {
+            return Content(HttpStatusCode.BadRequest,
+                new ApiResponse<DocumentPreparationResult>
+                {
+                    Success = false,
+                    Code = "DOCUMENT_VALIDATION_FAILED",
+                    Message = "字段校验未通过。",
+                    RequestId = GatewayRequestContext.Id,
+                    ServerTime = BusinessClock.Now,
+                    Data = result
+                });
         }
     }
 }

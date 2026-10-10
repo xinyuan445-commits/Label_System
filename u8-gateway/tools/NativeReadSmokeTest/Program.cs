@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json.Linq;
+using U8Gateway.Contracts;
 using U8Gateway.Core.Documents;
 using U8Gateway.Metadata;
 using U8Gateway.U8;
@@ -54,7 +55,7 @@ namespace U8Gateway.NativeReadSmokeTest
                         User = (string)publicSettings["U8UserId"],
                         Password = Unprotect((string)stored["U8PasswordProtected"]),
                         Serial = (string)publicSettings["U8Serial"],
-                        LoginDate = DateTime.Today
+                        LoginDate = BusinessClock.Today
                     }
                 };
 

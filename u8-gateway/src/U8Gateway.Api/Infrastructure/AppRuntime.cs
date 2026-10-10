@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using U8Gateway.Contracts;
 using U8Gateway.Core.Metadata;
 using U8Gateway.Core.Documents;
 using U8Gateway.Core.Operations;
@@ -73,7 +74,7 @@ namespace U8Gateway.Api.Infrastructure
                     Subsystem = settings.U8Subsystem,
                     User = settings.U8User,
                     Password = settings.U8Password,
-                    LoginDate = DateTime.Today
+                    LoginDate = BusinessClock.Today
                 }
             };
         }
@@ -101,12 +102,7 @@ namespace U8Gateway.Api.Infrastructure
 
         public static DateTimeOffset BusinessNow()
         {
-            GatewaySettings settings = CurrentSettings;
-            string timeZoneId = string.IsNullOrWhiteSpace(settings.BusinessTimeZone)
-                ? "China Standard Time"
-                : settings.BusinessTimeZone;
-            TimeZoneInfo timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-            return TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, timeZone);
+            return BusinessClock.Now;
         }
 
         private static string ResolveOperationArchiveRoot()

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import WorkspaceIcon from '@/WorkspaceIcon.vue'
+import { isFeatureVisible } from '@/services/feature-visibility'
 import { readWorkspaceFavorites } from '@/services/workspace-favorites'
 import { useAuthStore } from '@/stores/auth'
 import { findWorkspaceEntry, type WorkspaceEntry } from '@/workspace'
@@ -16,11 +17,18 @@ const username = computed(() => authStore.session?.username || '用户')
 const favoriteEntries = computed<WorkspaceEntry[]>(() =>
   readWorkspaceFavorites(username.value)
     .map((code) => findWorkspaceEntry(code))
-    .filter((entry): entry is WorkspaceEntry => entry !== undefined),
+    .filter(
+      (entry): entry is WorkspaceEntry =>
+        entry !== undefined && isFeatureVisible(entry.code),
+    ),
 )
 
 async function openEntry(code: string): Promise<void> {
-  await router.push({ name: 'work-function', params: { code } })
+  await router.push({
+    name: 'work-function',
+    params: { code },
+    query: { origin: 'home' },
+  })
 }
 
 async function logout(): Promise<void> {

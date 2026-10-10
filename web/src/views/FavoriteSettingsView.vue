@@ -4,17 +4,21 @@ import { useRouter } from 'vue-router'
 
 import WorkspaceIcon from '@/WorkspaceIcon.vue'
 import {
+  getVisibleWorkspaceGroups,
+  isFeatureVisible,
+} from '@/services/feature-visibility'
+import {
   MAX_WORKSPACE_FAVORITES,
   readWorkspaceFavorites,
   saveWorkspaceFavorites,
 } from '@/services/workspace-favorites'
 import { useAuthStore } from '@/stores/auth'
-import { workspaceGroups } from '@/workspace'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const username = authStore.session?.username || '用户'
-const selected = ref(readWorkspaceFavorites(username))
+const visibleGroups = getVisibleWorkspaceGroups()
+const selected = ref(readWorkspaceFavorites(username).filter(isFeatureVisible))
 const limitMessage = ref('')
 let messageTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -62,7 +66,7 @@ onBeforeUnmount(() => clearTimeout(messageTimer))
     </header>
 
     <div class="selection-list">
-      <section v-for="group in workspaceGroups" :key="group.key" class="selection-group">
+      <section v-for="group in visibleGroups" :key="group.key" class="selection-group">
         <h2>{{ group.title }}</h2>
 
         <div class="selection-grid">

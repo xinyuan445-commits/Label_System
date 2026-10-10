@@ -19,7 +19,7 @@ namespace U8Gateway.Contracts
                 Code = "OK",
                 Message = message ?? "成功",
                 RequestId = requestId,
-                ServerTime = DateTimeOffset.Now,
+                ServerTime = BusinessClock.Now,
                 Data = data
             };
         }

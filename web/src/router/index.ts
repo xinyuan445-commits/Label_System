@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 
 import { hasValidSession } from '@/services/auth'
+import { isFeatureVisible } from '@/services/feature-visibility'
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -27,6 +28,21 @@ export const router = createRouter({
       component: () => import('@/views/ScanTestView.vue'),
     },
     {
+      path: '/settings/features',
+      name: 'settings-features',
+      component: () => import('@/views/FeatureVisibilitySettingsView.vue'),
+    },
+    {
+      path: '/settings/data-sync',
+      name: 'settings-data-sync',
+      component: () => import('@/views/DataSyncSettingsView.vue'),
+    },
+    {
+      path: '/settings/users',
+      name: 'settings-users',
+      component: () => import('@/views/UserManagementView.vue'),
+    },
+    {
       path: '/settings/sound',
       name: 'settings-sound',
       component: () => import('@/views/SoundTestView.vue'),
@@ -50,6 +66,24 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/work/:code/source',
+      name: 'source-document-select',
+      component: () => import('@/views/SourceDocumentSelectView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/work/:code/documents',
+      name: 'outbound-document-manager',
+      component: () => import('@/views/OutboundDocumentManagerView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/work/:code/switches',
+      name: 'business-document-settings',
+      component: () => import('@/views/BusinessDocumentSettingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/work/:code',
       name: 'work-function',
       component: () => import('@/views/BusinessView.vue'),
@@ -70,6 +104,11 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.guestOnly && signedIn) {
+    return { name: 'home' }
+  }
+
+  const featureCode = Array.isArray(to.params.code) ? to.params.code[0] : to.params.code
+  if (typeof featureCode === 'string' && !isFeatureVisible(featureCode)) {
     return { name: 'home' }
   }
 

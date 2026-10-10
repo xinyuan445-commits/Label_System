@@ -21,6 +21,7 @@ namespace U8Gateway.Api.Controllers
                     DocumentType = x.DocumentType,
                     Title = x.Title,
                     Status = x.Status,
+                    WritePolicyStatus = x.WritePolicyStatus,
                     Capabilities = x.Capabilities
                 })
                 .ToArray();
@@ -43,7 +44,7 @@ namespace U8Gateway.Api.Controllers
                     Code = "DOCUMENT_TYPE_NOT_FOUND",
                     Message = "单据类型不存在。",
                     RequestId = GatewayRequestContext.Id,
-                    ServerTime = System.DateTimeOffset.Now
+                    ServerTime = BusinessClock.Now
                 });
             }
             return Ok(ApiResponse<DocumentDefinition>.Ok(

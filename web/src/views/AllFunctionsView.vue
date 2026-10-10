@@ -2,16 +2,17 @@
 import { useRouter } from 'vue-router'
 
 import WorkspaceIcon from '@/WorkspaceIcon.vue'
-import { workspaceGroups } from '@/workspace'
+import { getVisibleWorkspaceGroups } from '@/services/feature-visibility'
 
 const router = useRouter()
+const visibleGroups = getVisibleWorkspaceGroups()
 </script>
 
 <template>
   <main class="functions-page">
     <header class="page-header-shell">
       <div class="page-header">
-        <button class="back-button" type="button" aria-label="返回" @click="router.back()">
+        <button class="back-button" type="button" aria-label="返回" @click="router.replace({ name: 'home' })">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m15 18-6-6 6-6" />
           </svg>
@@ -22,7 +23,7 @@ const router = useRouter()
 
     <div class="function-list">
       <section
-        v-for="group in workspaceGroups"
+        v-for="group in visibleGroups"
         :key="group.key"
         class="business-group"
         :class="`tone-${group.tone}`"
@@ -35,7 +36,11 @@ const router = useRouter()
             :key="entry.code"
             class="entry-button"
             type="button"
-            @click="router.push({ name: 'work-function', params: { code: entry.code } })"
+            @click="router.replace({
+              name: 'work-function',
+              params: { code: entry.code },
+              query: { origin: 'all-functions' },
+            })"
           >
             <span class="entry-icon" aria-hidden="true">
               <WorkspaceIcon :icon="entry.icon" />

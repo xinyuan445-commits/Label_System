@@ -16,6 +16,7 @@ using U8Gateway.Core.U8;
 using VoucherCO_PU;
 using VoucherCO_SA;
 using VoucherVerify;
+using U8Gateway.Contracts;
 
 namespace U8Gateway.U8.Documents
 {
@@ -852,7 +853,7 @@ namespace U8Gateway.U8.Documents
         {
             var login = new U8Login.clsLogin();
             DateTime date = options.LoginDate == default(DateTime)
-                ? DateTime.Today
+                ? BusinessClock.Today
                 : options.LoginDate.Date;
             if (!login.Login(
                 options.Subsystem,

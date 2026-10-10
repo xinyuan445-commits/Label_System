@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using U8Gateway.Contracts;
 using U8Gateway.Contracts.Operations;
 using U8Gateway.Core.Operations;
 using U8Gateway.Persistence.Archive;
@@ -193,7 +194,7 @@ namespace U8Gateway.OperationJournalSmokeTest
                     VoucherCode = "TEST-001",
                     Version = "v1"
                 },
-                DateTimeOffset.Now);
+                BusinessClock.Now);
             OperationClaimResult replay = registry.Claim(NewRecord(
                 clientRequestId,
                 payloadHash,
@@ -233,8 +234,8 @@ namespace U8Gateway.OperationJournalSmokeTest
                 DocumentTitle = "采购入库",
                 OperationType = "add",
                 Status = OperationStages.Received,
-                CreatedAt = DateTimeOffset.Now,
-                UpdatedAt = DateTimeOffset.Now
+                CreatedAt = BusinessClock.Now,
+                UpdatedAt = BusinessClock.Now
             };
         }
 

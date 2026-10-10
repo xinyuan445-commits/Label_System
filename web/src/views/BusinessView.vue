@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
+import ApprovalDocumentView from '@/views/ApprovalDocumentView.vue'
+import OutboundDocumentView from '@/views/OutboundDocumentView.vue'
+import {
+  isBusinessDocumentType,
+  type BusinessDocumentType,
+} from '@/services/business-document-config'
 import { findWorkspaceEntry } from '@/workspace'
 
 const route = useRoute()
@@ -11,12 +17,48 @@ const entry = computed(() => {
   const code = Array.isArray(route.params.code) ? route.params.code[0] : route.params.code
   return findWorkspaceEntry(code ?? '')
 })
+
+const businessDocumentType = computed(() => {
+  const code = entry.value?.code
+  return isBusinessDocumentType(code) ? code : null
+})
+
+const approvalDocumentType = computed<BusinessDocumentType | null>(() => {
+  const code = entry.value?.code
+  const documentCode = code?.startsWith('approval-') ? code.slice('approval-'.length) : ''
+  return isBusinessDocumentType(documentCode) ? documentCode : null
+})
+
+const returnRouteName = computed(() =>
+  route.query.origin === 'all-functions' ? 'all-functions' : 'home',
+)
+
+async function leaveFunction(): Promise<void> {
+  await router.replace({ name: returnRouteName.value })
+}
+
+onBeforeRouteLeave((to) => {
+  if (businessDocumentType.value || approvalDocumentType.value || to.name === returnRouteName.value) return true
+  return { name: returnRouteName.value, replace: true }
+})
 </script>
 
 <template>
-  <main class="function-page">
+  <OutboundDocumentView
+    v-if="businessDocumentType"
+    :key="businessDocumentType"
+    :document-type="businessDocumentType"
+  />
+
+  <ApprovalDocumentView
+    v-else-if="approvalDocumentType"
+    :key="`approval-${approvalDocumentType}`"
+    :document-type="approvalDocumentType"
+  />
+
+  <main v-else class="function-page">
     <header class="page-header">
-      <button class="back-button" type="button" aria-label="返回" @click="router.back()">
+      <button class="back-button" type="button" aria-label="返回" @click="leaveFunction">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="m15 18-6-6 6-6" />
         </svg>

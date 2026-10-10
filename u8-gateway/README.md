@@ -54,7 +54,7 @@ u8-gateway/
 
 这些编码先稳定下来。9 类单据均已从目标 U8 16.0 生产账套只读采集原生 XML；销售发货使用 `USSAServer.clsSystem` 初始化销售上下文，并由 `clsVouchLoad.GetVoucherDataWEB` 读取。新网关的编译运行时已直接回读测试账套 888 中除委外到货外的 8 类历史单据，字段结构与合同一致，因此这 8 类已开放只读查询能力。委外到货按当前决定暂缓实现；其余单据的编号类型、中文字段名、条件必填和可写规则完成测试账套写入验证前，合同仍保持 `draft`。
 
-当前代码已建立 JSON 与 U8 ADO 持久化 XML 的双向编解码层，并把表头、表体和货位分开处理。9 类草稿合同共登记 2,584 个字段，已嵌入元数据服务供 schema 接口读取；采购、销售、库存三组适配器及统一单据路由已经建立，所有写能力仍保持关闭。写路由已接入追加式操作凭证、`clientRequestId` 幂等门禁和操作状态查询。审核、弃审和删除的三组 CO 调用及数据库状态回查已完成编码，尚未通过 888 写入验收，因此不会从 API 放行。服务器另有测试写入总开关、环境限制、数据库白名单和账套白名单四重门禁。
+当前代码已建立 JSON 与 U8 ADO 持久化 XML 的双向编解码层，并把表头、表体和货位分开处理。9 类草稿合同共登记 2,584 个字段，已嵌入元数据服务供 schema 接口读取；第一版新增/修改候选策略、服务端默认值、字段白名单、无写入校验和基于原单的 PATCH XML 合并已经实现。采购、销售、库存三组适配器及统一单据路由已经建立，所有写能力仍保持关闭。写路由已接入追加式操作凭证、`clientRequestId` 幂等门禁和操作状态查询。审核、弃审和删除的三组 CO 调用及数据库状态回查已完成编码，尚未通过 888 写入验收，因此不会从 API 放行。服务器另有测试写入总开关、环境限制、数据库白名单和账套白名单四重门禁。
 
 `tools/CodecSmokeTest` 用于验证 XML 往返、合同装载、能力开关、操作映射和适配器登记；`tools/NativeReadSmokeTest` 用于在 U8 服务器上验证实际读取；`tools/OperationJournalSmokeTest` 用于验证凭证摘要、脱敏、并发追加和并发幂等；`tools/WriteSafetySmokeTest` 验证错误环境、数据库或账套不能进入写适配器。这些自动测试都不会写账套。
 
@@ -63,8 +63,11 @@ u8-gateway/
 - [API 设计](docs/API_DESIGN.md)
 - [单据操作矩阵](docs/OPERATION_MATRIX.md)
 - [字段采集](docs/FIELD_DISCOVERY.md)
+- [新增与修改字段规则](docs/WRITE_CONTRACTS.md)
 - [只读运行时验证](docs/READ_VALIDATION_2026-10-10.md)
 - [操作凭证](docs/OPERATION_ARCHIVE.md)
 - [服务器配置](docs/SERVER_CONFIGURATION.md)
+- [IIS 独立部署](docs/IIS_DEPLOYMENT.md)
+- [2026-10-11 部署记录](docs/DEPLOYMENT_2026-10-11.md)
 - [字段合同](document-contracts/README.md)
 - [U8 来源映射](document-contracts/u8-source-map.json)

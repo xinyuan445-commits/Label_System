@@ -6,6 +6,7 @@ using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using U8Gateway.Contracts;
 using U8Gateway.Core.Documents;
 using U8Gateway.Core.Operations;
 
@@ -46,7 +47,7 @@ namespace U8Gateway.Persistence.Archive
                 if (existing == null)
                 {
                     DateTimeOffset now = record.CreatedAt == default(DateTimeOffset)
-                        ? DateTimeOffset.Now
+                        ? BusinessClock.Now
                         : record.CreatedAt;
                     record.CreatedAt = now;
                     record.UpdatedAt = now;
@@ -124,7 +125,7 @@ namespace U8Gateway.Persistence.Archive
                 record.Message = message;
                 record.Result = CopyResult(result);
                 record.UpdatedAt = occurredAt == default(DateTimeOffset)
-                    ? DateTimeOffset.Now
+                    ? BusinessClock.Now
                     : occurredAt;
                 if (!string.IsNullOrWhiteSpace(result?.VoucherCode))
                 {

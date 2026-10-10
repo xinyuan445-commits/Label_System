@@ -1,0 +1,280 @@
+{
+  "documents": [
+    {
+      "documentType": "material-outbound",
+      "status": "candidate-reference-derived",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["ddate", "cwhcode", "crdcode", "cdepcode", "cmaker"],
+          "createWritable": ["ddate", "ccode", "cwhcode", "crdcode", "cdepcode", "cpersoncode", "cprobatch", "cmemo", "cmaker", "csource", "cbustype", "cbuscode", "vt_id", "cpspcode", "cmpocode", "iproorderid", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2"],
+          "updateWritable": ["ddate", "cwhcode", "crdcode", "cdepcode", "cpersoncode", "cprobatch", "cmemo", "cpspcode", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2"],
+          "clearable": ["cpersoncode", "cprobatch", "cmemo", "cpspcode", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2"],
+          "defaults": { "csource": "库存", "cbustype": "领料" },
+          "defaultRules": { "ddate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "irowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cinvcode", "iquantity"],
+          "createWritable": ["cinvcode", "cposition", "cbatch", "inum", "iquantity", "iunitcost", "iprice", "inquantity", "innum", "cassunit", "iinvexchrate", "dmadedate", "dvdate", "imassdate", "cmassunit", "invcode", "impoids", "cmocode", "imoseq", "cmolotcode", "iopseq", "copdesc", "cmworkcentercode", "isotype", "iordertype", "iorderdid", "iordercode", "iorderseq", "ipesodid", "ipesotype", "cpesocode", "ipesoseq", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cbmemo", "irowno", "iposflag", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
+          "updateWritable": ["cposition", "cbatch", "inum", "iquantity", "iunitcost", "iprice", "inquantity", "innum", "dmadedate", "dvdate", "imassdate", "cmassunit", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
+          "clearable": ["cposition", "cbatch", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cexpirationdate", "dexpirationdate"],
+          "defaultRules": { "irowno": "rowNumber" },
+          "requiredWhen": { "cbatch": "inventory.batchManaged=true", "cposition": "warehouse.positionManaged=true" }
+        },
+        {
+          "scope": "position",
+          "matchKeys": ["AutoID"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cWhCode", "cPosCode", "cInvCode", "iQuantity"],
+          "createWritable": ["cWhCode", "cPosCode", "cInvCode", "cBatch", "cFree1", "cFree2", "dVDate", "iQuantity", "iNum", "cMemo", "dDate", "cSource", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10", "cAssUnit", "cBVencode", "dMadeDate", "iMassDate", "cMassUnit", "cvmivencode", "iExpiratDateCalcu", "cExpirationdate", "dExpirationdate", "cvouchtype", "cInVouchType", "dVouchDate"],
+          "updateWritable": ["cPosCode", "cBatch", "iQuantity", "iNum", "cMemo", "cFree1", "cFree2", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10", "dMadeDate", "iMassDate", "cMassUnit", "cExpirationdate", "dExpirationdate"],
+          "clearable": ["cBatch", "cMemo", "cFree1", "cFree2", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10", "cExpirationdate", "dExpirationdate"]
+        }
+      ]
+    },
+    {
+      "documentType": "inventory-count",
+      "status": "candidate-reference-derived",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["dcvdate", "dacdate", "cwhcode", "cirdcode", "cordcode", "cmaker"],
+          "createWritable": ["dcvdate", "ccvcode", "dacdate", "vt_id", "cwhcode", "ccvbatch", "cdepcode", "cirdcode", "cordcode", "csource", "cpersoncode", "ccvmemo", "cposition", "cmaker", "ccvtype", "ccvperiod", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "updateWritable": ["dacdate", "cdepcode", "cirdcode", "cordcode", "cpersoncode", "ccvmemo", "cposition", "ccvtype", "ccvperiod", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "clearable": ["ccvbatch", "cdepcode", "cpersoncode", "ccvmemo", "cposition", "ccvperiod", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "defaults": { "vt_id": 29, "cirdcode": "107", "cordcode": "207", "csource": "1", "ccvtype": "普通仓库盘点" },
+          "defaultRules": { "dcvdate": "today", "dacdate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "irowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cinvcode", "icvcquantity"],
+          "createWritable": ["cinvcode", "cposition", "ccvbatch", "iadinquantity", "iadinnum", "iadoutquantity", "iadoutnum", "iallowwaste", "iactualwaste", "cassunit", "iinvexchrate", "icvnum", "icvquantity", "icvcnum", "icvcquantity", "ccvreason", "rdsid", "ddisdate", "ijhdj", "ijhje", "isjdj", "isjje", "imassdate", "dmadedate", "cmassunit", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cbmemo", "irowno", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
+          "updateWritable": ["cposition", "ccvbatch", "icvcnum", "icvcquantity", "ccvreason", "cbmemo"],
+          "clearable": ["cposition", "ccvbatch", "ccvreason", "cbmemo"],
+          "defaultRules": { "irowno": "rowNumber" },
+          "requiredWhen": { "ccvbatch": "inventory.batchManaged=true", "cposition": "warehouse.positionManaged=true" }
+        }
+      ]
+    },
+    {
+      "documentType": "location-adjustment",
+      "status": "candidate",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["ddate", "cwhcode", "cmaker"],
+          "createWritable": ["cvouchcode", "ddate", "cwhcode", "cdepcode", "cpersoncode", "cmemo", "cmaker", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "updateWritable": ["ddate", "cdepcode", "cpersoncode", "cmemo", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "clearable": ["cdepcode", "cpersoncode", "cmemo", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "defaultRules": { "ddate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "irowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cinvcode", "cbposcode", "caposcode", "iquantity"],
+          "createWritable": ["cinvcode", "cbposcode", "caposcode", "inum", "iquantity", "cbatch", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "ddisdate", "dmadedate", "imassdate", "cmassunit", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cbmemo", "irowno", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37"],
+          "updateWritable": ["cbposcode", "caposcode", "inum", "iquantity", "cbatch", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "clearable": ["cbatch", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "defaultRules": { "irowno": "rowNumber" },
+          "requiredWhen": { "cbatch": "inventory.batchManaged=true" }
+        }
+      ]
+    },
+    {
+      "documentType": "transfer",
+      "status": "candidate",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["dtvdate", "cowhcode", "ciwhcode", "cirdcode", "cordcode", "cmaker"],
+          "createWritable": ["dtvdate", "ctvcode", "codepcode", "cidepcode", "cirdcode", "cordcode", "csource", "ctvmemo", "cpersoncode", "cowhcode", "ciwhcode", "cmaker", "ctranrequestcode", "iproorderid", "cmpocode", "cpspcode", "cordertype", "cbustype", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "chdefine1", "chdefine2"],
+          "updateWritable": ["dtvdate", "codepcode", "cidepcode", "cirdcode", "cordcode", "ctvmemo", "cpersoncode", "cowhcode", "ciwhcode", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "clearable": ["codepcode", "cidepcode", "ctvmemo", "cpersoncode", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
+          "defaultRules": { "dtvdate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "irowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cinvcode", "itvquantity"],
+          "createWritable": ["cinvcode", "ctvbatch", "itvnum", "itvquantity", "itvacost", "itvaprice", "itvpcost", "itvpprice", "iinvexchrate", "cinposcode", "coutposcode", "cbmemo", "irowno", "imassdate", "dmadedate", "cmassunit", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
+          "updateWritable": ["ctvbatch", "itvnum", "itvquantity", "itvacost", "itvaprice", "itvpcost", "itvpprice", "cinposcode", "coutposcode", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "clearable": ["ctvbatch", "cinposcode", "coutposcode", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "defaultRules": { "irowno": "rowNumber" },
+          "requiredWhen": { "ctvbatch": "inventory.batchManaged=true", "cinposcode": "inWarehouse.positionManaged=true", "coutposcode": "outWarehouse.positionManaged=true" }
+        }
+      ]
+    },
+    {
+      "documentType": "purchase-arrival",
+      "status": "candidate",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["ddate", "cptcode", "cvencode", "cexch_name", "iexchrate", "cmaker"],
+          "createWritable": ["ddate", "ccode", "cptcode", "cvencode", "cdepcode", "cpocode", "cpersoncode", "cpaycode", "cexch_name", "cexch_code", "iexchrate", "cmemo", "cbustype", "cmaker", "bnegative", "idiscounttaxtype", "itaxrate", "ibilltype", "cvouchtype", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "updateWritable": ["ddate", "cptcode", "cvencode", "cdepcode", "cpocode", "cpersoncode", "cpaycode", "cexch_name", "cexch_code", "iexchrate", "cmemo", "itaxrate", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "clearable": ["cdepcode", "cpocode", "cpersoncode", "cpaycode", "cmemo", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "defaults": { "iexchrate": 1, "cbustype": "普通采购", "bnegative": false },
+          "defaultRules": { "ddate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "ivouchrowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cinvcode", "iquantity"],
+          "createWritable": ["cwhcode", "cinvcode", "ccomunitcode", "cgroupcode", "iinvexchrate", "cbatch", "dvdate", "dpdate", "imassdate", "cmassunit", "ioritaxcost", "iquantity", "inum", "ioricost", "iorimoney", "ioritaxprice", "iorisum", "icost", "imoney", "itaxprice", "isum", "itaxrate", "iposid", "sotype", "csocode", "iordertype", "csoordercode", "iorderseq", "iorderdid", "cveninvcode", "cordercode", "bexigency", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "ivouchrowno", "cbmemo", "bgift", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
+          "updateWritable": ["cwhcode", "cbatch", "dvdate", "dpdate", "imassdate", "cmassunit", "ioritaxcost", "iquantity", "inum", "ioricost", "iorimoney", "ioritaxprice", "iorisum", "icost", "imoney", "itaxprice", "isum", "itaxrate", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "clearable": ["cwhcode", "cbatch", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "defaultRules": { "ivouchrowno": "rowNumber" },
+          "requiredWhen": { "cbatch": "inventory.batchManaged=true" }
+        }
+      ]
+    },
+    {
+      "documentType": "subcontract-arrival",
+      "status": "deferred-candidate",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["ddate", "cptcode", "cvencode", "cexch_name", "iexchrate", "cmaker"],
+          "createWritable": ["ddate", "ccode", "cptcode", "cvencode", "cdepcode", "cpocode", "cpersoncode", "cpaycode", "cexch_name", "cexch_code", "iexchrate", "cmemo", "cbustype", "cmaker", "bnegative", "itaxrate", "ibilltype", "cvouchtype"],
+          "updateWritable": ["ddate", "cptcode", "cvencode", "cdepcode", "cpocode", "cpersoncode", "cpaycode", "cexch_name", "cexch_code", "iexchrate", "cmemo", "itaxrate"],
+          "clearable": ["cdepcode", "cpocode", "cpersoncode", "cpaycode", "cmemo"],
+          "defaults": { "iexchrate": 1, "cbustype": "委外加工", "bnegative": false },
+          "defaultRules": { "ddate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "ivouchrowno"],
+          "requiredOnCreate": ["cinvcode", "iquantity"],
+          "createWritable": ["cwhcode", "cinvcode", "cbatch", "iquantity", "inum", "ioricost", "ioritaxcost", "itaxrate", "cordercode", "iorderdid", "iorderseq", "ivouchrowno", "cbmemo"],
+          "updateWritable": ["cwhcode", "cbatch", "iquantity", "inum", "ioricost", "ioritaxcost", "itaxrate", "cbmemo"],
+          "clearable": ["cwhcode", "cbatch", "cbmemo"],
+          "defaultRules": { "ivouchrowno": "rowNumber" },
+          "requiredWhen": { "cbatch": "inventory.batchManaged=true" }
+        }
+      ]
+    },
+    {
+      "documentType": "purchase-receipt",
+      "status": "candidate",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["ddate", "cwhcode", "crdcode", "cdepcode", "cptcode", "cvencode", "cmaker"],
+          "createWritable": ["ddate", "ccode", "cwhcode", "crdcode", "cdepcode", "cpersoncode", "cptcode", "cvencode", "cordercode", "carvcode", "cbillcode", "cmemo", "cmaker", "cbustype", "csource", "cbuscode", "itaxrate", "iexchrate", "cexch_name", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "updateWritable": ["ddate", "cwhcode", "crdcode", "cdepcode", "cpersoncode", "cptcode", "cvencode", "cordercode", "carvcode", "cbillcode", "cmemo", "itaxrate", "iexchrate", "cexch_name", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "clearable": ["cpersoncode", "cordercode", "carvcode", "cbillcode", "cmemo", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "defaultRules": { "ddate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "irowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cinvcode", "iquantity"],
+          "createWritable": ["cinvcode", "inum", "iquantity", "iunitcost", "iprice", "cbatch", "cposition", "iinvexchrate", "cassunit", "inquantity", "innum", "dmadedate", "imassdate", "cmassunit", "ioritaxcost", "ioricost", "iorimoney", "ioritaxprice", "iorisum", "itaxprice", "isum", "itaxrate", "cpoid", "iorderdid", "iordercode", "iorderseq", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cbmemo", "irowno", "iposflag", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37"],
+          "updateWritable": ["inum", "iquantity", "iunitcost", "iprice", "cbatch", "cposition", "inquantity", "innum", "dmadedate", "imassdate", "cmassunit", "itaxprice", "isum", "itaxrate", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "clearable": ["cbatch", "cposition", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "defaultRules": { "irowno": "rowNumber" },
+          "requiredWhen": { "cbatch": "inventory.batchManaged=true", "cposition": "warehouse.positionManaged=true" }
+        },
+        {
+          "scope": "position",
+          "matchKeys": ["AutoID"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cWhCode", "cPosCode", "cInvCode", "iQuantity"],
+          "createWritable": ["cWhCode", "cPosCode", "cInvCode", "cBatch", "cFree1", "cFree2", "dVDate", "iQuantity", "iNum", "cMemo", "dDate", "cSource", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10", "cAssUnit", "dMadeDate", "iMassDate", "cMassUnit", "cExpirationdate", "dExpirationdate", "dVouchDate"],
+          "updateWritable": ["cPosCode", "cBatch", "iQuantity", "iNum", "cMemo", "cFree1", "cFree2", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10"],
+          "clearable": ["cBatch", "cMemo", "cFree1", "cFree2", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10"]
+        }
+      ]
+    },
+    {
+      "documentType": "sales-delivery",
+      "status": "candidate",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["dlid"],
+          "requiredOnCreate": ["ddate", "cstcode", "cdepcode", "ccuscode", "cexch_name", "iexchrate", "cmaker"],
+          "createWritable": ["cdlcode", "cbustype", "cstcode", "ddate", "cdepcode", "cpersoncode", "csbvcode", "csocode", "ddependdate", "ccuscode", "cpaycode", "csccode", "cshipaddress", "cexch_name", "iexchrate", "itaxrate", "cmemo", "cmaker", "breturnflag", "caddcode", "cdeliverunit", "ccontactname", "cmobilephone", "cofficephone", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "updateWritable": ["ddate", "cstcode", "cdepcode", "cpersoncode", "csocode", "ddependdate", "ccuscode", "cpaycode", "csccode", "cshipaddress", "cexch_name", "iexchrate", "itaxrate", "cmemo", "caddcode", "cdeliverunit", "ccontactname", "cmobilephone", "cofficephone", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "clearable": ["cpersoncode", "csocode", "cmemo", "cshipaddress", "caddcode", "cdeliverunit", "ccontactname", "cmobilephone", "cofficephone", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2", "chdefine3"],
+          "defaults": { "cbustype": "普通销售", "iexchrate": 1, "breturnflag": false },
+          "defaultRules": { "ddate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "irowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cwhcode", "cinvcode", "iquantity"],
+          "createWritable": ["cwhcode", "cinvcode", "inum", "iquantity", "iquotedprice", "itaxunitprice", "iunitprice", "imoney", "itax", "idiscount", "isum", "cbatch", "cposition", "itaxrate", "csocode", "isosid", "irowno", "cbodymemo", "dvdate", "dmdate", "imassdate", "cmassunit", "cexpirationdate", "iexpiratdatecalcu", "dexpirationdate", "bgift", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
+          "updateWritable": ["cwhcode", "inum", "iquantity", "iquotedprice", "itaxunitprice", "iunitprice", "imoney", "itax", "idiscount", "isum", "cbatch", "cposition", "itaxrate", "cbodymemo", "dvdate", "dmdate", "imassdate", "cmassunit", "cexpirationdate", "dexpirationdate", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "clearable": ["cbatch", "cposition", "cbodymemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "defaultRules": { "irowno": "rowNumber" },
+          "requiredWhen": { "cbatch": "inventory.batchManaged=true", "cposition": "warehouse.positionManaged=true" }
+        }
+      ]
+    },
+    {
+      "documentType": "sales-outbound",
+      "status": "candidate",
+      "scopes": [
+        {
+          "scope": "header",
+          "matchKeys": ["id"],
+          "requiredOnCreate": ["ddate", "cwhcode", "crdcode", "cdepcode", "ccuscode", "cmaker"],
+          "createWritable": ["ddate", "ccode", "cwhcode", "crdcode", "cdepcode", "cpersoncode", "cstcode", "ccuscode", "cvencode", "cordercode", "cbillcode", "cdlcode", "cmemo", "cmaker", "cbustype", "cbuscode", "csource", "cshipaddress", "caddcode", "cdeliverunit", "ccontactname", "cmobilephone", "cofficephone", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2"],
+          "updateWritable": ["ddate", "cwhcode", "crdcode", "cdepcode", "cpersoncode", "cstcode", "ccuscode", "cordercode", "cbillcode", "cdlcode", "cmemo", "cshipaddress", "caddcode", "cdeliverunit", "ccontactname", "cmobilephone", "cofficephone", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2"],
+          "clearable": ["cpersoncode", "cordercode", "cbillcode", "cdlcode", "cmemo", "cshipaddress", "caddcode", "cdeliverunit", "ccontactname", "cmobilephone", "cofficephone", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16", "chdefine1", "chdefine2"],
+          "defaultRules": { "ddate": "today", "cmaker": "operatorName" }
+        },
+        {
+          "scope": "line",
+          "matchKeys": ["autoid", "irowno"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cinvcode", "iquantity"],
+          "createWritable": ["cinvcode", "inum", "iquantity", "iunitcost", "iprice", "cbatch", "cposition", "iinvexchrate", "cassunit", "inquantity", "innum", "dmadedate", "imassdate", "cmassunit", "isodid", "csocode", "isoseq", "iordertype", "iorderdid", "iordercode", "iorderseq", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cbmemo", "irowno", "iposflag", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
+          "updateWritable": ["inum", "iquantity", "iunitcost", "iprice", "cbatch", "cposition", "inquantity", "innum", "dmadedate", "imassdate", "cmassunit", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "clearable": ["cbatch", "cposition", "cbmemo", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10"],
+          "defaultRules": { "irowno": "rowNumber" },
+          "requiredWhen": { "cbatch": "inventory.batchManaged=true", "cposition": "warehouse.positionManaged=true" }
+        },
+        {
+          "scope": "position",
+          "matchKeys": ["AutoID"],
+          "allowCreateRows": true,
+          "allowDeleteRows": true,
+          "requiredOnCreate": ["cWhCode", "cPosCode", "cInvCode", "iQuantity"],
+          "createWritable": ["cWhCode", "cPosCode", "cInvCode", "cBatch", "cFree1", "cFree2", "dVDate", "iQuantity", "iNum", "cMemo", "dDate", "cSource", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10", "cAssUnit", "dMadeDate", "iMassDate", "cMassUnit", "cExpirationdate", "dExpirationdate", "dVouchDate"],
+          "updateWritable": ["cPosCode", "cBatch", "iQuantity", "iNum", "cMemo", "cFree1", "cFree2", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10"],
+          "clearable": ["cBatch", "cMemo", "cFree1", "cFree2", "cFree3", "cFree4", "cFree5", "cFree6", "cFree7", "cFree8", "cFree9", "cFree10"]
+        }
+      ]
+    }
+  ]
+}

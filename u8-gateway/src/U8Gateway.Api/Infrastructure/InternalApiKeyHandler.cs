@@ -59,7 +59,7 @@ namespace U8Gateway.Api.Infrastructure
                 Code = code,
                 Message = message,
                 RequestId = GatewayRequestContext.Id,
-                ServerTime = DateTimeOffset.Now
+                ServerTime = BusinessClock.Now
             });
         }
 

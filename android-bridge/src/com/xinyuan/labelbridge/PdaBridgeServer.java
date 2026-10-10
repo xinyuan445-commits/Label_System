@@ -2,6 +2,7 @@ package com.xinyuan.labelbridge;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.SystemClock;
@@ -140,7 +141,9 @@ final class PdaBridgeServer {
 
         if ("GET".equals(method) && requestTarget.startsWith("/v1/health")) {
             respond(socket, 200, "application/json; charset=utf-8",
-                "{\"ready\":true,\"protocol\":\"" + PROTOCOL_VERSION + "\"}");
+                "{\"ready\":true,\"protocol\":\"" + PROTOCOL_VERSION
+                    + "\",\"apkVersion\":\"" + escapeJson(appVersionName())
+                    + "\",\"apkVersionCode\":" + appVersionCode() + "}");
             return;
         }
         if ("GET".equals(method) && requestTarget.startsWith("/v1/events")) {
@@ -306,6 +309,31 @@ final class PdaBridgeServer {
             + "app.contentWindow.postMessage({source:'label-system-pda',type:'scan',payload:item},'*');}}}"
             + "catch(e){}finally{setTimeout(poll,140);}}poll();"
             + "</script></body></html>";
+    }
+
+    private static String appVersionName() {
+        Context context = appContext;
+        if (context == null) return "unknown";
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+            return info.versionName == null ? "unknown" : info.versionName;
+        } catch (Exception error) {
+            Log.w(TAG, "Could not read APK version name", error);
+            return "unknown";
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static int appVersionCode() {
+        Context context = appContext;
+        if (context == null) return 0;
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+            return info.versionCode;
+        } catch (Exception error) {
+            Log.w(TAG, "Could not read APK version code", error);
+            return 0;
+        }
     }
 
     private static String drainEvents() {
@@ -502,7 +530,9 @@ final class PdaBridgeServer {
                 + "\",\"testUrl\":\"" + escapeJson(testUrl)
                 + "\",\"productionUrl\":\"" + escapeJson(productionUrl)
                 + "\",\"scanSound\":\"" + escapeJson(scanSound)
-                + "\",\"bridgeVersion\":\"" + PROTOCOL_VERSION + "\"}";
+                + "\",\"bridgeVersion\":\"" + PROTOCOL_VERSION
+                + "\",\"apkVersion\":\"" + escapeJson(appVersionName())
+                + "\",\"apkVersionCode\":" + appVersionCode() + "}";
         }
     }
 

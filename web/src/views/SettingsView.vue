@@ -1,13 +1,29 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { createDefaultShellConfig, loadShellConfig } from '@/services/shell-config'
+
 const router = useRouter()
+const h5Version = __APP_VERSION__
+const shellConfig = ref(createDefaultShellConfig())
 
 const entries = [
   { name: 'settings-address', label: '地址设置', icon: 'link' },
+  { name: 'settings-features', label: '功能开关', icon: 'features' },
+  { name: 'settings-data-sync', label: '数据同步', icon: 'sync' },
+  { name: 'settings-users', label: '用户管理', icon: 'users' },
   { name: 'settings-scanner', label: '扫码测试', icon: 'scan' },
   { name: 'settings-sound', label: '扫码提示音测试', icon: 'sound' },
 ] as const
+
+onMounted(async () => {
+  try {
+    shellConfig.value = await loadShellConfig()
+  } catch {
+    // 保留构建时兼容版本，设置页仍可正常使用。
+  }
+})
 </script>
 
 <template>
@@ -37,6 +53,23 @@ const entries = [
           <svg v-else-if="entry.icon === 'scan'" viewBox="0 0 24 24">
             <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10" />
           </svg>
+          <svg v-else-if="entry.icon === 'features'" viewBox="0 0 24 24">
+            <rect x="4" y="4" width="6" height="6" rx="1" />
+            <rect x="14" y="4" width="6" height="6" rx="1" />
+            <rect x="4" y="14" width="6" height="6" rx="1" />
+            <path d="M15 17h4M17 15v4" />
+          </svg>
+          <svg v-else-if="entry.icon === 'sync'" viewBox="0 0 24 24">
+            <path d="M20 7h-5V2" />
+            <path d="M19 7a8 8 0 0 0-13.7-1.7L4 7" />
+            <path d="M4 17h5v5" />
+            <path d="M5 17a8 8 0 0 0 13.7 1.7L20 17" />
+          </svg>
+          <svg v-else-if="entry.icon === 'users'" viewBox="0 0 24 24">
+            <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+            <path d="M3 21a6 6 0 0 1 12 0" />
+            <path d="M17 8a3 3 0 0 1 0 6M16 16a5 5 0 0 1 5 5" />
+          </svg>
           <svg v-else viewBox="0 0 24 24">
             <path d="M11 5 7 9H4v6h3l4 4V5Z" />
             <path d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12" />
@@ -48,6 +81,12 @@ const entries = [
         </svg>
       </button>
     </nav>
+
+    <div class="version-info">
+      <span>H5 {{ h5Version }}</span>
+      <i>·</i>
+      <span>APK {{ shellConfig.apkVersion }}</span>
+    </div>
   </main>
 </template>
 
@@ -59,9 +98,24 @@ const entries = [
 }
 
 .page-header,
-.settings-list {
+.settings-list,
+.version-info {
   width: min(100%, 560px);
   margin-inline: auto;
+}
+
+.version-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 18px;
+  color: #94a0af;
+  font-size: 12px;
+}
+
+.version-info i {
+  font-style: normal;
 }
 
 .page-header {

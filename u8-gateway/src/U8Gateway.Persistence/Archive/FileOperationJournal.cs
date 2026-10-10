@@ -8,6 +8,7 @@ using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using U8Gateway.Contracts;
 using U8Gateway.Contracts.Operations;
 using U8Gateway.Core.Operations;
 
@@ -50,7 +51,7 @@ namespace U8Gateway.Persistence.Archive
             Require(start.OperationType, nameof(start.OperationType));
 
             DateTimeOffset occurredAt = start.OccurredAt == default(DateTimeOffset)
-                ? DateTimeOffset.Now
+                ? BusinessClock.Now
                 : start.OccurredAt;
             string folderName = SafeSegment(
                 (string.IsNullOrWhiteSpace(start.DocumentTitle)
@@ -120,7 +121,7 @@ namespace U8Gateway.Persistence.Archive
             EnsureUnderRoot(path);
             if (value.OccurredAt == default(DateTimeOffset))
             {
-                value.OccurredAt = DateTimeOffset.Now;
+                value.OccurredAt = BusinessClock.Now;
             }
 
             JToken token = JToken.FromObject(

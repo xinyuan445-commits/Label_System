@@ -8,6 +8,8 @@ export interface ShellConfig {
   productionUrl: string
   scanSound: ScanSoundMode
   bridgeVersion: string
+  apkVersion: string
+  apkVersionCode: number
 }
 
 interface ShellMessage {
@@ -26,6 +28,8 @@ const defaultConfig: ShellConfig = {
   productionUrl: 'http://172.16.10.45:5175/',
   scanSound: 'short',
   bridgeVersion: 'pda-bridge-v1',
+  apkVersion: '0.4.0',
+  apkVersionCode: 104,
 }
 
 function isEnvironment(value: unknown): value is ShellEnvironment {
@@ -64,6 +68,11 @@ function parseConfig(value: unknown): ShellConfig {
     productionUrl: normalizeUrl(String(candidate.productionUrl || '')),
     scanSound: isScanSound(candidate.scanSound) ? candidate.scanSound : 'short',
     bridgeVersion: String(candidate.bridgeVersion || defaultConfig.bridgeVersion),
+    apkVersion: String(candidate.apkVersion || defaultConfig.apkVersion),
+    apkVersionCode:
+      typeof candidate.apkVersionCode === 'number' && Number.isFinite(candidate.apkVersionCode)
+        ? candidate.apkVersionCode
+        : defaultConfig.apkVersionCode,
   }
 }
 
@@ -135,13 +144,16 @@ export async function loadShellConfig(): Promise<ShellConfig> {
   })
 }
 
-export async function saveShellConfig(value: ShellConfig): Promise<void> {
+export async function saveShellConfig(
+  value: ShellConfig,
+  options: { applyAddress?: boolean } = {},
+): Promise<void> {
   const config = parseConfig(value)
 
   if (!isNativeShell()) {
     localStorage.setItem(browserStorageKey, JSON.stringify(config))
     const nextUrl = config[`${config.environment}Url`]
-    if (new URL(nextUrl).href !== window.location.href) {
+    if (options.applyAddress !== false && new URL(nextUrl).href !== window.location.href) {
       window.location.assign(nextUrl)
     }
     return
