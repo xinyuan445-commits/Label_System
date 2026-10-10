@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>U8 Gateway 配置</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#172033;font:14px/1.5 "Microsoft YaHei",sans-serif}.page{width:min(980px,calc(100% - 32px));margin:28px auto}.bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}h1{font-size:22px;margin:0}.status{min-height:22px;color:#52627a}.card{background:#fff;border:1px solid #dce4ef;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 4px 16px rgba(35,58,91,.05)}h2{font-size:16px;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px}.field{display:flex;flex-direction:column;gap:6px}.wide{grid-column:1/-1}.check{flex-direction:row;align-items:center;padding-top:24px}.check input{width:18px;height:18px;padding:0}label{color:#44536a}input,select{height:40px;border:1px solid #cbd6e4;border-radius:8px;padding:0 11px;background:#fff;color:#172033;outline:none}input:focus,select:focus{border-color:#4778c7;box-shadow:0 0 0 3px rgba(71,120,199,.12)}.actions{display:flex;gap:10px;justify-content:flex-end}.actions button{height:40px;border:0;border-radius:8px;padding:0 18px;cursor:pointer}.primary{background:#245da8;color:#fff}.secondary{background:#e9eff7;color:#213b5f}.actions button:disabled{opacity:.45;cursor:not-allowed}.key{margin-top:12px;padding:12px;background:#fff8dd;border:1px solid #eedb8b;border-radius:8px;word-break:break-all;display:none}@media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.page{width:min(100% - 20px,980px);margin:14px auto}.card{padding:16px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="bar"><h1>U8 Gateway 配置</h1><div id="status" class="status"></div></div>
+    <form id="form">
+      <section class="card">
+        <h2>运行</h2>
+        <div class="grid">
+          <div class="field"><label for="environmentName">环境</label><select id="environmentName"><option value="development">开发</option><option value="test">测试</option><option value="production">生产</option></select></div>
+          <div class="field"><label for="businessTimeZone">时区</label><input id="businessTimeZone" value="China Standard Time"></div>
+          <div class="field wide"><label for="operationArchiveRoot">操作凭证目录</label><input id="operationArchiveRoot" value="D:\U8GatewayData\operation-archive"></div>
+          <div class="field check"><input id="enableTestWrites" type="checkbox"><label for="enableTestWrites">允许测试写入</label></div>
+          <div></div>
+          <div class="field"><label for="writeAllowedDatabase">限定数据库</label><input id="writeAllowedDatabase" autocomplete="off"></div>
+          <div class="field"><label for="writeAllowedAccountId">限定账套</label><input id="writeAllowedAccountId" autocomplete="off"></div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>数据库</h2>
+        <div class="grid">
+          <div class="field"><label for="sqlServer">服务器</label><input id="sqlServer" autocomplete="off"></div>
+          <div class="field"><label for="sqlDatabase">数据库</label><input id="sqlDatabase" autocomplete="off"></div>
+          <div class="field"><label for="sqlUser">账号</label><input id="sqlUser" autocomplete="off"></div>
+          <div class="field"><label for="sqlPassword">密码</label><input id="sqlPassword" type="password" autocomplete="new-password"></div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>U8</h2>
+        <div class="grid">
+          <div class="field"><label for="u8Server">服务器</label><input id="u8Server" autocomplete="off"></div>
+          <div class="field"><label for="u8AccountId">账套</label><input id="u8AccountId" autocomplete="off"></div>
+          <div class="field"><label for="u8Year">年度</label><input id="u8Year" inputmode="numeric"></div>
+          <div class="field"><label for="u8Subsystem">子系统</label><input id="u8Subsystem" value="ST"></div>
+          <div class="field"><label for="u8User">账号</label><input id="u8User" autocomplete="off"></div>
+          <div class="field"><label for="u8Password">密码</label><input id="u8Password" type="password" autocomplete="new-password"></div>
+          <div class="field"><label for="defaultMaker">制单人</label><input id="defaultMaker"></div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>管理</h2>
+        <div class="grid">
+          <div class="field"><label for="adminPassword">当前管理密码</label><input id="adminPassword" type="password" autocomplete="current-password"></div>
+          <div class="field"><label for="newAdminPassword">首次管理密码</label><input id="newAdminPassword" type="password" autocomplete="new-password"></div>
+        </div>
+      </section>
+      <section class="card">
+        <div class="actions">
+          <button class="secondary" type="button" id="testSql">测试 SQL</button>
+          <button class="secondary" type="button" id="testU8">测试 U8</button>
+          <button class="primary" type="submit">保存</button>
+        </div>
+        <div id="key" class="key"></div>
+      </section>
+    </form>
+  </main>
+  <script>
+    const ids=['environmentName','businessTimeZone','sqlServer','sqlDatabase','sqlUser','sqlPassword','u8Server','u8AccountId','u8Year','u8Subsystem','u8User','u8Password','defaultMaker','operationArchiveRoot','writeAllowedDatabase','writeAllowedAccountId','newAdminPassword'];
+    const statusEl=document.getElementById('status');
+    const keyEl=document.getElementById('key');
+    function headers(){const value=document.getElementById('adminPassword').value;return {'Content-Type':'application/json',...(value?{'X-Admin-Password':value}:{})}}
+    function payload(){return {...Object.fromEntries(ids.map(id=>[id,document.getElementById(id).value])),enableTestWrites:document.getElementById('enableTestWrites').checked}}
+    function message(value,error=false){statusEl.textContent=value||'';statusEl.style.color=error?'#b42318':'#28713d'}
+    async function read(){try{const response=await fetch('/admin/api/config',{headers:headers()});if(response.status===401){message('请输入当前管理密码');return}if(!response.ok)throw new Error('读取失败');const body=await response.json();const data=body.data;for(const id of ids){if(id==='sqlPassword'||id==='u8Password'||id==='newAdminPassword')continue;if(data[id]!==undefined&&data[id]!==null)document.getElementById(id).value=data[id]}document.getElementById('enableTestWrites').checked=!!data.enableTestWrites;document.getElementById('sqlPassword').placeholder=data.hasSqlPassword?'已配置，留空不变':'';document.getElementById('u8Password').placeholder=data.hasU8Password?'已配置，留空不变':'';message(data.configured?'已配置':'首次配置')}catch(error){message(error.message,true)}}
+    document.getElementById('adminPassword').addEventListener('change',read);
+    document.getElementById('testSql').addEventListener('click',async()=>{try{message('连接中');const response=await fetch('/admin/api/test-sql',{method:'POST',headers:headers(),body:JSON.stringify(payload())});if(!response.ok)throw new Error((await response.text())||'连接失败');message('SQL 连接成功')}catch(error){message(error.message,true)}});
+    document.getElementById('testU8').addEventListener('click',async()=>{try{message('连接中');const response=await fetch('/admin/api/test-u8',{method:'POST',headers:headers(),body:JSON.stringify(payload())});if(!response.ok)throw new Error((await response.text())||'连接失败');message('U8 连接成功')}catch(error){message(error.message,true)}});
+    document.getElementById('form').addEventListener('submit',async event=>{event.preventDefault();try{message('保存中');const response=await fetch('/admin/api/save',{method:'POST',headers:headers(),body:JSON.stringify(payload())});if(!response.ok)throw new Error((await response.text())||'保存失败');const body=await response.json();message('配置已保存');if(body.data.internalApiKey){keyEl.textContent='内部密钥：'+body.data.internalApiKey;keyEl.style.display='block'}document.getElementById('sqlPassword').value='';document.getElementById('u8Password').value='';document.getElementById('newAdminPassword').value=''}catch(error){message(error.message,true)}});
+    read();
+  </script>
+</body>
+</html>

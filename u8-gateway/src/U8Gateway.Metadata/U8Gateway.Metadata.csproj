@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>U8Gateway.Metadata</AssemblyName>
+    <RootNamespace>U8Gateway.Metadata</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\U8Gateway.Contracts\U8Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\U8Gateway.Core\U8Gateway.Core.csproj" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\document-contracts\purchase-arrival.json" />
+    <EmbeddedResource Include="..\..\document-contracts\subcontract-arrival.json" />
+    <EmbeddedResource Include="..\..\document-contracts\purchase-receipt.json" />
+    <EmbeddedResource Include="..\..\document-contracts\sales-delivery.json" />
+    <EmbeddedResource Include="..\..\document-contracts\sales-outbound.json" />
+    <EmbeddedResource Include="..\..\document-contracts\material-outbound.json" />
+    <EmbeddedResource Include="..\..\document-contracts\transfer.json" />
+    <EmbeddedResource Include="..\..\document-contracts\location-adjustment.json" />
+    <EmbeddedResource Include="..\..\document-contracts\inventory-count.json" />
+  </ItemGroup>
+</Project>

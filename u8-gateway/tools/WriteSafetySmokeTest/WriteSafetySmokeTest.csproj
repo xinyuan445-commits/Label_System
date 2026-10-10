@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>U8Gateway.WriteSafetySmokeTest</AssemblyName>
+    <RootNamespace>U8Gateway.WriteSafetySmokeTest</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\U8Gateway.U8\U8Gateway.U8.csproj" />
+  </ItemGroup>
+</Project>

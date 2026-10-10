@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>U8Gateway.Persistence</AssemblyName>
+    <RootNamespace>U8Gateway.Persistence</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\U8Gateway.Contracts\U8Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\U8Gateway.Core\U8Gateway.Core.csproj" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Security" />
+  </ItemGroup>
+</Project>

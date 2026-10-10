@@ -1,0 +1,14 @@
+{
+  "contractVersion": 1,
+  "documents": [
+    { "documentType": "purchase-arrival", "title": "采购到货", "status": "draft" },
+    { "documentType": "subcontract-arrival", "title": "委外到货", "status": "draft" },
+    { "documentType": "purchase-receipt", "title": "采购入库", "status": "draft" },
+    { "documentType": "sales-delivery", "title": "发货单", "status": "draft" },
+    { "documentType": "sales-outbound", "title": "销售出库单", "status": "draft" },
+    { "documentType": "material-outbound", "title": "材料出库单", "status": "draft" },
+    { "documentType": "transfer", "title": "调拨单", "status": "draft" },
+    { "documentType": "location-adjustment", "title": "货位调整", "status": "draft" },
+    { "documentType": "inventory-count", "title": "盘点单", "status": "draft" }
+  ]
+}

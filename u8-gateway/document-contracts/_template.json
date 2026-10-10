@@ -1,0 +1,54 @@
+{
+  "contractVersion": 1,
+  "documentType": "replace-me",
+  "title": "待填写",
+  "status": "draft",
+  "u8": {
+    "version": null,
+    "component": null,
+    "componentDocumentType": null,
+    "voucherType": null,
+    "numberType": null,
+    "businessType": null,
+    "headerTable": null,
+    "lineTable": null,
+    "positionTable": null
+  },
+  "capabilities": {
+    "query": false,
+    "validate": false,
+    "create": false,
+    "update": false,
+    "verify": false,
+    "unverify": false,
+    "delete": false
+  },
+  "fields": [
+    {
+      "name": "exampleField",
+      "title": "示例字段",
+      "scope": "header",
+      "dataType": "string",
+      "maxLength": null,
+      "precision": null,
+      "scale": null,
+      "adoDbType": null,
+      "adoFixedLength": null,
+      "adoSchemaNullable": null,
+      "adoMayBeNull": null,
+      "adoKeyColumn": null,
+      "adoBaseTable": null,
+      "adoBaseColumn": null,
+      "requiredMode": "optional",
+      "requiredWhen": null,
+      "createWritable": false,
+      "updateWritable": false,
+      "clearable": false,
+      "valueSource": "u8-system",
+      "u8Field": null,
+      "validation": null,
+      "returnable": true,
+      "evidence": []
+    }
+  ]
+}

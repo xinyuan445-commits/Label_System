@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>U8Gateway.U8</AssemblyName>
+    <RootNamespace>U8Gateway.U8</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\U8Gateway.Contracts\U8Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\U8Gateway.Core\U8Gateway.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="ADODB">
+      <HintPath>..\..\lib\u8-interop\ADODB.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Info_PU">
+      <HintPath>..\..\lib\u8-interop\Info_PU.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Interop.MSXML2">
+      <HintPath>..\..\lib\u8-interop\Interop.MSXML2.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Scripting">
+      <HintPath>..\..\lib\u8-interop\Scripting.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="System.Data" />
+    <Reference Include="SysInfo">
+      <HintPath>..\..\lib\u8-interop\SysInfo.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Interop.U8Login">
+      <HintPath>..\..\lib\u8-interop\Interop.U8Login.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Interop.VoucherCO_PU">
+      <HintPath>..\..\lib\u8-interop\Interop.VoucherCO_PU.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Interop.VoucherCO_SA">
+      <HintPath>..\..\lib\u8-interop\Interop.VoucherCO_SA.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="VoucherVerify">
+      <HintPath>..\..\lib\u8-interop\VoucherVerify.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>U8Gateway.Contracts</AssemblyName>
+    <RootNamespace>U8Gateway.Contracts</RootNamespace>
+  </PropertyGroup>
+</Project>

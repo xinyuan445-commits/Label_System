@@ -1,0 +1,121 @@
+{
+  "mappingVersion": 2,
+  "u8Version": "16.0",
+  "verifiedAt": "2026-10-10",
+  "componentCatalog": [
+    { "sequence": 1, "component": "CVoucher", "purpose": "凭证 CO" },
+    { "sequence": 2, "component": "VoucherCO_SA", "purpose": "销售 CO" },
+    { "sequence": 3, "component": "VoucherCO_PU", "purpose": "采购 CO" },
+    { "sequence": 4, "component": "USERPCO", "purpose": "库存 CO" },
+    { "sequence": 5, "component": "UFAPBO", "purpose": "应付 CO" },
+    { "sequence": 6, "component": "UFAPBO", "purpose": "用户原始清单同样标为应付 CO，待后续核对" },
+    { "sequence": 7, "component": "U8SrvTrans", "purpose": "基础资料" }
+  ],
+  "documents": [
+    {
+      "documentType": "purchase-arrival",
+      "component": "VoucherCO_PU",
+      "componentDocumentType": 2,
+      "componentDocumentTypeName": "采购到货单",
+      "databaseVoucherType": null,
+      "headerTable": "PU_ArrivalVouch",
+      "lineTable": "PU_ArrivalVouchs",
+      "businessType": "普通采购",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "subcontract-arrival",
+      "component": "VoucherCO_PU",
+      "componentDocumentType": 2,
+      "componentDocumentTypeName": "采购到货单",
+      "databaseVoucherType": null,
+      "headerTable": "PU_ArrivalVouch",
+      "lineTable": "PU_ArrivalVouchs",
+      "businessType": "委外加工",
+      "queryVerified": false,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "purchase-receipt",
+      "component": "USERPCO",
+      "componentDocumentType": "01",
+      "componentDocumentTypeName": "采购入库单",
+      "databaseVoucherType": "01",
+      "headerTable": "RdRecord01",
+      "lineTable": "RdRecords01",
+      "positionTable": "InvPosition",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "sales-delivery",
+      "component": "VoucherCO_SA",
+      "componentDocumentType": 9,
+      "componentDocumentTypeName": "DispatchBlue",
+      "databaseVoucherType": "05",
+      "headerTable": "DispatchList",
+      "lineTable": "DispatchLists",
+      "businessType": "普通销售",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "sales-outbound",
+      "component": "USERPCO",
+      "componentDocumentType": "32",
+      "componentDocumentTypeName": "销售出库单",
+      "databaseVoucherType": "32",
+      "headerTable": "RdRecord32",
+      "lineTable": "RdRecords32",
+      "positionTable": "InvPosition",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "material-outbound",
+      "component": "USERPCO",
+      "componentDocumentType": "11",
+      "componentDocumentTypeName": "材料出库单",
+      "databaseVoucherType": "11",
+      "headerTable": "RdRecord11",
+      "lineTable": "RdRecords11",
+      "positionTable": "InvPosition",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "transfer",
+      "component": "USERPCO",
+      "componentDocumentType": "12",
+      "componentDocumentTypeName": "调拨单",
+      "databaseVoucherType": "12",
+      "headerTable": "TransVouch",
+      "lineTable": "TransVouchs",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "location-adjustment",
+      "component": "USERPCO",
+      "componentDocumentType": "19",
+      "componentDocumentTypeName": "货位调整单",
+      "databaseVoucherType": "19",
+      "headerTable": "AdjustPVouch",
+      "lineTable": "AdjustPVouchs",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    },
+    {
+      "documentType": "inventory-count",
+      "component": "USERPCO",
+      "componentDocumentType": "18",
+      "componentDocumentTypeName": "盘点单",
+      "databaseVoucherType": "18",
+      "headerTable": "CheckVouch",
+      "lineTable": "CheckVouchs",
+      "queryVerified": true,
+      "schemaEvidence": "captured-read-only"
+    }
+  ]
+}

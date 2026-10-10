@@ -2,6 +2,7 @@
 node_modules/
 miniprogram_npm/
 .tools/
+U8_COM_Code/
 
 # Build outputs
 dist/
@@ -9,6 +10,8 @@ build/
 out/
 coverage/
 releases/
+**/bin/
+**/obj/
 *.apk
 *.aab
 *.apks
@@ -27,6 +30,9 @@ local.properties
 .env.*
 !.env.example
 *.local.json
+u8-gateway/runtime-data/
+u8-gateway/**/App_Data/
+u8-gateway/**/*.user
 
 # WeChat DevTools private settings
 project.private.config.json

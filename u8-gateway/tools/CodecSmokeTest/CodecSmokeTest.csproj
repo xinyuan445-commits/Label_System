@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>U8Gateway.CodecSmokeTest</AssemblyName>
+    <RootNamespace>U8Gateway.CodecSmokeTest</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\U8Gateway.Contracts\U8Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\U8Gateway.Core\U8Gateway.Core.csproj" />
+    <ProjectReference Include="..\..\src\U8Gateway.Metadata\U8Gateway.Metadata.csproj" />
+    <ProjectReference Include="..\..\src\U8Gateway.U8\U8Gateway.U8.csproj" />
+  </ItemGroup>
+</Project>

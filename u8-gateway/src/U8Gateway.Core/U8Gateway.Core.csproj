@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>U8Gateway.Core</AssemblyName>
+    <RootNamespace>U8Gateway.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\U8Gateway.Contracts\U8Gateway.Contracts.csproj" />
+  </ItemGroup>
+</Project>

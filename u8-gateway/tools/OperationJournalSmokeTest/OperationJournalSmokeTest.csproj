@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>U8Gateway.OperationJournalSmokeTest</AssemblyName>
+    <RootNamespace>U8Gateway.OperationJournalSmokeTest</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\U8Gateway.Contracts\U8Gateway.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\U8Gateway.Core\U8Gateway.Core.csproj" />
+    <ProjectReference Include="..\..\src\U8Gateway.Persistence\U8Gateway.Persistence.csproj" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>
