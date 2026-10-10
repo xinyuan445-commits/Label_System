@@ -38,6 +38,18 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/functions',
+      name: 'all-functions',
+      component: () => import('@/views/AllFunctionsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/favorites',
+      name: 'favorites',
+      component: () => import('@/views/FavoriteSettingsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/work/:code',
       name: 'work-function',
       component: () => import('@/views/BusinessView.vue'),

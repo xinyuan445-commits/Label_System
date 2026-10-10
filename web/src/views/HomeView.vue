@@ -2,8 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import WorkspaceIcon from '@/WorkspaceIcon.vue'
+import { readWorkspaceFavorites } from '@/services/workspace-favorites'
 import { useAuthStore } from '@/stores/auth'
-import { workspaceGroups, type WorkspaceIcon } from '@/workspace'
+import { findWorkspaceEntry, type WorkspaceEntry } from '@/workspace'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -11,49 +13,11 @@ const accountMenu = ref<HTMLElement | null>(null)
 const accountOpen = ref(false)
 const username = computed(() => authStore.session?.username || '用户')
 
-const iconPaths: Record<WorkspaceIcon, string[]> = {
-  receive: [
-    'M5 8.5 12 5l7 3.5v7L12 19l-7-3.5v-7Z',
-    'M12 12v7M5.5 8.7l6.5 3.3 6.5-3.3M12 3v5M9.5 5.5 12 8l2.5-2.5',
-  ],
-  truck: [
-    'M3 6h11v10H3V6ZM14 10h3l3 3v3h-6v-6Z',
-    'M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
-  ],
-  warehouse: [
-    'm3 9 9-5 9 5v11H3V9ZM7 12h10v8H7v-8Z',
-    'M7 15h10M10 12v8M14 12v8',
-  ],
-  document: [
-    'M6 3h8l4 4v14H6V3ZM14 3v5h4',
-    'M9 12h6M9 16h4',
-  ],
-  dispatch: [
-    'M4 8.5 11 5l7 3.5v7L11 19l-7-3.5v-7ZM11 12v7M4.5 8.7 11 12l6.5-3.3',
-    'M16 4h5v5M21 4l-6 6',
-  ],
-  material: [
-    'M4 7h16v12H4V7ZM4 11h16M9 11v8',
-    'M14 4h6v6M20 4l-7 7',
-  ],
-  transfer: ['M7 7h12M16 4l3 3-3 3M17 17H5M8 14l-3 3 3 3'],
-  location: [
-    'M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z',
-    'M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
-  ],
-  inventory: [
-    'M8 4h8M9 3v3h6V3M6 5h12v16H6V5Z',
-    'm9 14 2 2 4-5',
-  ],
-  approve: [
-    'M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Z',
-    'm8.5 12 2.2 2.2 4.8-5',
-  ],
-  query: [
-    'M4 6h10v12H4V6ZM7 9h4M7 12h4M7 15h3',
-    'M16.5 15.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18.7 17.7 21 20',
-  ],
-}
+const favoriteEntries = computed<WorkspaceEntry[]>(() =>
+  readWorkspaceFavorites(username.value)
+    .map((code) => findWorkspaceEntry(code))
+    .filter((entry): entry is WorkspaceEntry => entry !== undefined),
+)
 
 async function openEntry(code: string): Promise<void> {
   await router.push({ name: 'work-function', params: { code } })
@@ -77,99 +41,121 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeAccountMe
 
 <template>
   <main class="workspace">
-    <header class="topbar">
-      <h1>业务中心</h1>
+    <header class="topbar-shell">
+      <div class="topbar">
+        <h1>业务中心</h1>
 
-      <div ref="accountMenu" class="account-menu">
-        <button
-          class="account-button"
-          type="button"
-          :aria-expanded="accountOpen"
-          aria-haspopup="menu"
-          @click="accountOpen = !accountOpen"
-        >
-          <span class="avatar" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0" />
+        <div ref="accountMenu" class="account-menu">
+          <button
+            class="account-button"
+            type="button"
+            :aria-expanded="accountOpen"
+            aria-haspopup="menu"
+            @click="accountOpen = !accountOpen"
+          >
+            <span class="avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0" />
+              </svg>
+            </span>
+            <span class="account-name">{{ username }}</span>
+            <svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 10 5 5 5-5" />
             </svg>
-          </span>
-          <span class="account-name">{{ username }}</span>
-          <svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m7 10 5 5 5-5" />
-          </svg>
-        </button>
-
-        <div v-if="accountOpen" class="account-popover" role="menu">
-          <button type="button" role="menuitem" @click="logout">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" />
-            </svg>
-            <span>退出登录</span>
           </button>
+
+          <div v-if="accountOpen" class="account-popover" role="menu">
+            <button type="button" role="menuitem" @click="logout">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" />
+              </svg>
+              <span>退出登录</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>
 
-    <div class="group-list">
-      <section
-        v-for="group in workspaceGroups"
-        :key="group.key"
-        class="business-group"
-        :class="`tone-${group.tone}`"
-      >
-        <h2>{{ group.title }}</h2>
+    <div class="workspace-content">
+      <section class="favorites-card">
+        <div class="section-heading">
+          <h2>常用功能</h2>
+          <button type="button" @click="router.push({ name: 'favorites' })">管理</button>
+        </div>
 
-        <div class="entry-grid">
+        <div v-if="favoriteEntries.length" class="favorite-grid">
           <button
-            v-for="entry in group.entries"
+            v-for="entry in favoriteEntries"
             :key="entry.code"
-            class="entry-button"
+            class="favorite-button"
             type="button"
             @click="openEntry(entry.code)"
           >
-            <span class="entry-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24">
-                <path v-for="path in iconPaths[entry.icon]" :key="path" :d="path" />
-              </svg>
+            <span class="favorite-icon" aria-hidden="true">
+              <WorkspaceIcon :icon="entry.icon" />
             </span>
             <span>{{ entry.label }}</span>
           </button>
         </div>
+
+        <button v-else class="empty-favorites" type="button" @click="router.push({ name: 'favorites' })">
+          <span>＋</span>
+          <span>添加常用功能</span>
+        </button>
       </section>
+
+      <button class="all-functions" type="button" @click="router.push({ name: 'all-functions' })">
+        <span class="all-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <rect x="4" y="4" width="6" height="6" rx="1" />
+            <rect x="14" y="4" width="6" height="6" rx="1" />
+            <rect x="4" y="14" width="6" height="6" rx="1" />
+            <rect x="14" y="14" width="6" height="6" rx="1" />
+          </svg>
+        </span>
+        <span class="all-label">全部功能</span>
+        <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+      </button>
     </div>
   </main>
 </template>
 
 <style scoped>
 .workspace {
-  min-height: 100dvh;
-  padding: 24px 20px 34px;
+  height: 100dvh;
+  overflow: hidden;
   background: #f3f6fa;
 }
 
-.topbar,
-.group-list {
-  width: min(100%, 920px);
-  margin-inline: auto;
+.topbar-shell {
+  position: relative;
+  z-index: 20;
+  height: 72px;
+  border-bottom: 1px solid #e7edf4;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(23, 54, 93, 0.05);
 }
 
 .topbar {
-  min-height: 54px;
+  width: min(100%, 920px);
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 18px;
+  margin-inline: auto;
+  padding: 0 20px;
 }
 
 h1 {
   color: #17365d;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .account-menu {
   position: relative;
-  z-index: 10;
 }
 
 .account-button {
@@ -184,7 +170,6 @@ h1 {
   color: #31445e;
   font-size: 14px;
   font-weight: 650;
-  box-shadow: 0 5px 15px rgba(23, 54, 93, 0.06);
 }
 
 .avatar {
@@ -197,14 +182,18 @@ h1 {
   color: #2368c4;
 }
 
-.avatar svg {
-  width: 19px;
-  height: 19px;
+.avatar svg,
+.account-popover svg {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
+}
+
+.avatar svg {
+  width: 19px;
+  height: 19px;
 }
 
 .account-name {
@@ -258,21 +247,18 @@ h1 {
 .account-popover svg {
   width: 19px;
   height: 19px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
 }
 
-.group-list {
-  display: grid;
-  gap: 16px;
+.workspace-content {
+  width: min(100%, 920px);
+  height: calc(100dvh - 72px);
+  overflow-y: auto;
+  margin-inline: auto;
+  padding: 18px 20px 32px;
+  overscroll-behavior: contain;
 }
 
-.business-group {
-  --group-color: #2368c4;
-  --group-soft: #e9f2fd;
+.favorites-card {
   padding: 18px;
   border: 1px solid rgba(23, 54, 93, 0.07);
   border-radius: 18px;
@@ -280,39 +266,37 @@ h1 {
   box-shadow: 0 10px 28px rgba(23, 54, 93, 0.06);
 }
 
-.tone-green {
-  --group-color: #16805c;
-  --group-soft: #e6f5ef;
-}
-
-.tone-orange {
-  --group-color: #bb651c;
-  --group-soft: #fff0e3;
-}
-
-.tone-purple {
-  --group-color: #7651b5;
-  --group-soft: #f1ebfb;
-}
-
-.tone-cyan {
-  --group-color: #147a8c;
-  --group-soft: #e5f5f7;
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
 }
 
 h2 {
-  margin-bottom: 15px;
   color: #24344d;
   font-size: 17px;
 }
 
-.entry-grid {
+.section-heading button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: #edf4fd;
+  color: #2368c4;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.favorite-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
-.entry-button {
+.favorite-button {
   min-width: 0;
   min-height: 94px;
   display: flex;
@@ -331,44 +315,113 @@ h2 {
   text-align: center;
 }
 
-.entry-button:active {
-  background: var(--group-soft);
+.favorite-button:active {
+  background: #e9f2fd;
 }
 
-.entry-icon {
-  width: 38px;
-  height: 38px;
+.favorite-icon,
+.all-icon {
   display: grid;
   place-items: center;
-  border-radius: 11px;
-  background: var(--group-soft);
-  color: var(--group-color);
+  color: #2368c4;
 }
 
-.entry-icon svg {
-  width: 22px;
-  height: 22px;
+.favorite-icon {
+  width: 38px;
+  height: 38px;
+  padding: 8px;
+  border-radius: 11px;
+  background: #e9f2fd;
+}
+
+.empty-favorites {
+  width: 100%;
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  border: 1px dashed #c7d5e5;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #718096;
+  font-size: 13px;
+}
+
+.empty-favorites span:first-child {
+  color: #3f77bd;
+  font-size: 25px;
+}
+
+.all-functions {
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 12px 18px;
+  border: 1px solid rgba(23, 54, 93, 0.07);
+  border-radius: 18px;
+  background: #fff;
+  color: #24344d;
+  text-align: left;
+  box-shadow: 0 10px 28px rgba(23, 54, 93, 0.06);
+}
+
+.all-icon {
+  width: 40px;
+  height: 40px;
+  padding: 9px;
+  border-radius: 12px;
+  background: #e9f2fd;
+}
+
+.all-icon svg,
+.chevron {
+  width: 100%;
+  height: 100%;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.7;
+  stroke-width: 1.8;
+}
+
+.all-label {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.chevron {
+  width: 20px;
+  height: 20px;
+  color: #9aa8b9;
+  stroke-width: 2;
 }
 
 @media (max-width: 480px) {
-  .workspace {
-    padding: 20px 14px 28px;
+  .topbar {
+    padding: 0 14px;
   }
 
-  .business-group {
+  h1 {
+    font-size: 24px;
+  }
+
+  .workspace-content {
+    padding: 16px 14px 28px;
+  }
+
+  .favorites-card {
     padding: 16px 12px;
   }
 
-  .entry-grid {
+  .favorite-grid {
     gap: 8px;
   }
 
-  .entry-button {
+  .favorite-button {
     min-height: 90px;
     font-size: 13px;
   }

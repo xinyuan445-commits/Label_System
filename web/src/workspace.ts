@@ -83,7 +83,7 @@ export const workspaceGroups: WorkspaceGroup[] = [
   },
 ]
 
-const workspaceEntries = workspaceGroups.flatMap((group) => group.entries)
+export const workspaceEntries = workspaceGroups.flatMap((group) => group.entries)
 
 export function findWorkspaceEntry(code: string): WorkspaceEntry | undefined {
   return workspaceEntries.find((entry) => entry.code === code)
