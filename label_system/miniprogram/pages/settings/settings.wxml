@@ -1,0 +1,47 @@
+<view class="settings-page">
+  <view class="page-title">地址配置</view>
+
+  <radio-group bindchange="handleEnvironmentChange">
+    <label class="address-card {{environment === 'development' ? 'selected' : ''}}">
+      <view class="card-heading">
+        <text>开发</text>
+        <radio value="development" checked="{{environment === 'development'}}" color="#2368c4" />
+      </view>
+      <input
+        class="address-input"
+        value="{{developmentUrl}}"
+        placeholder="H5 地址"
+        bindinput="handleDevelopmentInput"
+      />
+    </label>
+
+    <label class="address-card {{environment === 'test' ? 'selected' : ''}}">
+      <view class="card-heading">
+        <text>测试</text>
+        <radio value="test" checked="{{environment === 'test'}}" color="#2368c4" />
+      </view>
+      <input
+        class="address-input"
+        value="{{testUrl}}"
+        placeholder="H5 地址"
+        bindinput="handleTestInput"
+      />
+    </label>
+
+    <label class="address-card {{environment === 'production' ? 'selected' : ''}}">
+      <view class="card-heading">
+        <text>生产</text>
+        <radio value="production" checked="{{environment === 'production'}}" color="#2368c4" />
+      </view>
+      <input
+        class="address-input"
+        value="{{productionUrl}}"
+        placeholder="H5 地址"
+        bindinput="handleProductionInput"
+      />
+    </label>
+  </radio-group>
+
+  <view class="error-message">{{errorMessage}}</view>
+  <button class="open-button" type="primary" bindtap="handleOpen">进入系统</button>
+</view>

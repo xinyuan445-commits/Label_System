@@ -29,6 +29,7 @@ local.properties
 
 # WeChat DevTools private settings
 project.private.config.json
+label_system/miniapp/*/i18nInfo.json
 
 # Logs and temporary files
 *.log
