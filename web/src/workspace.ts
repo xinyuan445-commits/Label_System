@@ -9,6 +9,7 @@ export type WorkspaceIcon =
   | 'location'
   | 'inventory'
   | 'approve'
+  | 'query'
 
 export interface WorkspaceEntry {
   code: string
@@ -20,7 +21,7 @@ export interface WorkspaceEntry {
 export interface WorkspaceGroup {
   key: string
   title: string
-  tone: 'blue' | 'green' | 'orange' | 'purple'
+  tone: 'blue' | 'green' | 'orange' | 'purple' | 'cyan'
   entries: WorkspaceEntry[]
 }
 
@@ -73,6 +74,12 @@ export const workspaceGroups: WorkspaceGroup[] = [
     title: '审核管理',
     tone: 'purple',
     entries: approvalEntries,
+  },
+  {
+    key: 'query',
+    title: '信息查询',
+    tone: 'cyan',
+    entries: [{ code: 'label-query', label: '标签查询', icon: 'query' }],
   },
 ]
 

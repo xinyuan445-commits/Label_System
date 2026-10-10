@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
@@ -6,6 +7,9 @@ import { workspaceGroups, type WorkspaceIcon } from '@/workspace'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const accountMenu = ref<HTMLElement | null>(null)
+const accountOpen = ref(false)
+const username = computed(() => authStore.session?.username || '用户')
 
 const iconPaths: Record<WorkspaceIcon, string[]> = {
   receive: [
@@ -45,6 +49,10 @@ const iconPaths: Record<WorkspaceIcon, string[]> = {
     'M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Z',
     'm8.5 12 2.2 2.2 4.8-5',
   ],
+  query: [
+    'M4 6h10v12H4V6ZM7 9h4M7 12h4M7 15h3',
+    'M16.5 15.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18.7 17.7 21 20',
+  ],
 }
 
 async function openEntry(code: string): Promise<void> {
@@ -52,20 +60,54 @@ async function openEntry(code: string): Promise<void> {
 }
 
 async function logout(): Promise<void> {
+  accountOpen.value = false
   authStore.logout()
   await router.replace({ name: 'login' })
 }
+
+function closeAccountMenu(event: PointerEvent): void {
+  if (!accountMenu.value?.contains(event.target as Node)) {
+    accountOpen.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('pointerdown', closeAccountMenu))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', closeAccountMenu))
 </script>
 
 <template>
   <main class="workspace">
     <header class="topbar">
-      <div>
-        <h1>工作台</h1>
-        <span class="username">{{ authStore.session?.username }}</span>
-      </div>
+      <h1>业务中心</h1>
 
-      <button class="logout-button" type="button" @click="logout">退出</button>
+      <div ref="accountMenu" class="account-menu">
+        <button
+          class="account-button"
+          type="button"
+          :aria-expanded="accountOpen"
+          aria-haspopup="menu"
+          @click="accountOpen = !accountOpen"
+        >
+          <span class="avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM5 20a7 7 0 0 1 14 0" />
+            </svg>
+          </span>
+          <span class="account-name">{{ username }}</span>
+          <svg class="account-chevron" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m7 10 5 5 5-5" />
+          </svg>
+        </button>
+
+        <div v-if="accountOpen" class="account-popover" role="menu">
+          <button type="button" role="menuitem" @click="logout">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M10 5H5v14h5M14 8l4 4-4 4M18 12H9" />
+            </svg>
+            <span>退出登录</span>
+          </button>
+        </div>
+      </div>
     </header>
 
     <div class="group-list">
@@ -125,23 +167,102 @@ h1 {
   font-size: 28px;
 }
 
-.username {
-  display: block;
-  margin-top: 3px;
-  color: #7b899a;
-  font-size: 13px;
+.account-menu {
+  position: relative;
+  z-index: 10;
 }
 
-.logout-button {
-  min-width: 68px;
-  min-height: 42px;
-  padding: 0 16px;
+.account-button {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 10px 5px 6px;
   border: 1px solid #d9e2ec;
-  border-radius: 11px;
+  border-radius: 22px;
   background: #fff;
-  color: #40516a;
+  color: #31445e;
   font-size: 14px;
   font-weight: 650;
+  box-shadow: 0 5px 15px rgba(23, 54, 93, 0.06);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9f2fd;
+  color: #2368c4;
+}
+
+.avatar svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.account-name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-chevron {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: #8593a5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.account-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 144px;
+  padding: 6px;
+  border: 1px solid #e0e7ef;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(23, 54, 93, 0.14);
+}
+
+.account-popover button {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #47586e;
+  font-size: 14px;
+  text-align: left;
+}
+
+.account-popover button:active {
+  background: #f3f6fa;
+}
+
+.account-popover svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .group-list {
@@ -172,6 +293,11 @@ h1 {
 .tone-purple {
   --group-color: #7651b5;
   --group-soft: #f1ebfb;
+}
+
+.tone-cyan {
+  --group-color: #147a8c;
+  --group-soft: #e5f5f7;
 }
 
 h2 {
