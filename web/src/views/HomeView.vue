@@ -12,16 +12,11 @@ const authStore = useAuthStore()
 const config = getRuntimeConfig()
 const bridge = getPdaBridge()
 
-const online = ref(navigator.onLine)
 const lastScan = ref<PdaScanEvent | null>(null)
 const mockBarcode = ref('TEST-CT58C-001')
 const canSimulate = computed(() => isMockPdaBridge(bridge))
 
 let stopScanListener: (() => void) | null = null
-
-function updateNetworkState(): void {
-  online.value = navigator.onLine
-}
 
 function simulateScan(): void {
   if (isMockPdaBridge(bridge)) {
@@ -35,16 +30,12 @@ async function logout(): Promise<void> {
 }
 
 onMounted(() => {
-  window.addEventListener('online', updateNetworkState)
-  window.addEventListener('offline', updateNetworkState)
   stopScanListener = bridge.subscribeScan((event) => {
     lastScan.value = event
   })
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('online', updateNetworkState)
-  window.removeEventListener('offline', updateNetworkState)
   stopScanListener?.()
 })
 </script>
@@ -57,13 +48,7 @@ onBeforeUnmount(() => {
         <span class="username">{{ authStore.session?.username }}</span>
       </div>
 
-      <div class="topbar-actions">
-        <span class="network-state" :class="{ offline: !online }">
-          <span aria-hidden="true"></span>
-          {{ online ? '在线' : '离线' }}
-        </span>
-        <button class="secondary-button" type="button" @click="logout">退出</button>
-      </div>
+      <button class="secondary-button" type="button" @click="logout">退出</button>
     </header>
 
     <section class="scan-card">
@@ -116,38 +101,6 @@ h1 {
   margin-top: 5px;
   color: #718096;
   font-size: 14px;
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.network-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #287a51;
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.network-state span {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #31a36b;
-  box-shadow: 0 0 0 5px rgba(49, 163, 107, 0.12);
-}
-
-.network-state.offline {
-  color: #a33a3a;
-}
-
-.network-state.offline span {
-  background: #d65353;
-  box-shadow: 0 0 0 5px rgba(214, 83, 83, 0.12);
 }
 
 .secondary-button,
@@ -275,11 +228,6 @@ footer {
 
   .topbar {
     align-items: flex-start;
-  }
-
-  .topbar-actions {
-    flex-direction: column;
-    align-items: flex-end;
   }
 
   .scan-card {

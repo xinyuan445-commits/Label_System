@@ -1,9 +1,9 @@
 {
   "pages": [
-    "pages/settings/settings",
     "pages/h5/h5"
   ],
   "window": {
+    "navigationStyle": "custom",
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "标签管理系统",
     "navigationBarBackgroundColor": "#ffffff",

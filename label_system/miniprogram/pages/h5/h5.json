@@ -1,4 +1,4 @@
 {
-  "navigationBarTitleText": "标签管理系统",
+  "navigationStyle": "custom",
   "disableScroll": true
 }
