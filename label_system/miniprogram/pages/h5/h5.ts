@@ -18,7 +18,9 @@ Page({
       return
     }
 
-    this.setData({ url })
+    this.setData({
+      url: `http://127.0.0.1:18765/?target=${encodeURIComponent(url)}`,
+    })
   },
 
   handleLoadError() {

@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 miniprogram_npm/
+.tools/
 
 # Build outputs
 dist/
