@@ -7,6 +7,7 @@ export interface DocumentPolicySettings {
   includePalletByDefault: boolean
   autoUploadOnComplete: boolean
   autoApproveAfterUpload: boolean
+  allowOverIssue: boolean
 }
 
 export interface GlobalOperationSettings {
@@ -35,6 +36,7 @@ const defaultPolicy: DocumentPolicySettings = {
   includePalletByDefault: true,
   autoUploadOnComplete: false,
   autoApproveAfterUpload: false,
+  allowOverIssue: false,
 }
 
 const defaultGlobalOperation: GlobalOperationSettings = {
@@ -58,6 +60,7 @@ function copyPolicy(value?: Partial<DocumentPolicySettings>): DocumentPolicySett
       value?.autoUploadOnComplete ?? defaultPolicy.autoUploadOnComplete,
     autoApproveAfterUpload:
       value?.autoApproveAfterUpload ?? defaultPolicy.autoApproveAfterUpload,
+    allowOverIssue: value?.allowOverIssue ?? defaultPolicy.allowOverIssue,
   }
 }
 

@@ -6,6 +6,16 @@ import { getPdaBridge, isMockPdaBridge } from '@/bridge/pda-bridge'
 import type { PdaScanEvent } from '@/bridge/types'
 import { getBusinessDocumentConfig } from '@/services/business-document-config'
 import {
+  ensureDocumentPolicy,
+  loadBusinessDocumentSettings,
+} from '@/services/business-document-settings'
+import { lookupInventoryObject } from '@/services/inventory-object-lookup'
+import {
+  allocateMaterialScans,
+  summarizeMaterialAllocations,
+  type SourceQuantityAllocation,
+} from '@/services/material-outbound-allocation'
+import {
   clearOutboundDocumentWorkingState,
   consumeOutboundDocumentEditRequest,
   consumeOutboundDocumentWorkingState,
@@ -14,10 +24,14 @@ import {
   saveOutboundDocument,
   saveOutboundDocumentWorkingState,
   type OutboundDocumentSummary,
+  type StoredOutboundDocument,
 } from '@/services/outbound-document-drafts'
+import { uploadOutboundDocument } from '@/services/outbound-document-upload'
 import {
   consumeSourceDocumentSelection,
+  type MaterialRequirementLine,
   type OutboundDocumentType,
+  type SourceDocumentLine,
 } from '@/services/source-document-selection'
 
 type LineObjectType = 'PRODUCT_LABEL' | 'PALLET'
@@ -37,6 +51,35 @@ interface OutboundLine {
   locationCode: string
   availableQty: number | null
   requestedQty: number
+  sourcePalletCode?: string
+  sourceAllocations?: SourceQuantityAllocation[]
+  unallocatedQty?: number
+}
+
+interface MaterialOutboundSubmissionLine {
+  scanLineId: string
+  labelCode: string
+  objectType: LineObjectType
+  sourcePalletCode: string
+  materialCode: string
+  materialName: string
+  batchNo: string
+  locationCode: string
+  requirementId: number
+  sourceLineId: number
+  sourceLineNo: number | null
+  productCode: string
+  normalQty: number
+  overQty: number
+  quantity: number
+}
+
+interface MaterialOutboundSubmissionGroup {
+  groupKey: string
+  sourceDocumentId: number
+  sourceDocumentNo: string
+  warehouseCode: string
+  lines: MaterialOutboundSubmissionLine[]
 }
 
 interface OutboundDraft {
@@ -53,7 +96,11 @@ interface OutboundDraft {
   outboundCategoryCode: string
   productionBatch: string
   remark: string
+  selectedSourceLines: SourceDocumentLine[]
+  materialRequirements: MaterialRequirementLine[]
+  overIssueTargets: Record<string, number>
   lines: OutboundLine[]
+  submissionGroups: MaterialOutboundSubmissionGroup[]
 }
 
 const props = defineProps<Props>()
@@ -76,6 +123,9 @@ const departmentCode = ref('')
 const outboundCategoryCode = ref('')
 const productionBatch = ref('')
 const remark = ref('')
+const selectedSourceLines = ref<SourceDocumentLine[]>([])
+const materialRequirements = ref<MaterialRequirementLine[]>([])
+const overIssueTargets = ref<Record<string, number>>({})
 const scanCode = ref('')
 const lines = ref<OutboundLine[]>([])
 const message = ref('')
@@ -85,14 +135,52 @@ let allowNavigation = false
 let baselineSnapshot = ''
 let stopScanListener: (() => void) | null = null
 let messageTimer: ReturnType<typeof setTimeout> | null = null
+const resolvingBarcodes = new Set<string>()
 
 const pageConfig = computed(() => getBusinessDocumentConfig(props.documentType))
+const documentSettings = computed(() => loadBusinessDocumentSettings())
+const documentPolicy = computed(() =>
+  ensureDocumentPolicy(documentSettings.value, props.documentType),
+)
+const allocationByLine = computed(() =>
+  props.documentType === 'material-outbound'
+    ? allocateMaterialScans(
+        lines.value,
+        materialRequirements.value,
+        documentPolicy.value.allowOverIssue,
+        overIssueTargets.value,
+      )
+    : {},
+)
+const materialSummaries = computed(() =>
+  props.documentType === 'material-outbound'
+    ? summarizeMaterialAllocations(lines.value, materialRequirements.value, allocationByLine.value)
+    : [],
+)
+const pendingOverIssueLine = computed(() =>
+  documentPolicy.value.allowOverIssue
+    ? lines.value.find((line) => allocationByLine.value[line.id]?.requiresOverIssueTarget)
+    : undefined,
+)
+const pendingOverIssueMaterial = computed(() =>
+  materialSummaries.value.find(
+    (item) => item.materialCode === pendingOverIssueLine.value?.materialCode,
+  ),
+)
+const overIssueChoices = computed(() => {
+  const materialCode = pendingOverIssueMaterial.value?.materialCode
+  if (!materialCode) return []
+  return materialRequirements.value.filter((item) => item.materialCode === materialCode)
+})
 
 const totalQty = computed(() =>
   lines.value.reduce((total, line) => total + normalizeQty(line.requestedQty), 0),
 )
 const showHeaderForm = computed(() => currentStep.value === 1)
 const showScanContent = computed(() => currentStep.value === 2)
+const sourceDetailButtonLabel = computed(() =>
+  props.documentType === 'material-outbound' ? '领料明细' : '源单明细',
+)
 const returnRouteName = computed(() =>
   route.query.origin === 'all-functions' ? 'all-functions' : 'home',
 )
@@ -131,35 +219,71 @@ function notify(text: string, tone: 'success' | 'error' | 'info' = 'info'): void
   }, 2400)
 }
 
-function addBarcode(rawCode: string): void {
+async function addBarcode(rawCode: string): Promise<void> {
   const barcode = rawCode.trim()
   if (!barcode) return
-
-  if (lines.value.some((line) => line.labelCode === barcode)) {
+  if (
+    resolvingBarcodes.has(barcode) ||
+    lines.value.some((line) => line.labelCode === barcode)
+  ) {
     notify('标签已添加', 'error')
     scanCode.value = ''
     return
   }
+  resolvingBarcodes.add(barcode)
 
-  lines.value.unshift({
-    id: createLineId(),
-    labelCode: barcode,
-    objectType: isPalletCode(barcode) ? 'PALLET' : 'PRODUCT_LABEL',
-    materialCode: '',
-    materialName: '',
-    batchNo: '',
-    warehouseCode: '',
-    locationCode: '',
-    availableQty: null,
-    requestedQty: 1,
-  })
-  scanCode.value = ''
-  notify('已添加', 'success')
+  try {
+    const found = await lookupInventoryObject(barcode)
+    const isPalletScan = isPalletCode(barcode) || found.length > 1
+    if (
+      !isPalletScan &&
+      found.some((item) => item.palletCode) &&
+      !documentSettings.value.globalPallet.allowPalletizedLabelDirectUse
+    ) {
+      notify('请扫描托盘码', 'error')
+      return
+    }
+    if (
+      props.documentType === 'material-outbound' &&
+      found.some((item) =>
+        !materialRequirements.value.some(
+          (requirement) => requirement.materialCode === item.materialCode,
+        ),
+      )
+    ) {
+      notify('该物料不在领料范围', 'error')
+      return
+    }
+    if (found.some((item) => lines.value.some((line) => line.labelCode === item.labelCode))) {
+      notify('标签已添加', 'error')
+      return
+    }
+    const additions = found.map<OutboundLine>((item) => ({
+      id: createLineId(),
+      labelCode: item.labelCode,
+      objectType: isPalletScan ? 'PALLET' : item.objectType,
+      materialCode: item.materialCode,
+      materialName: item.materialName,
+      batchNo: item.batchNo,
+      warehouseCode: item.warehouseCode,
+      locationCode: item.locationCode,
+      availableQty: item.availableQty,
+      requestedQty: item.availableQty,
+      sourcePalletCode: item.palletCode,
+    }))
+    lines.value = [...lines.value, ...additions]
+    notify('已添加', 'success')
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '标签查询失败', 'error')
+  } finally {
+    resolvingBarcodes.delete(barcode)
+    scanCode.value = ''
+  }
 }
 
 function handleScan(event: PdaScanEvent): void {
   if (currentStep.value !== 2) return
-  addBarcode(event.barcode)
+  void addBarcode(event.barcode)
 }
 
 function simulateOrAdd(): void {
@@ -168,11 +292,16 @@ function simulateOrAdd(): void {
     bridge.simulateScan(scanCode.value)
     return
   }
-  addBarcode(scanCode.value)
+  void addBarcode(scanCode.value)
 }
 
 function removeLine(id: string): void {
   lines.value = lines.value.filter((line) => line.id !== id)
+  if (overIssueTargets.value[id]) {
+    const next = { ...overIssueTargets.value }
+    delete next[id]
+    overIssueTargets.value = next
+  }
 }
 
 async function openSourceDocumentSelection(): Promise<void> {
@@ -189,9 +318,63 @@ function clearSourceDocument(): void {
   sourceDocumentType.value = ''
   sourceDocumentTypeLabel.value = ''
   sourceDocumentNo.value = ''
+  selectedSourceLines.value = []
+  materialRequirements.value = []
+  overIssueTargets.value = {}
+}
+
+function buildMaterialOutboundSubmissionGroups(
+  draftLines: OutboundLine[],
+): MaterialOutboundSubmissionGroup[] {
+  if (props.documentType !== 'material-outbound') return []
+  const groups = new Map<string, MaterialOutboundSubmissionGroup>()
+  for (const line of draftLines) {
+    for (const allocation of line.sourceAllocations ?? []) {
+      const warehouse = line.warehouseCode.trim()
+      const groupKey = `${allocation.sourceDocumentId}::${warehouse}`
+      let group = groups.get(groupKey)
+      if (!group) {
+        group = {
+          groupKey,
+          sourceDocumentId: allocation.sourceDocumentId,
+          sourceDocumentNo: allocation.sourceDocumentNo,
+          warehouseCode: warehouse,
+          lines: [],
+        }
+        groups.set(groupKey, group)
+      }
+      group.lines.push({
+        scanLineId: line.id,
+        labelCode: line.labelCode,
+        objectType: line.objectType,
+        sourcePalletCode: line.sourcePalletCode ?? '',
+        materialCode: line.materialCode,
+        materialName: line.materialName,
+        batchNo: line.batchNo,
+        locationCode: line.locationCode,
+        requirementId: allocation.requirementId,
+        sourceLineId: allocation.sourceLineId,
+        sourceLineNo: allocation.sourceLineNo,
+        productCode: allocation.productCode,
+        normalQty: allocation.normalQty,
+        overQty: allocation.overQty,
+        quantity: allocation.normalQty + allocation.overQty,
+      })
+    }
+  }
+  return [...groups.values()].sort((left, right) =>
+    left.sourceDocumentNo.localeCompare(right.sourceDocumentNo) ||
+    left.warehouseCode.localeCompare(right.warehouseCode),
+  )
 }
 
 function createDraft(): OutboundDraft {
+  const draftLines = lines.value.map((line) => ({
+    ...line,
+    requestedQty: normalizeQty(line.requestedQty),
+    sourceAllocations: allocationByLine.value[line.id]?.allocations ?? [],
+    unallocatedQty: allocationByLine.value[line.id]?.unallocatedQty ?? 0,
+  }))
   return {
     documentDate: documentDate.value,
     sourceDocumentType: sourceDocumentType.value,
@@ -206,7 +389,11 @@ function createDraft(): OutboundDraft {
     outboundCategoryCode: outboundCategoryCode.value.trim(),
     productionBatch: productionBatch.value.trim(),
     remark: remark.value.trim(),
-    lines: lines.value.map((line) => ({ ...line, requestedQty: normalizeQty(line.requestedQty) })),
+    selectedSourceLines: selectedSourceLines.value,
+    materialRequirements: materialRequirements.value,
+    overIssueTargets: overIssueTargets.value,
+    lines: draftLines,
+    submissionGroups: buildMaterialOutboundSubmissionGroups(draftLines),
   }
 }
 
@@ -233,6 +420,15 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
   outboundCategoryCode.value = draft.outboundCategoryCode || ''
   productionBatch.value = draft.productionBatch || ''
   remark.value = draft.remark || ''
+  selectedSourceLines.value = Array.isArray(draft.selectedSourceLines)
+    ? draft.selectedSourceLines
+    : []
+  materialRequirements.value = Array.isArray(draft.materialRequirements)
+    ? draft.materialRequirements
+    : []
+  overIssueTargets.value = draft.overIssueTargets && typeof draft.overIssueTargets === 'object'
+    ? draft.overIssueTargets
+    : {}
   lines.value = Array.isArray(draft.lines) ? draft.lines : []
 }
 
@@ -282,11 +478,11 @@ function saveWorkingState(): void {
   })
 }
 
-function saveCompletedDocument(): boolean {
+function saveCompletedDocument(): StoredOutboundDocument | null {
   const error = validate()
   if (error) {
     notify(error, 'error')
-    return false
+    return null
   }
 
   const payload = createDraft()
@@ -299,7 +495,7 @@ function saveCompletedDocument(): boolean {
   draftId.value = stored.id
   baselineSnapshot = snapshotDraft()
   clearOutboundDocumentWorkingState()
-  return true
+  return stored
 }
 
 function hasDraftContent(): boolean {
@@ -338,8 +534,21 @@ async function openSwitchSettings(): Promise<void> {
   })
 }
 
+async function openSourceDetails(): Promise<void> {
+  saveWorkingState()
+  allowNavigation = true
+  await router.replace({
+    name: 'source-document-details',
+    params: { code: props.documentType },
+    query: route.query,
+  })
+}
+
 function validateHeader(): string {
   if (!documentDate.value) return '请选择日期'
+  if (pageConfig.value.sourceTypes.length && !selectedSourceLines.value.length) {
+    return '请选择源单明细'
+  }
   if (pageConfig.value.partnerRequired && !customerCode.value.trim()) {
     return `请输入${pageConfig.value.partnerLabel}`
   }
@@ -365,11 +574,46 @@ function validateHeader(): string {
 function validate(): string {
   const headerError = validateHeader()
   if (headerError) return headerError
-  if (!lines.value.length) return '请扫描标签或托盘'
+  if (!lines.value.length && !selectedSourceLines.value.length) return '请扫描标签或托盘'
   if (lines.value.some((line) => normalizeQty(line.requestedQty) <= 0)) {
     return `${pageConfig.value.quantityLabel}必须大于0`
   }
+  if (
+    lines.value.some(
+      (line) => line.availableQty !== null && normalizeQty(line.requestedQty) > line.availableQty,
+    )
+  ) return '本次处理数量不能超过标签当前数量'
+  if (props.documentType === 'material-outbound') {
+    if (lines.value.some((line) => !line.warehouseCode.trim())) return '标签缺少仓库'
+    if (materialSummaries.value.some((item) => item.unallocatedQty > 0)) {
+      return documentPolicy.value.allowOverIssue ? '请选择超领产品' : '存在超过可领数量的物料'
+    }
+    if (
+      materialSummaries.value.some((item) => item.overQty > 0) &&
+      documentSettings.value.globalOperation.reasonRequired &&
+      !remark.value.trim()
+    ) return '请输入超领原因'
+  }
   return ''
+}
+
+function chooseOverIssueTarget(requirementId: number): void {
+  const lineId = pendingOverIssueLine.value?.id
+  if (!lineId) return
+  overIssueTargets.value = { ...overIssueTargets.value, [lineId]: requirementId }
+}
+
+function cancelOverIssue(): void {
+  const pending = pendingOverIssueLine.value
+  if (!pending) return
+  const quantityToRemove = allocationByLine.value[pending.id]?.unallocatedQty ?? 0
+  const current = normalizeQty(pending.requestedQty)
+  const nextQuantity = normalizeQty(current - quantityToRemove)
+  if (nextQuantity <= 0) {
+    lines.value = lines.value.filter((line) => line.id !== pending.id)
+    return
+  }
+  pending.requestedQty = nextQuantity
 }
 
 function goToScanStep(): void {
@@ -392,7 +636,15 @@ function resetDocument(): void {
 }
 
 async function finishDocument(): Promise<void> {
-  if (!saveCompletedDocument()) return
+  const stored = saveCompletedDocument()
+  if (!stored) return
+  if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
+    try {
+      await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '上传失败', 'error')
+    }
+  }
   allowNavigation = true
   await router.replace({
     name: 'outbound-document-manager',
@@ -402,9 +654,17 @@ async function finishDocument(): Promise<void> {
 }
 
 async function finishAndLeave(): Promise<void> {
-  if (!saveCompletedDocument()) {
+  const stored = saveCompletedDocument()
+  if (!stored) {
     showLeaveConfirm.value = false
     return
+  }
+  if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
+    try {
+      await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '上传失败', 'error')
+    }
   }
   showLeaveConfirm.value = false
   allowNavigation = true
@@ -440,6 +700,15 @@ onMounted(() => {
     sourceDocumentType.value = sourceSelection.sourceType
     sourceDocumentTypeLabel.value = sourceSelection.sourceTypeLabel
     sourceDocumentNo.value = sourceSelection.documentNo
+    selectedSourceLines.value = sourceSelection.selectedLines
+    materialRequirements.value = sourceSelection.requirements
+    overIssueTargets.value = {}
+    const departments = [...new Set(
+      sourceSelection.selectedLines.map((line) => line.departmentCode).filter(Boolean),
+    )]
+    if (!departmentCode.value && departments.length === 1) {
+      departmentCode.value = departments[0] ?? ''
+    }
   }
   stopScanListener = bridge.subscribeScan(handleScan)
 })
@@ -473,14 +742,19 @@ onBeforeRouteLeave((to) => {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
         </button>
         <h1>{{ pageConfig.title }}</h1>
-        <button
-          v-if="currentStep === 2"
-          class="switch-settings-button"
-          type="button"
-          @click="openSwitchSettings"
-        >
-          开关设置
-        </button>
+        <div v-if="currentStep === 2" class="topbar-actions">
+          <button
+            v-if="selectedSourceLines.length"
+            class="source-details-button"
+            type="button"
+            @click="openSourceDetails"
+          >
+            {{ sourceDetailButtonLabel }}
+          </button>
+          <button class="switch-settings-button" type="button" @click="openSwitchSettings">
+            开关设置
+          </button>
+        </div>
         <span v-else aria-hidden="true"></span>
       </div>
     </header>
@@ -590,7 +864,7 @@ onBeforeRouteLeave((to) => {
 
       <section v-if="showScanContent" class="line-section">
         <div class="section-title">
-          <h2>{{ pageConfig.detailTitle }}</h2>
+          <h2>扫码记录</h2>
           <span>{{ lines.length }}项</span>
         </div>
 
@@ -622,6 +896,22 @@ onBeforeRouteLeave((to) => {
               <span>{{ pageConfig.quantityLabel }}</span>
               <input v-model.number="line.requestedQty" type="number" inputmode="decimal" min="0.000001" step="0.000001" />
             </label>
+
+            <div
+              v-if="allocationByLine[line.id]?.allocations.length"
+              class="allocation-list"
+            >
+              <div
+                v-for="allocation in allocationByLine[line.id]?.allocations"
+                :key="allocation.requirementId"
+              >
+                <span>{{ allocation.productCode }} {{ allocation.productName }}</span>
+                <strong>
+                  {{ allocation.normalQty + allocation.overQty }}
+                  <i v-if="allocation.overQty > 0">超{{ allocation.overQty }}</i>
+                </strong>
+              </div>
+            </div>
           </article>
         </div>
 
@@ -678,6 +968,30 @@ onBeforeRouteLeave((to) => {
           <button class="discard" type="button" @click="discardAndLeave">放弃返回</button>
           <button class="finish" type="button" @click="finishAndLeave">完成做单</button>
         </div>
+      </section>
+    </div>
+
+    <div v-if="pendingOverIssueMaterial" class="confirm-mask over-issue-mask">
+      <section class="over-issue-dialog" role="dialog" aria-modal="true" aria-label="选择超领产品">
+        <div class="over-issue-heading">
+          <div>
+            <strong>{{ pendingOverIssueMaterial.materialCode }}</strong>
+            <span>超领{{ allocationByLine[pendingOverIssueLine?.id ?? '']?.unallocatedQty ?? 0 }}</span>
+          </div>
+        </div>
+        <button
+          v-for="choice in overIssueChoices"
+          :key="choice.requirementId"
+          type="button"
+          @click="chooseOverIssueTarget(choice.requirementId)"
+        >
+          <span>{{ choice.productCode }} {{ choice.productName }}</span>
+          <small>
+            {{ choice.sourceDocumentNo }} · 行{{ choice.sourceLineNo ?? '-' }}
+            <template v-if="choice.operationSequence"> · 工序{{ choice.operationSequence }}</template>
+          </small>
+        </button>
+        <button class="cancel-over-issue" type="button" @click="cancelOverIssue">取消</button>
       </section>
     </div>
 
@@ -757,9 +1071,15 @@ h1 {
   white-space: nowrap;
 }
 
-.switch-settings-button {
+.topbar-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.switch-settings-button,
+.source-details-button {
   height: 38px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 0;
   border-radius: 10px;
   background: #edf4fd;
@@ -767,6 +1087,11 @@ h1 {
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.source-details-button {
+  background: #2368c4;
+  color: #fff;
 }
 
 .page-content {
@@ -1258,6 +1583,170 @@ h1 {
 .confirm-actions .finish {
   background: #2368c4;
   color: #fff;
+}
+
+.material-summary-list {
+  display: grid;
+  gap: 9px;
+}
+
+.material-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 1px solid #dce6f1;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.material-summary-card.over {
+  border-color: #edc28e;
+  background: #fffaf3;
+}
+
+.material-summary-card > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.material-summary-card > div strong {
+  color: #203552;
+  font: 700 14px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.material-summary-card > div span {
+  color: #718096;
+  font-size: 12px;
+}
+
+.material-summary-card dl {
+  display: flex;
+  gap: 13px;
+}
+
+.material-summary-card dl div {
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+
+.material-summary-card dt {
+  color: #8a96a6;
+  font-size: 11px;
+}
+
+.material-summary-card dd {
+  margin: 0;
+  color: #2b405c;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.material-summary-card.over dd {
+  color: #b56825;
+}
+
+.allocation-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid #edf1f5;
+}
+
+.allocation-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #617186;
+  font-size: 12px;
+}
+
+.allocation-list strong {
+  color: #253b58;
+}
+
+.allocation-list i {
+  margin-left: 6px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: #fff0df;
+  color: #b56825;
+  font-style: normal;
+  font-size: 10px;
+}
+
+.over-issue-mask {
+  z-index: 46;
+}
+
+.over-issue-dialog {
+  width: min(100%, 400px);
+  overflow: hidden;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 18px 44px rgba(23, 54, 93, 0.24);
+}
+
+.over-issue-heading {
+  padding: 17px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.over-issue-heading > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.over-issue-heading strong {
+  color: #24344d;
+  font: 700 15px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.over-issue-heading span {
+  color: #b56825;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.over-issue-dialog > button {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 17px;
+  border: 0;
+  border-bottom: 1px solid #edf1f5;
+  background: #fff;
+  color: #2b405c;
+  text-align: left;
+}
+
+.over-issue-dialog > button:last-child {
+  border-bottom: 0;
+}
+
+.over-issue-dialog > button span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.over-issue-dialog > button small {
+  color: #7a8798;
+  font-size: 12px;
+}
+
+.over-issue-dialog > button.cancel-over-issue {
+  display: block;
+  color: #718096;
+  text-align: center;
+  font-weight: 700;
 }
 
 .toast-enter-active,

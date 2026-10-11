@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)] [string]$Server,
-    [Parameter(Mandatory)] [pscredential]$Credential,
+    [pscredential]$Credential,
     [string]$PackagePath,
     [int]$Port = 9880
 )
@@ -22,7 +22,12 @@ $zipPath = Join-Path $zipRoot 'U8Gateway.Api.zip'
 if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
 Compress-Archive -Path (Join-Path $packageRoot '*') -DestinationPath $zipPath -CompressionLevel Optimal
 
-$session = New-PSSession -ComputerName $Server -Credential $Credential -Authentication Negotiate
+$sessionParameters = @{
+    ComputerName = $Server
+    Authentication = 'Negotiate'
+}
+if ($Credential) { $sessionParameters.Credential = $Credential }
+$session = New-PSSession @sessionParameters
 try {
     $preflight = Invoke-Command -Session $session -ScriptBlock {
         param($RequestedPort)

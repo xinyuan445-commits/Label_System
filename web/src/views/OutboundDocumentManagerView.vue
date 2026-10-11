@@ -14,6 +14,11 @@ import {
   type OutboundDocumentUploadStatus,
   type StoredOutboundDocument,
 } from '@/services/outbound-document-drafts'
+import { uploadOutboundDocument } from '@/services/outbound-document-upload'
+import {
+  ensureDocumentPolicy,
+  loadBusinessDocumentSettings,
+} from '@/services/business-document-settings'
 import type { OutboundDocumentType } from '@/services/source-document-selection'
 
 const route = useRoute()
@@ -22,6 +27,7 @@ const activeStatus = ref<OutboundDocumentUploadStatus>('pending')
 const documents = ref<StoredOutboundDocument[]>([])
 const selectedDocument = ref<StoredOutboundDocument | null>(null)
 const message = ref('')
+const uploadingId = ref('')
 let allowDocumentReturn = false
 
 const documentType = computed<OutboundDocumentType>(() => {
@@ -43,6 +49,12 @@ function changeStatus(status: OutboundDocumentUploadStatus): void {
   refresh()
 }
 
+function canUpload(document: StoredOutboundDocument): boolean {
+  if (!document.payload || typeof document.payload !== 'object') return false
+  const payload = document.payload as { lines?: unknown[] }
+  return Array.isArray(payload.lines) && payload.lines.length > 0
+}
+
 async function continueDocument(document: StoredOutboundDocument): Promise<void> {
   clearOutboundDocumentWorkingState()
   requestOutboundDocumentEdit({
@@ -61,11 +73,28 @@ async function returnToDocument(): Promise<void> {
   })
 }
 
-function uploadDocument(): void {
-  message.value = '接口待接入'
-  setTimeout(() => {
-    message.value = ''
-  }, 2200)
+async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
+  if (!canUpload(document)) {
+    message.value = '请先扫码'
+    return
+  }
+  if (uploadingId.value) return
+  uploadingId.value = document.id
+  try {
+    const settings = loadBusinessDocumentSettings()
+    const policy = ensureDocumentPolicy(settings, documentType.value)
+    await uploadOutboundDocument(document, policy.autoApproveAfterUpload)
+    message.value = '上传成功'
+    refresh()
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : '上传失败'
+    refresh()
+  } finally {
+    uploadingId.value = ''
+    setTimeout(() => {
+      message.value = ''
+    }, 2200)
+  }
 }
 
 function openDocument(document: StoredOutboundDocument): void {
@@ -163,8 +192,18 @@ onBeforeRouteLeave((to) => {
             <div><dt>数量</dt><dd>{{ document.summary.totalQty }}</dd></div>
           </dl>
 
+          <p v-if="document.lastUploadError" class="upload-error">
+            {{ document.lastUploadError }}
+          </p>
+
           <div v-if="activeStatus === 'pending'" class="card-actions pending-actions">
-            <button type="button" @click.stop="uploadDocument">上传</button>
+            <button
+              type="button"
+              :disabled="uploadingId === document.id || !canUpload(document)"
+              @click.stop="uploadDocument(document)"
+            >
+              {{ uploadingId === document.id ? '上传中' : '上传' }}
+            </button>
             <button class="danger" type="button" @click.stop="removeDocument(document)">删除</button>
           </div>
           <div v-else class="card-actions">
@@ -195,4 +234,5 @@ onBeforeRouteLeave((to) => {
 
 <style scoped>
 .manager-page{min-height:100dvh;padding-top:72px;background:#f3f6fa;color:#21324a}.topbar-shell{position:fixed;z-index:20;top:0;right:0;left:0;height:72px;border-bottom:1px solid #e4ebf3;background:#fff;box-shadow:0 3px 12px rgba(23,54,93,.05)}.topbar,.page-content{width:min(100%,760px);margin-inline:auto}.topbar{height:100%;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:12px;padding:0 18px}.back-button{width:42px;height:42px;display:grid;place-items:center;border:0;border-radius:12px;background:#f3f6fa;color:#365678}.back-button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2}h1{overflow:hidden;color:#17365d;font-size:21px;text-overflow:ellipsis;white-space:nowrap}.page-content{display:grid;gap:14px;padding:16px}.status-tabs{display:grid;grid-template-columns:1fr 1fr;padding:4px;border:1px solid #dce5ef;border-radius:13px;background:#e9eff6}.status-tabs button{height:40px;border:0;border-radius:9px;background:transparent;color:#6c7b8e;font-size:14px;font-weight:750}.status-tabs button.active{background:#fff;color:#2368c4;box-shadow:0 2px 8px rgba(23,54,93,.1)}.document-list{display:grid;gap:11px}.document-card{padding:15px;border:1px solid rgba(23,54,93,.08);border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(23,54,93,.055);cursor:pointer}.document-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.document-heading>div{min-width:0;display:grid;gap:4px}.document-heading strong{overflow-wrap:anywhere;color:#203552;font:700 15px ui-monospace,SFMono-Regular,Consolas,monospace}.document-heading span,.document-heading time{color:#7b899b;font-size:12px}.document-card dl,.detail-sheet dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0;padding:12px;border-radius:11px;background:#f7f9fc}.document-card dl div,.detail-sheet dl div{min-width:0;display:grid;gap:4px}.document-card dt,.document-card dd,.detail-sheet dt,.detail-sheet dd{margin:0;font-size:12px}.document-card dt,.detail-sheet dt{color:#8491a2}.document-card dd,.detail-sheet dd{overflow:hidden;color:#33465e;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.card-actions{display:flex;justify-content:flex-end;gap:8px}.card-actions button{min-width:72px;height:38px;border:0;border-radius:9px;background:#e9f2fd;color:#2368c4;font-size:13px;font-weight:750}.card-actions button:nth-child(2){background:#2368c4;color:#fff}.card-actions button.danger{background:#fbecec;color:#b64141}.empty-state{min-height:180px;display:grid;place-items:center;border:1px dashed #cbd7e4;border-radius:16px;background:rgba(255,255,255,.62);color:#8b98a8;font-size:14px}.toast-message{position:fixed;z-index:50;right:18px;bottom:28px;left:18px;width:fit-content;margin-inline:auto;padding:10px 15px;border-radius:10px;background:#31445e;color:#fff;font-size:13px;font-weight:650;box-shadow:0 8px 22px rgba(23,54,93,.2)}.detail-mask{position:fixed;z-index:40;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:18px;background:rgba(20,32,48,.38)}.detail-sheet{width:min(100%,560px);padding:18px;border-radius:18px;background:#fff;box-shadow:0 16px 40px rgba(23,54,93,.2)}.detail-sheet header{display:flex;align-items:center;justify-content:space-between}.detail-sheet h2{color:#24344d;font-size:17px}.detail-sheet header button{width:36px;height:36px;border:0;border-radius:9px;background:#f1f4f8;color:#718096;font-size:22px}.detail-sheet dl{grid-template-columns:1fr 1fr;margin-bottom:0}@media(max-width:560px){.topbar{padding:0 14px}.page-content{padding:14px 12px}.document-card dl{grid-template-columns:repeat(3,minmax(0,1fr))}.pending-actions{display:grid;grid-template-columns:1fr 1fr}.card-actions button{min-width:0}}
+.upload-error{margin:-4px 0 12px;padding:9px 10px;border-radius:9px;background:#fff2f2;color:#ae4141;font-size:12px}.card-actions button:disabled{opacity:.55}
 </style>

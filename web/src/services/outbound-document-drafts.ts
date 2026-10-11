@@ -17,6 +17,9 @@ export interface StoredOutboundDocument {
   createdAt: string
   updatedAt: string
   uploadedAt: string | null
+  uploadAttempts: number
+  lastUploadError: string
+  serverOperationId: string
   summary: OutboundDocumentSummary
   payload: unknown
 }
@@ -108,6 +111,9 @@ export function saveOutboundDocument(input: {
     const updated: StoredOutboundDocument = {
       ...existing,
       updatedAt: now,
+      uploadStatus: 'pending',
+      uploadedAt: null,
+      lastUploadError: '',
       summary: input.summary,
       payload: input.payload,
     }
@@ -123,12 +129,57 @@ export function saveOutboundDocument(input: {
     createdAt: now,
     updatedAt: now,
     uploadedAt: null,
+    uploadAttempts: 0,
+    lastUploadError: '',
+    serverOperationId: '',
     summary: input.summary,
     payload: input.payload,
   }
   documents.push(created)
   writeAll(documents)
   return created
+}
+
+export function markOutboundDocumentUploaded(
+  id: string,
+  serverOperationId: string,
+): StoredOutboundDocument {
+  const documents = readAll()
+  const index = documents.findIndex((document) => document.id === id)
+  const existing = documents[index]
+  if (!existing) throw new Error('本地单据不存在')
+  const now = beijingTimestamp()
+  const updated: StoredOutboundDocument = {
+    ...existing,
+    uploadStatus: 'uploaded',
+    uploadedAt: now,
+    updatedAt: now,
+    uploadAttempts: (existing.uploadAttempts ?? 0) + 1,
+    lastUploadError: '',
+    serverOperationId,
+  }
+  documents.splice(index, 1, updated)
+  writeAll(documents)
+  return updated
+}
+
+export function markOutboundDocumentUploadFailed(
+  id: string,
+  error: string,
+): StoredOutboundDocument {
+  const documents = readAll()
+  const index = documents.findIndex((document) => document.id === id)
+  const existing = documents[index]
+  if (!existing) throw new Error('本地单据不存在')
+  const updated: StoredOutboundDocument = {
+    ...existing,
+    updatedAt: beijingTimestamp(),
+    uploadAttempts: (existing.uploadAttempts ?? 0) + 1,
+    lastUploadError: error,
+  }
+  documents.splice(index, 1, updated)
+  writeAll(documents)
+  return updated
 }
 
 export function deleteOutboundDocument(id: string): void {
@@ -150,9 +201,17 @@ export function saveOutboundDocumentWorkingState(state: OutboundDocumentWorkingS
 export function consumeOutboundDocumentWorkingState(
   documentType: OutboundDocumentType,
 ): OutboundDocumentWorkingState | null {
+  const state = readOutboundDocumentWorkingState(documentType)
+  if (!state) return null
+  sessionStorage.removeItem(workingStateKey)
+  return state
+}
+
+export function readOutboundDocumentWorkingState(
+  documentType: OutboundDocumentType,
+): OutboundDocumentWorkingState | null {
   const raw = sessionStorage.getItem(workingStateKey)
   if (!raw) return null
-  sessionStorage.removeItem(workingStateKey)
 
   try {
     const state = JSON.parse(raw) as Partial<OutboundDocumentWorkingState>
@@ -161,6 +220,32 @@ export function consumeOutboundDocumentWorkingState(
   } catch {
     return null
   }
+}
+
+export function findPendingSourceLineConflicts(
+  documentType: OutboundDocumentType,
+  sourceLineIds: number[],
+  excludeDocumentId: string | null = null,
+): number[] {
+  const requested = new Set(sourceLineIds.filter((id) => Number.isInteger(id) && id > 0))
+  if (!requested.size) return []
+  const conflicts = new Set<number>()
+  for (const document of readAll()) {
+    if (
+      document.documentType !== documentType ||
+      document.uploadStatus !== 'pending' ||
+      document.id === excludeDocumentId
+    ) continue
+    const payload = document.payload && typeof document.payload === 'object'
+      ? document.payload as { selectedSourceLines?: Array<{ sourceLineId?: number }> }
+      : {}
+    for (const line of payload.selectedSourceLines ?? []) {
+      if (typeof line.sourceLineId === 'number' && requested.has(line.sourceLineId)) {
+        conflicts.add(line.sourceLineId)
+      }
+    }
+  }
+  return [...conflicts]
 }
 
 export function clearOutboundDocumentWorkingState(): void {

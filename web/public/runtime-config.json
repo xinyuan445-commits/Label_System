@@ -1,10 +1,12 @@
 {
   "environment": "development",
   "apiBaseUrl": "http://127.0.0.1:3000",
-  "h5Version": "0.1.0-dev.1",
+  "sourceDocumentApiBaseUrl": "/__u8",
+  "h5Version": "0.2.0-dev.1",
   "bridgeProtocol": "pda-bridge-v1",
   "enableMockLogin": true,
   "enableMockScanner": true,
+  "enableMockSourceDocuments": false,
   "enableVConsole": false,
   "offlineSessionHours": 24
 }

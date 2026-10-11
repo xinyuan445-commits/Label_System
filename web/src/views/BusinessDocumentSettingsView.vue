@@ -116,6 +116,13 @@ onBeforeRouteLeave((to) => {
             <button type="button" @click="syncToGlobal('autoApproveAfterUpload')">全局</button>
           </div>
         </div>
+        <div v-if="documentType === 'material-outbound'" class="setting-row">
+          <span>允许超领</span>
+          <div class="setting-actions">
+            <label class="toggle"><input v-model="documentPolicy.allowOverIssue" type="checkbox" /><i aria-hidden="true"></i></label>
+            <button type="button" @click="syncToGlobal('allowOverIssue')">全局</button>
+          </div>
+        </div>
       </section>
 
       <div class="group-title">全局设置</div>

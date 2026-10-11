@@ -14,7 +14,7 @@ Environment: test
 Database: UFDATA_888_2021
 U8 account: (default)@888
 Test writes: disabled
-Service version: 0.2.0.0
+Service version: 0.3.3.0
 ```
 
 原有 `Default Web Site`、`PDA` 和 `MaterialOutboundApi` 站点名称、目录和绑定未修改。
@@ -30,6 +30,8 @@ Service version: 0.2.0.0
 - 新增字段无写入校验：通过，服务端日期和制单人默认值正确；
 - 服务器外访问管理页：403，符合仅本机管理要求；
 - 真实新增接口：409 `DOCUMENT_OPERATION_DISABLED`，未调用 U8 写入。
+- 生产订单源单、整单有效明细与子件查询：参数化 `SELECT` 验证通过；按订单日期筛选，只返回已审核且关闭日期、关闭时间为空的记录，不使用订单状态推断。
+- 合并选单验证：订单 `SCDD26093014` 返回 11 条有效工单明细和 11 条领料子件；未执行 U8 写入。
 
 首次启动发现 Web API 依赖的 Newtonsoft.Json 版本需要绑定重定向，已在 `Web.config` 固定为随发布包提供的 13.0.0.0，重新部署后启动正常。
 

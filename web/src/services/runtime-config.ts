@@ -3,10 +3,12 @@ export type AppEnvironment = 'development' | 'test' | 'production'
 export interface RuntimeConfig {
   environment: AppEnvironment
   apiBaseUrl: string
+  sourceDocumentApiBaseUrl: string
   h5Version: string
   bridgeProtocol: string
   enableMockLogin: boolean
   enableMockScanner: boolean
+  enableMockSourceDocuments: boolean
   enableVConsole: boolean
   offlineSessionHours: number
 }
@@ -14,10 +16,12 @@ export interface RuntimeConfig {
 const fallbackConfig: RuntimeConfig = {
   environment: 'development',
   apiBaseUrl: 'http://127.0.0.1:3000',
+  sourceDocumentApiBaseUrl: '/__u8',
   h5Version: '0.1.0-dev.1',
   bridgeProtocol: 'pda-bridge-v1',
   enableMockLogin: true,
   enableMockScanner: true,
+  enableMockSourceDocuments: false,
   enableVConsole: false,
   offlineSessionHours: 24,
 }
@@ -42,10 +46,14 @@ function parseRuntimeConfig(value: unknown): RuntimeConfig {
   return {
     environment: candidate.environment,
     apiBaseUrl: String(candidate.apiBaseUrl || ''),
+    sourceDocumentApiBaseUrl: String(
+      candidate.sourceDocumentApiBaseUrl || candidate.apiBaseUrl || '',
+    ),
     h5Version: String(candidate.h5Version || fallbackConfig.h5Version),
     bridgeProtocol: String(candidate.bridgeProtocol || fallbackConfig.bridgeProtocol),
     enableMockLogin: candidate.enableMockLogin === true,
     enableMockScanner: candidate.enableMockScanner === true,
+    enableMockSourceDocuments: candidate.enableMockSourceDocuments === true,
     enableVConsole: candidate.enableVConsole === true,
     offlineSessionHours:
       typeof candidate.offlineSessionHours === 'number' && candidate.offlineSessionHours > 0

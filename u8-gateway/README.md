@@ -56,6 +56,8 @@ u8-gateway/
 
 当前代码已建立 JSON 与 U8 ADO 持久化 XML 的双向编解码层，并把表头、表体和货位分开处理。9 类草稿合同共登记 2,584 个字段，已嵌入元数据服务供 schema 接口读取；第一版新增/修改候选策略、服务端默认值、字段白名单、无写入校验和基于原单的 PATCH XML 合并已经实现。采购、销售、库存三组适配器及统一单据路由已经建立，所有写能力仍保持关闭。写路由已接入追加式操作凭证、`clientRequestId` 幂等门禁和操作状态查询。审核、弃审和删除的三组 CO 调用及数据库状态回查已完成编码，尚未通过 888 写入验收，因此不会从 API 放行。服务器另有测试写入总开关、环境限制、数据库白名单和账套白名单四重门禁。
 
+生产订单源单查询已经开放：`GET /api/v1/source-documents` 返回已审核、未关闭的生产订单明细行，日期范围按订单日期筛选；`POST /api/v1/source-documents/lines` 为合并选单重新读取整张订单的全部有效明细；`POST /api/v1/source-documents/material-requirements` 返回选中明细的子件计划量、累计已领量和剩余量。是否关闭根据关闭日期、关闭时间判断，不使用订单状态推断。查询只使用参数化 `SELECT`，不写 U8；委外订单源单查询暂未开放。
+
 `tools/CodecSmokeTest` 用于验证 XML 往返、合同装载、能力开关、操作映射和适配器登记；`tools/NativeReadSmokeTest` 用于在 U8 服务器上验证实际读取；`tools/OperationJournalSmokeTest` 用于验证凭证摘要、脱敏、并发追加和并发幂等；`tools/WriteSafetySmokeTest` 验证错误环境、数据库或账套不能进入写适配器。这些自动测试都不会写账套。
 
 ## 相关文档

@@ -72,6 +72,12 @@ export const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/work/:code/source-details',
+      name: 'source-document-details',
+      component: () => import('@/views/SourceDocumentDetailsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/work/:code/documents',
       name: 'outbound-document-manager',
       component: () => import('@/views/OutboundDocumentManagerView.vue'),
