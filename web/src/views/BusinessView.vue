@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import ApprovalDocumentView from '@/views/ApprovalDocumentView.vue'
+import LabelQueryView from '@/views/LabelQueryView.vue'
 import OutboundDocumentView from '@/views/OutboundDocumentView.vue'
 import {
   isBusinessDocumentType,
@@ -56,6 +57,8 @@ onBeforeRouteLeave((to) => {
     :document-type="approvalDocumentType"
   />
 
+  <LabelQueryView v-else-if="entry?.code === 'label-query'" />
+
   <main v-else class="function-page">
     <header class="page-header">
       <button class="back-button" type="button" aria-label="返回" @click="leaveFunction">
@@ -73,7 +76,7 @@ onBeforeRouteLeave((to) => {
 <style scoped>
 .function-page {
   min-height: 100dvh;
-  padding: 24px 20px;
+  padding: calc(24px + var(--app-safe-top)) 20px 24px;
   background: #f3f6fa;
 }
 
@@ -132,7 +135,7 @@ h1 {
 
 @media (max-width: 480px) {
   .function-page {
-    padding: 20px 14px;
+    padding: calc(20px + var(--app-safe-top)) 14px 20px;
   }
 }
 </style>

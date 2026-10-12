@@ -1,8 +1,8 @@
 /*
-    标签管理系统业务数据库结构（评审稿）
+    标签管理系统业务数据库结构（初始迁移）
 
     适用数据库：Microsoft SQL Server
-    状态：仅供字段和关系评审，尚未冻结，禁止直接用于生产环境。
+    状态：已确认执行；迁移编号 001。
     时间字段：全部直接保存北京时间（UTC+8），精确到毫秒。
     数量规则：当前阶段每个物料只使用一个标签计量单位，数量精度 decimal(18,6)，不做单位换算。
     安全规则：本库不得保存 SQL 密码、U8 密码、令牌或完整连接字符串。
@@ -15,6 +15,13 @@
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
+SET ANSI_NULLS ON;
+SET ANSI_PADDING ON;
+SET ANSI_WARNINGS ON;
+SET ARITHABORT ON;
+SET CONCAT_NULL_YIELDS_NULL ON;
+SET QUOTED_IDENTIFIER ON;
+SET NUMERIC_ROUNDABORT OFF;
 
 IF EXISTS
 (
@@ -33,7 +40,8 @@ IF EXISTS
           N'pallet_label_relation',
           N'business_operation_event',
           N'system_function',
-          N'system_setting'
+          N'system_setting',
+          N'schema_migration'
       )
 )
 BEGIN
@@ -42,6 +50,22 @@ END;
 
 BEGIN TRY
     BEGIN TRANSACTION;
+
+    /* 记录每个环境已经执行的结构迁移，后续只新增迁移，不改写已执行历史。 */
+    CREATE TABLE dbo.schema_migration
+    (
+        migration_id                varchar(100) NOT NULL,
+        description                 nvarchar(500) NOT NULL,
+        script_checksum             char(64) NULL,
+        applied_at                  datetime2(3) NOT NULL CONSTRAINT DF_schema_migration_applied_at DEFAULT (DATEADD(HOUR, 8, SYSUTCDATETIME())),
+        applied_by                  sysname NOT NULL CONSTRAINT DF_schema_migration_applied_by DEFAULT (ORIGINAL_LOGIN()),
+
+        CONSTRAINT PK_schema_migration PRIMARY KEY CLUSTERED (migration_id),
+        CONSTRAINT CK_schema_migration_checksum CHECK
+        (
+            script_checksum IS NULL OR script_checksum NOT LIKE '%[^0-9A-Fa-f]%'
+        )
+    );
 
     /* 一笔提交、打印、审核、标签或托盘作业的操作主记录。 */
     CREATE TABLE dbo.business_operation
@@ -764,6 +788,12 @@ BEGIN TRY
 
     INSERT INTO @Descriptions(table_name, column_name, description)
     VALUES
+    (N'schema_migration', NULL, N'数据库结构迁移记录表：保存每个环境已经成功执行的迁移编号，防止重复或漏执行。'),
+    (N'schema_migration', N'migration_id', N'全局唯一迁移编号。'),
+    (N'schema_migration', N'description', N'迁移用途说明。'),
+    (N'schema_migration', N'script_checksum', N'迁移脚本 SHA-256；首个迁移暂不保存时可为空。'),
+    (N'schema_migration', N'applied_at', N'迁移执行完成时间，北京时间。'),
+    (N'schema_migration', N'applied_by', N'执行迁移的 SQL 登录名。'),
     (N'business_operation', NULL, N'业务操作主表：一笔提交、审核、打印、标签或托盘作业一条记录，保存操作人、设备、单据、幂等、归档和最终结果。'),
     (N'business_operation', N'id', N'业务操作内部主键。'),
     (N'business_operation', N'operation_no', N'业务操作编号，系统生成且全局唯一。'),
@@ -1024,6 +1054,9 @@ BEGIN TRY
 
     CLOSE description_cursor;
     DEALLOCATE description_cursor;
+
+    INSERT INTO dbo.schema_migration(migration_id, description)
+    VALUES ('001', N'创建标签管理系统初始业务表、约束、索引、扩展说明和功能目录。');
 
     COMMIT TRANSACTION;
 END TRY

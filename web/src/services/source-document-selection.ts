@@ -1,4 +1,5 @@
 import type { BusinessDocumentType } from '@/services/business-document-config'
+import { apiRequest } from '@/api/client'
 import { getRuntimeConfig } from '@/services/runtime-config'
 
 export type OutboundDocumentType = BusinessDocumentType
@@ -47,16 +48,11 @@ export interface SourceDocumentSelection {
 }
 
 export interface SourceDocumentQuery {
+  documentType: OutboundDocumentType
   sourceType: string
   keyword: string
   startDate: string
   endDate: string
-}
-
-interface ApiEnvelope<T> {
-  success: boolean
-  message?: string
-  data?: T
 }
 
 interface SourceDocumentSearchResult {
@@ -134,11 +130,6 @@ function shouldUseMockData(): boolean {
   return config.environment === 'development' && config.enableMockSourceDocuments
 }
 
-function sourceApiBaseUrl(): string {
-  const config = getRuntimeConfig()
-  return config.sourceDocumentApiBaseUrl || config.apiBaseUrl
-}
-
 function toQueryString(query: SourceDocumentQuery): string {
   const params = new URLSearchParams({ sourceType: query.sourceType, limit: '100' })
   if (query.keyword.trim()) params.set('keyword', query.keyword.trim())
@@ -171,18 +162,15 @@ export async function searchSourceDocuments(
     })
   }
 
-  const response = await fetch(
-    `${sourceApiBaseUrl()}/api/v1/source-documents?${toQueryString(query)}`,
-    { cache: 'no-store' },
+  const result = await apiRequest<SourceDocumentSearchResult>(
+    `/api/v1/source-documents?${toQueryString(query)}`,
+    { headers: { 'X-Function-Code': query.documentType } },
   )
-  const envelope = (await response.json()) as ApiEnvelope<SourceDocumentSearchResult>
-  if (!response.ok || !envelope.success || !envelope.data) {
-    throw new Error(envelope.message || '源单查询失败')
-  }
-  return envelope.data.items.map(normalizeSourceLine)
+  return result.items.map(normalizeSourceLine)
 }
 
 export async function loadMaterialRequirements(
+  documentType: OutboundDocumentType,
   sourceType: string,
   sourceLineIds: number[],
 ): Promise<MaterialRequirementLine[]> {
@@ -193,19 +181,15 @@ export async function loadMaterialRequirements(
     )
   }
 
-  const response = await fetch(`${sourceApiBaseUrl()}/api/v1/source-documents/material-requirements`, {
+  return apiRequest<MaterialRequirementLine[]>('/api/v1/source-documents/material-requirements', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'X-Function-Code': documentType },
     body: JSON.stringify({ sourceType, sourceLineIds }),
   })
-  const envelope = (await response.json()) as ApiEnvelope<MaterialRequirementLine[]>
-  if (!response.ok || !envelope.success || !envelope.data) {
-    throw new Error(envelope.message || '领料明细加载失败')
-  }
-  return envelope.data
 }
 
 export async function loadSourceDocumentLines(
+  documentType: OutboundDocumentType,
   sourceType: string,
   sourceDocumentIds: number[],
 ): Promise<SourceDocumentLine[]> {
@@ -216,16 +200,12 @@ export async function loadSourceDocumentLines(
     )
   }
 
-  const response = await fetch(`${sourceApiBaseUrl()}/api/v1/source-documents/lines`, {
+  const result = await apiRequest<SourceDocumentLine[]>('/api/v1/source-documents/lines', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'X-Function-Code': documentType },
     body: JSON.stringify({ sourceType, sourceDocumentIds }),
   })
-  const envelope = (await response.json()) as ApiEnvelope<SourceDocumentLine[]>
-  if (!response.ok || !envelope.success || !envelope.data) {
-    throw new Error(envelope.message || '源单明细加载失败')
-  }
-  return envelope.data.map(normalizeSourceLine)
+  return result.map(normalizeSourceLine)
 }
 
 export function saveSourceDocumentSelection(selection: SourceDocumentSelection): void {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import WorkspaceIcon from '@/WorkspaceIcon.vue'
@@ -9,6 +9,7 @@ import {
 } from '@/services/feature-visibility'
 import {
   MAX_WORKSPACE_FAVORITES,
+  loadWorkspaceFavorites,
   readWorkspaceFavorites,
   saveWorkspaceFavorites,
 } from '@/services/workspace-favorites'
@@ -16,7 +17,7 @@ import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const username = authStore.session?.username || '用户'
+const username = authStore.session?.user.id || '用户'
 const visibleGroups = getVisibleWorkspaceGroups()
 const selected = ref(readWorkspaceFavorites(username).filter(isFeatureVisible))
 const limitMessage = ref('')
@@ -43,10 +44,17 @@ function toggle(code: string): void {
 }
 
 async function save(): Promise<void> {
-  saveWorkspaceFavorites(username, selected.value)
-  await router.replace({ name: 'home' })
+  try {
+    await saveWorkspaceFavorites(username, selected.value)
+    await router.replace({ name: 'home' })
+  } catch {
+    limitMessage.value = '保存失败'
+  }
 }
 
+onMounted(async () => {
+  selected.value = (await loadWorkspaceFavorites(username)).filter(isFeatureVisible)
+})
 onBeforeUnmount(() => clearTimeout(messageTimer))
 </script>
 
@@ -293,5 +301,16 @@ h2 {
   .selection-grid {
     grid-template-columns: 1fr;
   }
+}
+.page-header-shell {
+  height: var(--app-header-height);
+}
+
+.page-header {
+  padding-top: var(--app-safe-top);
+}
+
+.selection-list {
+  height: calc(100dvh - var(--app-header-height));
 }
 </style>

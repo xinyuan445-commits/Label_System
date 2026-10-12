@@ -752,7 +752,7 @@ namespace U8Gateway.U8.Documents
                 : "ID";
             string verifiedColumn = VerifiedColumn(profile.DocumentType);
             string sql = "select top (1) [" + verifiedColumn + "], " +
-                "convert(varchar(18), [ufts], 1) from [dbo].[" +
+                "master.dbo.fn_varbintohexstr([ufts]) from [dbo].[" +
                 profile.HeaderTable + "] where [" + idColumn + "]=@id";
             using (var connection = new SqlConnection(ConnectionString(options)))
             using (var command = new SqlCommand(sql, connection))

@@ -1,4 +1,5 @@
 import { workspaceEntries } from '@/workspace'
+import { apiRequest, ApiError } from '@/api/client'
 
 export const MAX_WORKSPACE_FAVORITES = 6
 
@@ -25,6 +26,10 @@ function normalize(codes: unknown): string[] {
     .slice(0, MAX_WORKSPACE_FAVORITES)
 }
 
+interface PreferenceItem {
+  value: unknown
+}
+
 export function readWorkspaceFavorites(username: string): string[] {
   try {
     const value = localStorage.getItem(storageKey(username))
@@ -34,6 +39,25 @@ export function readWorkspaceFavorites(username: string): string[] {
   }
 }
 
-export function saveWorkspaceFavorites(username: string, codes: string[]): void {
-  localStorage.setItem(storageKey(username), JSON.stringify(normalize(codes)))
+export async function loadWorkspaceFavorites(username: string): Promise<string[]> {
+  try {
+    const item = await apiRequest<PreferenceItem>('/api/v1/users/me/preferences/workspace.favorites')
+    const favorites = normalize(item.value)
+    localStorage.setItem(storageKey(username), JSON.stringify(favorites))
+    return favorites
+  } catch (error) {
+    if (error instanceof ApiError && error.code === 'PREFERENCE_NOT_FOUND') {
+      return readWorkspaceFavorites(username)
+    }
+    return readWorkspaceFavorites(username)
+  }
+}
+
+export async function saveWorkspaceFavorites(username: string, codes: string[]): Promise<void> {
+  const favorites = normalize(codes)
+  localStorage.setItem(storageKey(username), JSON.stringify(favorites))
+  await apiRequest('/api/v1/users/me/preferences/workspace.favorites', {
+    method: 'PUT',
+    body: JSON.stringify({ value: favorites, deviceId: null, expectedRowVersion: null }),
+  })
 }

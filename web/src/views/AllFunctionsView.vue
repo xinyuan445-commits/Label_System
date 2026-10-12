@@ -215,4 +215,15 @@ h2 {
     font-size: 13px;
   }
 }
+.page-header-shell {
+  height: var(--app-header-height);
+}
+
+.page-header {
+  padding-top: var(--app-safe-top);
+}
+
+.function-list {
+  height: calc(100dvh - var(--app-header-height));
+}
 </style>

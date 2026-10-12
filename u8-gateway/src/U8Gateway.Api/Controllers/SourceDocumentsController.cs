@@ -32,15 +32,15 @@ namespace U8Gateway.Api.Controllers
             {
                 return Error(HttpStatusCode.BadRequest, "DATE_RANGE_INVALID", "开始日期不能晚于结束日期。");
             }
-            if (!string.Equals(sourceType, SourceDocumentTypeCodes.ProductionOrder,
-                    StringComparison.OrdinalIgnoreCase))
+            if (!U8SourceDocumentReader.IsSupportedSourceType(sourceType))
             {
                 return Error(HttpStatusCode.Conflict, "SOURCE_TYPE_NOT_READY", "该源单类型尚未开放。");
             }
 
             try
             {
-                SourceDocumentSearchResult result = Reader().SearchProductionOrders(
+                SourceDocumentSearchResult result = Reader().Search(
+                    sourceType,
                     keyword,
                     startDate,
                     endDate,
@@ -53,6 +53,10 @@ namespace U8Gateway.Api.Controllers
             {
                 return Error(HttpStatusCode.ServiceUnavailable, "U8_SOURCE_QUERY_FAILED", "U8 源单查询失败。");
             }
+            catch (InvalidOperationException)
+            {
+                return Error(HttpStatusCode.Conflict, "SOURCE_TYPE_NOT_READY", "该源单类型尚未开放。");
+            }
         }
 
         [HttpPost]
@@ -63,8 +67,7 @@ namespace U8Gateway.Api.Controllers
             {
                 return Error(HttpStatusCode.BadRequest, "SOURCE_TYPE_REQUIRED", "请选择源单类型。");
             }
-            if (!string.Equals(request.SourceType, SourceDocumentTypeCodes.ProductionOrder,
-                    StringComparison.OrdinalIgnoreCase))
+            if (!U8SourceDocumentReader.IsSupportedSourceType(request.SourceType))
             {
                 return Error(HttpStatusCode.Conflict, "SOURCE_TYPE_NOT_READY", "该源单类型尚未开放。");
             }
@@ -79,7 +82,7 @@ namespace U8Gateway.Api.Controllers
 
             try
             {
-                IList<SourceDocumentLine> result = Reader().GetProductionOrderLines(ids);
+                IList<SourceDocumentLine> result = Reader().GetLines(request.SourceType, ids);
                 if (result.Count == 0)
                 {
                     return Error(HttpStatusCode.NotFound, "SOURCE_LINES_NOT_FOUND", "未找到可用的源单明细。");
@@ -91,6 +94,10 @@ namespace U8Gateway.Api.Controllers
             catch (SqlException)
             {
                 return Error(HttpStatusCode.ServiceUnavailable, "U8_SOURCE_QUERY_FAILED", "U8 源单查询失败。");
+            }
+            catch (InvalidOperationException)
+            {
+                return Error(HttpStatusCode.Conflict, "SOURCE_TYPE_NOT_READY", "该源单类型尚未开放。");
             }
         }
 

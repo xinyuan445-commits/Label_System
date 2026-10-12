@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -9,8 +9,9 @@ import {
 } from '@/services/business-document-config'
 import {
   ensureDocumentPolicy,
+  fetchBusinessDocumentSettings,
   loadBusinessDocumentSettings,
-  saveBusinessDocumentSettings,
+  persistBusinessDocumentSettings,
   syncPolicySettingToGlobal,
   type DocumentPolicySettings,
 } from '@/services/business-document-settings'
@@ -22,6 +23,9 @@ const router = useRouter()
 const settings = ref(loadBusinessDocumentSettings())
 const expandedSections = ref<Record<GlobalSection, boolean>>({ operation: true, pallet: false })
 const message = ref('')
+const loading = ref(false)
+const saving = ref(false)
+const globallySynced = new Set<keyof DocumentPolicySettings>()
 let messageTimer: ReturnType<typeof setTimeout> | null = null
 let allowDocumentReturn = false
 
@@ -48,13 +52,21 @@ function notifyGlobalSync(): void {
 
 function syncToGlobal(key: keyof DocumentPolicySettings): void {
   syncPolicySettingToGlobal(settings.value, key, documentPolicy.value[key])
-  saveBusinessDocumentSettings(settings.value)
+  globallySynced.add(key)
   notifyGlobalSync()
 }
 
 async function saveAndReturn(): Promise<void> {
-  saveBusinessDocumentSettings(settings.value)
-  await returnToDocument()
+  if (saving.value) return
+  saving.value = true
+  try {
+    await persistBusinessDocumentSettings(documentType.value, settings.value, globallySynced)
+    await returnToDocument()
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : '保存失败'
+  } finally {
+    saving.value = false
+  }
 }
 
 async function returnToDocument(): Promise<void> {
@@ -79,6 +91,17 @@ onBeforeRouteLeave((to) => {
     replace: true,
   }
 })
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    settings.value = await fetchBusinessDocumentSettings(documentType.value)
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : '设置加载失败'
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <template>
@@ -92,7 +115,7 @@ onBeforeRouteLeave((to) => {
       </div>
     </header>
 
-    <div class="page-content">
+    <div v-if="!loading" class="page-content">
       <section class="settings-card document-settings-card">
         <h2><span>单据设置</span><small>{{ documentTitle }}</small></h2>
         <div class="setting-row">
@@ -123,6 +146,7 @@ onBeforeRouteLeave((to) => {
             <button type="button" @click="syncToGlobal('allowOverIssue')">全局</button>
           </div>
         </div>
+
       </section>
 
       <div class="group-title">全局设置</div>
@@ -153,7 +177,7 @@ onBeforeRouteLeave((to) => {
       </section>
     </div>
 
-    <footer class="action-shell"><button type="button" @click="saveAndReturn">保存</button></footer>
+    <footer class="action-shell"><button type="button" :disabled="loading || saving" @click="saveAndReturn">{{ saving ? '保存中' : '保存' }}</button></footer>
 
     <Transition name="drop-toast">
       <div v-if="message" class="toast-message" role="status">{{ message }}</div>
@@ -287,5 +311,20 @@ onBeforeRouteLeave((to) => {
 
 .action-shell button {
   box-shadow: 0 7px 16px rgba(35, 104, 196, 0.2);
+}
+.settings-page {
+  padding-top: var(--app-header-height);
+}
+
+.topbar-shell {
+  height: var(--app-header-height);
+}
+
+.topbar {
+  padding-top: var(--app-safe-top);
+}
+
+.toast-message {
+  top: calc(var(--app-header-height) + 10px);
 }
 </style>

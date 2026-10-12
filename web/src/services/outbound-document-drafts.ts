@@ -1,6 +1,66 @@
 import type { OutboundDocumentType } from '@/services/source-document-selection'
+import { readSession } from '@/services/auth'
+import {
+  readDraftDocument,
+  readDraftDocuments,
+  removeDraftDocument,
+  writeDraftDocument,
+  writeDraftDocuments,
+} from '@/services/draft-database'
+import { getDeviceId, getDeviceName } from '@/services/device-identity'
+import { createUniqueId } from '@/utils/unique-id'
 
-export type OutboundDocumentUploadStatus = 'pending' | 'uploaded'
+export type OutboundDocumentUploadStatus =
+  | 'pending'
+  | 'prepared'
+  | 'completed'
+  | 'cancelled'
+  | 'uploaded'
+
+export type DraftSyncStatus =
+  | 'local'
+  | 'pending'
+  | 'syncing'
+  | 'synced'
+  | 'failed'
+  | 'deleted-pending'
+
+export interface PreparedOperation {
+  id: number
+  operationNo: string
+  sourceDocumentNo: string
+  warehouseCode: string
+  lineCount: number
+  totalQty: number
+  status?: string
+  erpStatus?: string
+  approvalStatus?: string
+  erpDocumentNo?: string | null
+  errorCode?: string | null
+  errorMessage?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  completedAt?: string | null
+}
+
+export interface OperationGroupSnapshot {
+  submissionGroupId: string
+  documentType?: string
+  status: string
+  isTerminal?: boolean
+  operatorId?: string
+  operatorName?: string
+  sourceDocumentNo?: string
+  lineCount?: number
+  totalQty?: number
+  lockExpiresAt: string | null
+  createdAt?: string
+  updatedAt?: string
+  completedAt?: string | null
+  errorCode?: string | null
+  errorMessage?: string | null
+  operations: PreparedOperation[]
+}
 
 export interface OutboundDocumentSummary {
   documentDate: string
@@ -20,8 +80,25 @@ export interface StoredOutboundDocument {
   uploadAttempts: number
   lastUploadError: string
   serverOperationId: string
+  serverStatus?: string
+  lockExpiresAt?: string | null
+  serverCheckedAt?: string | null
+  serverErrorCode?: string | null
+  serverErrorMessage?: string | null
+  u8WriteEnabled?: boolean
+  preparedOperations?: PreparedOperation[]
   summary: OutboundDocumentSummary
   payload: unknown
+  ownerUserId: string
+  ownerName: string
+  deviceId: string
+  deviceName?: string
+  clientRevision: number
+  syncStatus: DraftSyncStatus
+  lastSyncedAt: string | null
+  syncError: string
+  remoteOnly?: boolean
+  operationOnly?: boolean
 }
 
 export interface OutboundDocumentEditRequest {
@@ -37,153 +114,264 @@ export interface OutboundDocumentWorkingState {
   baselineSnapshot?: string
 }
 
-const storageKey = 'label-system:outbound-documents:v1'
+const legacyStorageKey = 'label-system:outbound-documents:v1'
+const migrationMarkerKey = 'label-system:outbound-documents:indexeddb-v1'
 const editRequestKey = 'label-system:outbound-document-edit'
 const workingStateKey = 'label-system:outbound-document-working'
+const changeEventName = 'label-system:draft-changed'
+let migrationPromise: Promise<void> | null = null
 
-function readAll(): StoredOutboundDocument[] {
-  const raw = localStorage.getItem(storageKey)
-  if (!raw) return []
+function notifyChanged(): void {
+  window.dispatchEvent(new Event(changeEventName))
+}
 
-  try {
-    const value = JSON.parse(raw) as unknown
-    return Array.isArray(value) ? (value as StoredOutboundDocument[]) : []
-  } catch {
-    return []
+export function subscribeDraftChanges(listener: () => void): () => void {
+  window.addEventListener(changeEventName, listener)
+  return () => window.removeEventListener(changeEventName, listener)
+}
+
+function isAdmin(): boolean {
+  return readSession()?.user.roles.some((role) => role.toLowerCase() === 'admin') === true
+}
+
+function currentOwner(): { id: string; name: string } {
+  const user = readSession()?.user
+  if (!user) throw new Error('请先登录')
+  return user
+}
+
+function normalizedDocument(document: Partial<StoredOutboundDocument>): StoredOutboundDocument | null {
+  if (!document.id || !document.documentType || !document.summary) return null
+  const owner = readSession()?.user
+  return {
+    id: document.id,
+    documentType: document.documentType,
+    uploadStatus: document.uploadStatus ?? 'pending',
+    createdAt: document.createdAt ?? beijingTimestamp(),
+    updatedAt: document.updatedAt ?? document.createdAt ?? beijingTimestamp(),
+    uploadedAt: document.uploadedAt ?? null,
+    uploadAttempts: document.uploadAttempts ?? 0,
+    lastUploadError: document.lastUploadError ?? '',
+    serverOperationId: document.serverOperationId ?? '',
+    serverStatus: document.serverStatus,
+    lockExpiresAt: document.lockExpiresAt,
+    serverCheckedAt: document.serverCheckedAt,
+    serverErrorCode: document.serverErrorCode,
+    serverErrorMessage: document.serverErrorMessage,
+    u8WriteEnabled: document.u8WriteEnabled,
+    preparedOperations: document.preparedOperations,
+    summary: document.summary,
+    payload: document.payload ?? {},
+    ownerUserId: document.ownerUserId ?? owner?.id ?? 'unknown',
+    ownerName: document.ownerName ?? owner?.name ?? '',
+    deviceId: document.deviceId ?? getDeviceId(),
+    deviceName: document.deviceName ?? getDeviceName(),
+    clientRevision: Math.max(1, document.clientRevision ?? 1),
+    syncStatus: document.syncStatus ?? 'pending',
+    lastSyncedAt: document.lastSyncedAt ?? null,
+    syncError: document.syncError ?? '',
+    remoteOnly: document.remoteOnly ?? false,
+    operationOnly: document.operationOnly ?? false,
   }
 }
 
-function writeAll(documents: StoredOutboundDocument[]): void {
-  localStorage.setItem(storageKey, JSON.stringify(documents))
+async function ensureMigration(): Promise<void> {
+  if (migrationPromise) return migrationPromise
+  migrationPromise = (async () => {
+    if (localStorage.getItem(migrationMarkerKey)) return
+    const raw = localStorage.getItem(legacyStorageKey)
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as Array<Partial<StoredOutboundDocument>>
+        const documents = Array.isArray(parsed)
+          ? parsed.map(normalizedDocument).filter((item): item is StoredOutboundDocument => item !== null)
+          : []
+        await writeDraftDocuments(documents)
+        localStorage.removeItem(legacyStorageKey)
+      } catch {
+        return
+      }
+    }
+    localStorage.setItem(migrationMarkerKey, beijingTimestamp())
+  })()
+  return migrationPromise
+}
+
+async function readAll(): Promise<StoredOutboundDocument[]> {
+  await ensureMigration()
+  return readDraftDocuments()
 }
 
 function beijingTimestamp(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23',
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
   }).formatToParts(new Date())
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]))
   return `${value.year}-${value.month}-${value.day}T${value.hour}:${value.minute}:${value.second}+08:00`
 }
 
-function createDocumentId(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  return `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`
+function localStatusForServer(status: string, isTerminal = false): OutboundDocumentUploadStatus {
+  if (status === 'CANCELLED') return 'cancelled'
+  if (isTerminal || ['SUCCESS', 'FAILED', 'REVERSED'].includes(status)) return 'completed'
+  return 'prepared'
 }
 
-export function listOutboundDocuments(
+async function updateDocument(
+  id: string,
+  create: (existing: StoredOutboundDocument) => StoredOutboundDocument,
+): Promise<StoredOutboundDocument> {
+  await ensureMigration()
+  const existing = await readDraftDocument(id)
+  if (!existing) throw new Error('本地单据不存在')
+  const updated = create(existing)
+  await writeDraftDocument(updated)
+  notifyChanged()
+  return updated
+}
+
+export async function listAllLocalDocuments(): Promise<StoredOutboundDocument[]> {
+  return readAll()
+}
+
+export async function listOutboundDocuments(
   documentType: OutboundDocumentType,
   uploadStatus: OutboundDocumentUploadStatus,
-): StoredOutboundDocument[] {
-  return readAll()
-    .filter(
-      (document) =>
-        document.documentType === documentType && document.uploadStatus === uploadStatus,
-    )
+): Promise<StoredOutboundDocument[]> {
+  const session = readSession()
+  return (await readAll())
+    .filter((document) => document.syncStatus !== 'deleted-pending' &&
+      document.documentType === documentType && document.uploadStatus === uploadStatus &&
+      (isAdmin() || document.ownerUserId === session?.user.id))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
 }
 
-export function getOutboundDocument(id: string): StoredOutboundDocument | null {
-  return readAll().find((document) => document.id === id) ?? null
+export async function getOutboundDocument(id: string): Promise<StoredOutboundDocument | null> {
+  await ensureMigration()
+  return readDraftDocument(id)
 }
 
-export function saveOutboundDocument(input: {
+export async function saveOutboundDocument(input: {
   id?: string
   documentType: OutboundDocumentType
   summary: OutboundDocumentSummary
   payload: unknown
-}): StoredOutboundDocument {
-  const documents = readAll()
+}): Promise<StoredOutboundDocument> {
+  await ensureMigration()
   const now = beijingTimestamp()
-  const existingIndex = input.id
-    ? documents.findIndex((document) => document.id === input.id)
-    : -1
-
-  if (existingIndex >= 0) {
-    const existing = documents[existingIndex]
-    if (!existing) throw new Error('草稿不存在')
+  const owner = currentOwner()
+  const existing = input.id ? await readDraftDocument(input.id) : null
+  if (existing) {
+    if (existing.ownerUserId !== owner.id) throw new Error('不能修改其他用户的草稿')
     const updated: StoredOutboundDocument = {
-      ...existing,
-      updatedAt: now,
-      uploadStatus: 'pending',
-      uploadedAt: null,
-      lastUploadError: '',
-      summary: input.summary,
-      payload: input.payload,
+      ...existing, updatedAt: now, uploadStatus: 'pending', uploadedAt: null,
+      lastUploadError: '', summary: input.summary, payload: input.payload,
+      clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '',
+      remoteOnly: false, deviceId: getDeviceId(), deviceName: getDeviceName(),
     }
-    documents.splice(existingIndex, 1, updated)
-    writeAll(documents)
+    await writeDraftDocument(updated)
+    notifyChanged()
     return updated
   }
 
   const created: StoredOutboundDocument = {
-    id: createDocumentId(),
-    documentType: input.documentType,
-    uploadStatus: 'pending',
-    createdAt: now,
-    updatedAt: now,
-    uploadedAt: null,
-    uploadAttempts: 0,
-    lastUploadError: '',
-    serverOperationId: '',
-    summary: input.summary,
-    payload: input.payload,
+    id: createUniqueId('draft'), documentType: input.documentType,
+    uploadStatus: 'pending', createdAt: now, updatedAt: now, uploadedAt: null,
+    uploadAttempts: 0, lastUploadError: '', serverOperationId: '',
+    summary: input.summary, payload: input.payload,
+    ownerUserId: owner.id, ownerName: owner.name,
+    deviceId: getDeviceId(), deviceName: getDeviceName(), clientRevision: 1,
+    syncStatus: 'pending', lastSyncedAt: null, syncError: '', remoteOnly: false,
   }
-  documents.push(created)
-  writeAll(documents)
+  await writeDraftDocument(created)
+  notifyChanged()
   return created
 }
 
-export function markOutboundDocumentUploaded(
-  id: string,
-  serverOperationId: string,
-): StoredOutboundDocument {
-  const documents = readAll()
-  const index = documents.findIndex((document) => document.id === id)
-  const existing = documents[index]
-  if (!existing) throw new Error('本地单据不存在')
-  const now = beijingTimestamp()
-  const updated: StoredOutboundDocument = {
-    ...existing,
-    uploadStatus: 'uploaded',
-    uploadedAt: now,
-    updatedAt: now,
-    uploadAttempts: (existing.uploadAttempts ?? 0) + 1,
-    lastUploadError: '',
-    serverOperationId,
-  }
-  documents.splice(index, 1, updated)
-  writeAll(documents)
-  return updated
+export async function markOutboundDocumentUploaded(
+  id: string, serverOperationId: string,
+): Promise<StoredOutboundDocument> {
+  return updateDocument(id, (existing) => {
+    const now = beijingTimestamp()
+    return { ...existing, uploadStatus: 'uploaded', uploadedAt: now, updatedAt: now,
+      uploadAttempts: existing.uploadAttempts + 1, lastUploadError: '', serverOperationId,
+      clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '' }
+  })
 }
 
-export function markOutboundDocumentUploadFailed(
-  id: string,
-  error: string,
-): StoredOutboundDocument {
-  const documents = readAll()
-  const index = documents.findIndex((document) => document.id === id)
-  const existing = documents[index]
-  if (!existing) throw new Error('本地单据不存在')
-  const updated: StoredOutboundDocument = {
-    ...existing,
-    updatedAt: beijingTimestamp(),
-    uploadAttempts: (existing.uploadAttempts ?? 0) + 1,
-    lastUploadError: error,
-  }
-  documents.splice(index, 1, updated)
-  writeAll(documents)
-  return updated
+export async function markOutboundDocumentPrepared(
+  id: string, result: OperationGroupSnapshot & { u8WriteEnabled: boolean },
+): Promise<StoredOutboundDocument> {
+  return updateDocument(id, (existing) => {
+    const now = beijingTimestamp()
+    return { ...existing, uploadStatus: localStatusForServer(result.status, result.isTerminal), uploadedAt: now,
+      updatedAt: now, uploadAttempts: existing.uploadAttempts + 1, lastUploadError: '',
+      serverOperationId: result.submissionGroupId, serverStatus: result.status,
+      lockExpiresAt: result.lockExpiresAt, serverCheckedAt: now,
+      serverErrorCode: result.errorCode, serverErrorMessage: result.errorMessage,
+      u8WriteEnabled: result.u8WriteEnabled, preparedOperations: result.operations,
+      clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '' }
+  })
 }
 
-export function deleteOutboundDocument(id: string): void {
-  writeAll(readAll().filter((document) => document.id !== id))
+export async function updateOutboundDocumentGroup(
+  id: string, result: OperationGroupSnapshot,
+): Promise<StoredOutboundDocument> {
+  return updateDocument(id, (existing) => {
+    const now = beijingTimestamp()
+    return { ...existing, uploadStatus: localStatusForServer(result.status, result.isTerminal), updatedAt: now,
+      lastUploadError: '', serverOperationId: result.submissionGroupId,
+      serverStatus: result.status, lockExpiresAt: result.lockExpiresAt,
+      serverErrorCode: result.errorCode, serverErrorMessage: result.errorMessage,
+      serverCheckedAt: now, preparedOperations: result.operations,
+      clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '' }
+  })
+}
+
+export async function markOutboundDocumentUploadFailed(
+  id: string, error: string,
+): Promise<StoredOutboundDocument> {
+  return updateDocument(id, (existing) => ({ ...existing, updatedAt: beijingTimestamp(),
+    uploadAttempts: existing.uploadAttempts + 1, lastUploadError: error }))
+}
+
+export async function markDraftSyncing(id: string, revision: number): Promise<void> {
+  const existing = await readDraftDocument(id)
+  if (!existing || existing.clientRevision !== revision || existing.syncStatus === 'deleted-pending') return
+  await writeDraftDocument({ ...existing, syncStatus: 'syncing', syncError: '' })
+}
+
+export async function markDraftSynced(id: string, revision: number, syncedAt: string): Promise<void> {
+  const existing = await readDraftDocument(id)
+  if (!existing || existing.clientRevision !== revision) return
+  await writeDraftDocument({ ...existing, syncStatus: 'synced', lastSyncedAt: syncedAt,
+    syncError: '', remoteOnly: false })
+  notifyChanged()
+}
+
+export async function markDraftSyncFailed(id: string, revision: number, error: string): Promise<void> {
+  const existing = await readDraftDocument(id)
+  if (!existing || existing.clientRevision !== revision || existing.syncStatus === 'deleted-pending') return
+  await writeDraftDocument({ ...existing, syncStatus: 'failed', syncError: error })
+  notifyChanged()
+}
+
+export async function deleteOutboundDocument(id: string): Promise<void> {
+  const existing = await getOutboundDocument(id)
+  if (!existing) return
+  await writeDraftDocument({ ...existing, clientRevision: existing.clientRevision + 1,
+    syncStatus: 'deleted-pending', updatedAt: beijingTimestamp(), syncError: '' })
+  notifyChanged()
+}
+
+export async function confirmLocalDraftDeletion(id: string): Promise<void> {
+  await removeDraftDocument(id)
+  notifyChanged()
+}
+
+export async function importRemoteDocument(document: StoredOutboundDocument): Promise<void> {
+  await writeDraftDocument({ ...document, remoteOnly: false, syncStatus: 'synced' })
+  notifyChanged()
 }
 
 export function requestOutboundDocumentEdit(request: OutboundDocumentEditRequest): void {
@@ -212,37 +400,30 @@ export function readOutboundDocumentWorkingState(
 ): OutboundDocumentWorkingState | null {
   const raw = sessionStorage.getItem(workingStateKey)
   if (!raw) return null
-
   try {
     const state = JSON.parse(raw) as Partial<OutboundDocumentWorkingState>
     if (state.documentType !== documentType || !state.payload) return null
     return state as OutboundDocumentWorkingState
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
-export function findPendingSourceLineConflicts(
+export async function findPendingSourceLineConflicts(
   documentType: OutboundDocumentType,
   sourceLineIds: number[],
   excludeDocumentId: string | null = null,
-): number[] {
+): Promise<number[]> {
   const requested = new Set(sourceLineIds.filter((id) => Number.isInteger(id) && id > 0))
   if (!requested.size) return []
   const conflicts = new Set<number>()
-  for (const document of readAll()) {
-    if (
-      document.documentType !== documentType ||
-      document.uploadStatus !== 'pending' ||
-      document.id === excludeDocumentId
-    ) continue
+  const session = readSession()
+  for (const document of await readAll()) {
+    if (document.ownerUserId !== session?.user.id || document.documentType !== documentType ||
+      !['pending', 'prepared'].includes(document.uploadStatus) ||
+      document.syncStatus === 'deleted-pending' || document.id === excludeDocumentId) continue
     const payload = document.payload && typeof document.payload === 'object'
-      ? document.payload as { selectedSourceLines?: Array<{ sourceLineId?: number }> }
-      : {}
+      ? document.payload as { selectedSourceLines?: Array<{ sourceLineId?: number }> } : {}
     for (const line of payload.selectedSourceLines ?? []) {
-      if (typeof line.sourceLineId === 'number' && requested.has(line.sourceLineId)) {
-        conflicts.add(line.sourceLineId)
-      }
+      if (typeof line.sourceLineId === 'number' && requested.has(line.sourceLineId)) conflicts.add(line.sourceLineId)
     }
   }
   return [...conflicts]
@@ -258,29 +439,26 @@ export function consumeOutboundDocumentEditRequest(
   const raw = sessionStorage.getItem(editRequestKey)
   if (!raw) return null
   sessionStorage.removeItem(editRequestKey)
-
   try {
     const request = JSON.parse(raw) as Partial<OutboundDocumentEditRequest>
     if (request.documentType !== documentType || !request.documentId) return null
     return request as OutboundDocumentEditRequest
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
-export function migrateLegacyOutboundDraft(
+export async function migrateLegacyOutboundDraft(
   documentType: OutboundDocumentType,
   legacyKey: string,
   createSummary: (payload: unknown) => OutboundDocumentSummary,
-): void {
+): Promise<void> {
+  await ensureMigration()
   const raw = localStorage.getItem(legacyKey)
   if (!raw) return
-
-  localStorage.removeItem(legacyKey)
   try {
     const payload = JSON.parse(raw) as unknown
-    saveOutboundDocument({ documentType, summary: createSummary(payload), payload })
+    await saveOutboundDocument({ documentType, summary: createSummary(payload), payload })
+    localStorage.removeItem(legacyKey)
   } catch {
-    // 旧草稿损坏时直接忽略，避免阻止页面进入。
+    // 旧草稿保留在原位置，下次进入时继续尝试。
   }
 }

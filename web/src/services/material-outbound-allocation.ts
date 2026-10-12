@@ -44,6 +44,10 @@ function qty(value: number): number {
   return Math.round(value * precision) / precision
 }
 
+function materialKey(value: string): string {
+  return value.trim().toLocaleUpperCase()
+}
+
 function addAllocation(
   allocations: SourceQuantityAllocation[],
   requirement: MaterialRequirementLine,
@@ -80,9 +84,10 @@ export function allocateMaterialScans(
   const result: Record<string, AllocatedMaterialScanLine> = {}
   const requirementGroups = new Map<string, MaterialRequirementLine[]>()
   for (const requirement of requirements) {
-    const group = requirementGroups.get(requirement.materialCode) ?? []
+    const key = materialKey(requirement.materialCode)
+    const group = requirementGroups.get(key) ?? []
     group.push(requirement)
-    requirementGroups.set(requirement.materialCode, group)
+    requirementGroups.set(key, group)
   }
   for (const group of requirementGroups.values()) {
     group.sort((left, right) =>
@@ -99,7 +104,7 @@ export function allocateMaterialScans(
 
   for (const line of lines) {
     const allocations: SourceQuantityAllocation[] = []
-    const matches = requirementGroups.get(line.materialCode) ?? []
+    const matches = requirementGroups.get(materialKey(line.materialCode)) ?? []
     let pending = qty(line.requestedQty)
     for (const requirement of matches) {
       if (pending <= 0) break
@@ -136,13 +141,14 @@ export function summarizeMaterialAllocations(
   requirements: MaterialRequirementLine[],
   allocated: Record<string, AllocatedMaterialScanLine>,
 ): MaterialAllocationSummary[] {
-  const codes = new Set([
-    ...requirements.map((line) => line.materialCode),
-    ...lines.map((line) => line.materialCode),
-  ])
-  return [...codes].map((materialCode) => {
-    const requirementLines = requirements.filter((line) => line.materialCode === materialCode)
-    const scanLines = lines.filter((line) => line.materialCode === materialCode)
+  const codes = new Map<string, string>()
+  for (const line of [...requirements, ...lines]) {
+    const key = materialKey(line.materialCode)
+    if (!codes.has(key)) codes.set(key, line.materialCode)
+  }
+  return [...codes].map(([key, materialCode]) => {
+    const requirementLines = requirements.filter((line) => materialKey(line.materialCode) === key)
+    const scanLines = lines.filter((line) => materialKey(line.materialCode) === key)
     const allocations = scanLines.flatMap((line) => allocated[line.id]?.allocations ?? [])
     return {
       materialCode,

@@ -1,4 +1,5 @@
 import { getRuntimeConfig } from '@/services/runtime-config'
+import { createUniqueId } from '@/utils/unique-id'
 
 import type { MockPdaBridge, PdaBridge, PdaScanEvent, ScanListener } from './types'
 
@@ -82,7 +83,7 @@ class BrowserMockBridge implements MockPdaBridge {
     }
 
     const event: PdaScanEvent = {
-      id: `${Date.now()}-${crypto.randomUUID()}`,
+      id: `${Date.now()}-${createUniqueId('scan')}`,
       barcode: normalized,
       action: 'mock.pda.SCAN',
       field: 'barcode_string',

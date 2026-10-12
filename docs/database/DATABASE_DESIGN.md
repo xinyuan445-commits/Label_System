@@ -1,9 +1,9 @@
 # 标签管理系统数据库设计说明
 
-状态：评审稿，尚未冻结，不得直接用于生产环境
-数据库：Microsoft SQL Server
-默认开发库：`LabelSystem_Dev`
-更新时间：2026-10-11
+状态：结构、业务设置、U8 基础资料缓存、用户权限、漫游数据、本地密码凭据、用户管理审计、多端草稿同步及标签 Code 规则已创建；三套环境最新迁移编号均为 `011`
+数据库：Microsoft SQL Server 2019 Standard（15.0.2170.1）
+实例：`172.16.1.159` 默认实例
+更新时间：2026-10-12
 
 ## 1. 文件与执行顺序
 
@@ -11,18 +11,55 @@
 | --- | --- | --- |
 | 1 | `000_create_database.sql` | 创建独立业务数据库并设置基础数据库选项 |
 | 2 | `001_label_business_schema_draft.sql` | 创建业务表、约束、索引及 SQL Server 扩展说明 |
+| 3 | `010_install_schema_all_environments.sql` | 用 sqlcmd 将 001 安装到三个环境 |
+| 4 | `011_record_initial_migration_checksum.sql` | 保存初始迁移脚本 SHA-256 |
+| 5 | `002_seed_settings_and_source_reservation_index.sql` | 写入默认设置、修正标量 JSON 校验并增加源单占用索引 |
+| 6 | `012_install_migration_002_all_environments.sql` | 用 sqlcmd 将 002 安装到三个环境 |
+| 7 | `013_record_migration_002_checksum.sql` | 保存 002 迁移脚本 SHA-256 |
+| 8 | `003_cache_u8_rd_style.sql` | 建立 U8 出入库类别缓存和基础资料同步状态 |
+| 9 | `014_install_migration_003_all_environments.sql` | 用 sqlcmd 将 003 安装到三个环境 |
+| 10 | `015_record_migration_003_checksum.sql` | 保存 003 迁移脚本 SHA-256 |
+| 11 | `004_fix_reference_data_sync_time_constraint.sql` | 修正基础资料重复同步的时间约束 |
+| 12 | `016_install_migration_004_all_environments.sql` | 用 sqlcmd 将 004 安装到三个环境 |
+| 13 | `017_record_migration_004_checksum.sql` | 保存 004 迁移脚本 SHA-256 |
+| 14 | `005_cache_u8_warehouse_position_department.sql` | 建立 U8 仓库、仓位和部门缓存 |
+| 15 | `018_install_migration_005_all_environments.sql` | 用 sqlcmd 将 005 安装到三个环境 |
+| 16 | `019_record_migration_005_checksum.sql` | 保存 005 迁移脚本 SHA-256 |
+| 17 | `006_create_users_permissions_preferences.sql` | 建立应用用户、功能权限和用户漫游偏好 |
+| 18 | `022_install_migration_006_all_environments.sql` | 用 sqlcmd 将 006 安装到三个环境 |
+| 19 | `023_record_migration_006_checksum.sql` | 保存 006 迁移脚本 SHA-256 |
+| 20 | `007_add_local_user_credentials.sql` | 在应用用户表增加本地密码哈希和登录锁定字段 |
+| 21 | `024_install_migration_007_all_environments.sql` | 用 sqlcmd 将 007 安装到三个环境 |
+| 22 | `025_record_migration_007_checksum.sql` | 保存 007 迁移脚本 SHA-256 |
+| 23 | `008_create_user_admin_audit.sql` | 建立用户管理审计记录 |
+| 24 | `026_install_migration_008_all_environments.sql` | 用 sqlcmd 将 008 安装到三个环境 |
+| 25 | `027_record_migration_008_checksum.sql` | 保存 008 迁移脚本 SHA-256 |
+| 26 | `009_create_synced_document_drafts.sql` | 建立多端草稿、设备状态、草稿事件及默认保留策略 |
+| 27 | `028_install_migration_009_all_environments.sql` | 用 sqlcmd 将 009 安装到三个环境 |
+| 28 | `029_record_migration_009_checksum.sql` | 保存 009 迁移脚本 SHA-256 |
+| 29 | `031_create_label_code_rules.sql` | 建立本地标签 Code 规则、不可变版本、流水和统一登记 |
+| 30 | `032_install_migration_010_all_environments.sql` | 用 sqlcmd 将 010 安装到三个环境 |
+| 31 | `033_record_migration_010_checksum.sql` | 保存 010 迁移脚本 SHA-256 |
+| 32 | `034_allow_shared_inventory_label_rule.sql` | 允许产品标签与托盘共用一条 Code 规则 |
+| 33 | `035_install_migration_011_all_environments.sql` | 用 sqlcmd 将 011 安装到三个环境 |
+| 34 | `036_record_migration_011_checksum.sql` | 保存 011 迁移脚本 SHA-256 |
+| 35 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
+| 36 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
+| 37 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
 
-建库脚本默认只创建 `LabelSystem_Dev`。执行前可在脚本顶部修改数据库名、环境和恢复模式。
+脚本使用 UTF-8 保存。通过旧版 `sqlcmd` 执行时必须增加 `-f 65001`，并使用 `-b` 在 SQL 错误时返回失败；连接密码通过安全部署配置或 `SQLCMDPASSWORD` 提供，不写入命令脚本。
 
-建议环境命名：
+已经建立的环境：
 
-| 环境 | 数据库名 | 恢复模式 | 用途 |
-| --- | --- | --- | --- |
-| development | `LabelSystem_Dev` | SIMPLE | 本地开发 |
-| test | `LabelSystem_Test` | SIMPLE | PDA、API 和 U8 测试账套联调 |
-| production | `LabelSystem_Prod` | FULL | 正式业务；必须配置完整备份和日志备份 |
+| 环境 | 数据库名 | 恢复模式 | 数据文件 | 日志文件 | 用途 |
+| --- | --- | --- | --- | --- | --- |
+| development | `LabelSystem_Dev` | SIMPLE | 初始 512MB；增长 128MB；上限 20GB | 初始 256MB；增长 64MB；上限 4GB | 本地开发 |
+| test | `LabelSystem_Test` | SIMPLE | 初始 1GB；增长 256MB；上限 40GB | 初始 512MB；增长 128MB；上限 8GB | PDA、API 和 U8 测试账套联调 |
+| production | `LabelSystem_Prod` | FULL | 初始 4GB；增长 512MB；上限 180GB | 初始 1GB；增长 256MB；上限 40GB | 正式业务 |
 
-三个环境必须使用不同数据库。应用连接账号使用最小权限专用账号，不使用 `sa`。数据库密码、U8 密码、令牌和连接字符串不进入业务表、代码仓库或事件 JSON。
+数据文件位于 `D:\LabelSystem\Data`，日志文件位于 `D:\LabelSystem\Log`。排序规则固定为 `Chinese_PRC_CI_AS`，兼容级别为 150；与当前 U8 账套保持一致。`AUTO_CLOSE`、`AUTO_SHRINK`、`TRUSTWORTHY` 和跨库所有权链接关闭，页校验使用 `CHECKSUM`，并启用快照隔离和读已提交快照。
+
+三个环境使用不同数据库。按当前项目决定，数据库 owner 和应用连接账号使用 `sa`；密码不得进入业务表、代码仓库、事件 JSON 或前端包。后续如调整安全策略，再通过新增迁移和部署配置切换到最小权限账号。
 
 ## 2. 数据库边界
 
@@ -36,6 +73,8 @@
 - 操作过程事件和异常核对状态。
 - 非敏感的全局及单据级业务配置。
 - 系统功能目录、显示分组、顺序及全局启停状态。
+- U8 出入库类别、仓库、仓位和部门的本地只读缓存及同步状态。
+- 应用用户、ERP 制单人映射、直接功能权限和用户漫游偏好。
 
 本数据库不保存：
 
@@ -116,6 +155,14 @@ business_operation.reversal_of_operation_id ── business_operation
 inventory_flow.reversal_of_flow_id ── 同一库存对象的原流水
 
 system_function.parent_function_code ── 对应的业务功能
+schema_migration ───────── 已执行的数据库结构版本
+
+label_code_rule
+└─ label_code_rule_version
+   ├─ label_code_sequence
+   └─ label_code_registry
+      ├─ product_label（可选）
+      └─ pallet（可选）
 ```
 
 打印不单独建表。成功的首次打印和补打由 `inventory_flow` 记录，操作人、设备和原因由 `business_operation` 记录；包装规格、计划张数和成功张数由业务操作明细记录，打印机、模板、任务号、失败返回和重试过程由 `business_operation_event` 按顺序记录。每成功物理输出一张标签，必须写入一条该标签的 `PRINT` 或 `REPRINT` 流水；失败或结果未知的尝试不得写成成功流水。
@@ -257,7 +304,7 @@ system_function.parent_function_code ── 对应的业务功能
 
 维护哪些 U8 存货编码属于托盘。加入本表并启用的料号只能打印成托盘，不能同时打印为普通产品标签。存货名称、规格和单位从 U8 查询，不在本地重复维护。
 
-产品料号与托盘料号由业务保证互斥，因此不增加产品与托盘共用的标签编码登记表，数据库仍为 9 张业务表。发码服务必须避免产品标签码与托盘标签码重复；扫码意外同时命中两类对象时，应用按数据异常拒绝处理并记录事件。
+产品料号与托盘料号由业务保证互斥，核心标签业务仍为 10 张表。迁移 010 另建 `label_code_registry` 统一约束产品、托盘及外部 Code；正式发码服务必须先登记唯一哈希。扫码意外同时命中两类对象时，应用按数据异常拒绝处理并记录事件。
 
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
@@ -400,12 +447,17 @@ system_function.parent_function_code ── 对应的业务功能
 
 关键约束：全局配置的 `document_type` 必须为空；单据配置必须指定 `document_type`；同一作用域、单据类型和配置键唯一；`value_json` 必须是合法 JSON。
 
-当前已确定的托盘标签使用配置：
+迁移 002 已写入 35 条默认设置：7 条全局设置、9 类单据各 3 条通用设置，以及材料出库的“允许超领”设置。SQL Server 2019 对 JSON 标量不能直接通过 `ISJSON` 判定，迁移使用显式布尔、数字、字符串和对象/数组组合校验，API 仍可统一读写 JSON 值。
+
+当前主要默认设置：
 
 | 作用域 | 配置键 | 名称 | 默认值 |
 | --- | --- | --- | --- |
 | GLOBAL | `allow_direct_use_of_palletized_label` | 托盘内标签允许单独使用 | `false` |
 | DOCUMENT | `include_pallet_in_document_by_default` | 做单时默认包含托盘自身 | `true` |
+| DOCUMENT | `auto_upload_on_complete` | 完成自动上传 | `false` |
+| DOCUMENT | `auto_approve_after_upload` | 上传自动审核 | `false` |
+| DOCUMENT / material-outbound | `allow_over_issue` | 允许超领 | `false` |
 
 ### 5.10 `system_function` 系统功能表
 
@@ -432,6 +484,107 @@ system_function.parent_function_code ── 对应的业务功能
 
 初始写入 9 个做单功能、9 个审核功能和 1 个标签查询功能。全局关闭后所有用户均不可显示或访问；不删除记录和复用功能编码。后续用户权限表引用 `function_code`，用户只能在全局开启且自身具有权限的范围内使用功能。
 
+### 5.11 `u8_rd_style_cache` U8 出入库类别缓存表
+
+保存从当前环境所连接 U8 账套 `Rd_Style` 读取的完整类别快照。同步不会物理删除旧编码；本次未出现的记录改为停用，以保留历史解释能力。
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| `rd_style_code` | nvarchar(10) | 否 | U8 `cRdCode`，主键 |
+| `rd_style_name` | nvarchar(24) | 否 | U8 `cRdName` |
+| `rd_grade` | tinyint | 否 | U8 `iRdGrade` |
+| `direction` | varchar(10) | 否 | IN 或 OUT；分别对应 `bRdFlag` 1 和 0 |
+| `is_terminal` | bit | 否 | U8 `bRdEnd`，是否末级类别 |
+| `opposite_code` | nvarchar(80) | 是 | U8 `cOppHead` |
+| `is_retail` | bit | 否 | U8 `bRetail` |
+| `source_row_version` | binary(8) | 是 | U8 `pubufts` 快照 |
+| `is_active` | bit | 否 | 最近一次完整同步是否仍存在 |
+| `last_seen_at` | datetime2(3) | 否 | 最近一次在 U8 快照中出现时间 |
+| `created_at` / `updated_at` | datetime2(3) | 否 | 本地创建和更新时间 |
+| `row_version` | rowversion | 否 | 本地并发版本 |
+
+业务选择默认只读取 `is_active=1` 且 `is_terminal=1` 的记录；完整缓存保留非末级分类。
+
+### 5.12 `u8_warehouse_cache` U8 仓库缓存表
+
+保存 U8 `Warehouse` 中未设置停用日期的仓库。主键为 `warehouse_code`；同时保存名称、有效标志、最近出现时间、本地创建/更新时间和行版本。没有仓位的有效仓库同样保留。
+
+### 5.13 `u8_position_cache` U8 仓位缓存表
+
+保存 U8 `Position` 仓位及所属仓库。`position_code` 为主键，`warehouse_code` 外键指向仓库缓存；选择索引为 `(warehouse_code, is_active, position_code)`。同步缺失项只停用，不删除。
+
+### 5.14 `u8_department_cache` U8 部门缓存表
+
+保存 U8 `Department` 中未设置停用日期的部门。主键为 `department_code`；同时保存名称、有效标志、最近出现时间、本地创建/更新时间和行版本。
+
+### 5.15 `reference_data_sync_state` 基础资料同步状态表
+
+按同步项记录手工同步状态、数量、开始/完成/成功时间、操作人和简短错误。当前稳定键为 `rd-styles`、`warehouse-positions` 和 `departments`。
+
+状态限定为 `NEVER`、`RUNNING`、`SUCCESS` 和 `FAILED`。同步失败只更新状态，不清空上一次成功缓存。迁移 004 允许 `last_success_at` 保留上一轮成功时间，同时仍要求本轮完成时间不得早于本轮开始时间、成功时间不得晚于最近完成时间。
+
+### 5.16 `schema_migration` 结构迁移记录表
+
+记录每套数据库已经成功执行的结构迁移。当前已执行 `001` 至 `009`；正式建表完成后，后续结构调整只能新增迁移编号，不修改已执行脚本。
+
+| 字段 | 类型 | 可空 | 说明 |
+| --- | --- | --- | --- |
+| `migration_id` | varchar(100) | 否 | 全局唯一迁移编号 |
+| `description` | nvarchar(500) | 否 | 迁移用途 |
+| `script_checksum` | char(64) | 是 | 脚本 SHA-256；当前 `001` 至 `009` 均已记录 |
+| `applied_at` | datetime2(3) | 否 | 成功执行时间，北京时间 |
+| `applied_by` | sysname | 否 | 执行迁移的 SQL 登录名 |
+
+### 5.17 `application_user` 应用用户表
+
+保存应用身份，不保存明文密码。`user_id` 是业务和审计使用的稳定主键，`login_name` 唯一；`display_name` 用于页面及本地业务快照。`erp_operator_code`、`erp_operator_name` 必须同时为空或同时有值，真实 U8 写入时由 Business API 读取该映射生成制单人。`auth_source` 当前允许 `DEVELOPMENT`、`LOCAL`、`EXTERNAL`。
+
+主要字段还包括 `is_admin`、`is_enabled`、`last_login_at`、创建/更新人、北京时间和 `row_version`。迁移 007 在同一表增加 `password_hash`、`password_salt`、`password_iterations`、失败次数、锁定时间和密码修改时间；只保存 PBKDF2-SHA256 加盐派生值。本地账号连续 5 次失败锁定 15 分钟。development 当前另有两个已启用管理员账号；测试库和生产库只安装字段，不复制开发账号。
+
+### 5.18 `user_function_permission` 用户功能权限表
+
+主键为 `(user_id, function_code)`，分别外键关联用户和 `system_function`。`permission_state` 仅允许 `ALLOW`、`DENY`；无记录表示继承。`data_scope_json` 可空且必须为合法 JSON，当前使用 `version=1` 和 `rdStyles={mode,codes}` 保存该用户在对应做单功能可使用的出入库类别；空值或没有 `rdStyles` 表示全部。部门、仓库和货位当前不进入用户数据范围。指定范围会同时保留一条 `ALLOW` 记录，恢复“默认”且无范围时删除记录。权限变更记录更新人、时间和行版本。
+
+### 5.19 `user_preference` 用户漫游偏好表
+
+主键为 `(user_id, preference_key)`，`value_json` 必须为合法 JSON 对象或数组。每次更新递增 `preference_version`，并保存可选设备号、北京时间和行版本。稳定键包括常用功能 `workspace.favorites` 和业务中心显示模式 `workspace.homeMode`；显示模式值为 `{"mode":"compact|detailed"}`。无期望行版本的首次并发写入采用最后写入覆盖，显式携带行版本时仍执行并发冲突校验。设备地址、扫描器和声音等设备属性不放入本表。
+
+### 5.20 `user_admin_audit` 用户管理审计表
+
+记录新增/修改用户、密码重置、账号解锁、会话撤销、漫游数据重置和功能权限修改。每条记录保存操作人、目标用户、请求编号、客户端地址、User-Agent、北京时间以及不含敏感凭据的前后快照。密码、密码哈希、盐值和令牌不得进入审计 JSON。
+
+除会话撤销外，用户管理写操作与审计记录在同一数据库事务内提交。会话撤销发生在 API 进程内，撤销数量随后写入审计记录。
+
+### 5.21 `document_draft` 多端草稿最新快照
+
+每个 `draft_id` 只保存一个最新 JSON 正文。`owner_user_id`、`device_id`、`document_type`、`business_status`、日期、源单、仓库、部门、明细数和总数量作为普通字段保存，便于权限过滤和索引查询；各单据差异字段保存在 `payload_json`。`schema_version` 管理 JSON 结构演进，`client_revision` 和 `payload_hash` 用于幂等与并发冲突检测。
+
+状态限制为 `DRAFT`、`PREPARED`、`COMPLETED`、`CANCELLED`、`DELETED`。软删除设置 `deleted_at` 并保留正文到保留期结束；服务端不保存每次字段修改前后的 JSON。
+
+### 5.22 `document_draft_event` 草稿状态事件
+
+只记录创建、状态变化、删除和恢复，包括前后状态、操作人、设备、客户端修订号、请求号和时间，不保存草稿正文、密码或令牌。清理草稿时先清理对应事件。
+
+### 5.23 `client_device_state` PDA 同步状态
+
+以用户和设备为联合主键，保存设备名称、型号、H5 版本、最近在线时间、最后成功同步时间及本地草稿、待同步、失败数量。该表是设备最后一次主动上报的快照，不代表离线设备的实时内容。
+
+### 5.24 `label_code_rule` 标签 Code 规则主档
+
+保存稳定规则编号、名称、业务对象类型、解析优先级和启停状态。对象类型限制为产品标签、托盘、产品/托盘通用或外部标签。优先级数值越小越先匹配；同优先级同时命中必须由服务端拒绝，不允许静默选择。通用规则只表示解析格式，统一登记仍必须保存最终对象类型。
+
+### 5.25 `label_code_rule_version` 标签 Code 规则版本
+
+每个规则按递增版本保存完整 JSON 规则、SHA-256 和状态。状态为草稿、启用、历史停用或阻断；同一规则最多一个草稿和一个启用版本。启用版本不可原位修改，历史版本保留用于旧标签解析。
+
+### 5.26 `label_code_sequence` 标签 Code 流水
+
+按规则版本和分区键保存最后分配流水号，并使用行版本保护并发。该表只为后续正式发码预留；本阶段不消耗流水。正式实现必须在分配流水与统一登记的同一数据库事务内完成。
+
+### 5.27 `label_code_registry` Code 统一登记
+
+保存 Code 的 SHA-256 唯一哈希、原始值、标准化值、业务对象、规则版本、账套快照、解析 JSON 和登记状态。产品标签或托盘建立后可以关联对应主表；外部标签不关联本地业务对象。本阶段不写入该表，后续正式发码和外部码首次登记必须保证哈希全局唯一。
+
 ## 6. 关键索引与查询
 
 | 查询 | 主要索引或约束 |
@@ -447,12 +600,27 @@ system_function.parent_function_code ── 对应的业务功能
 | 标签当前所属托盘 | `pallet_label_relation(label_id) WHERE unloaded_at IS NULL` 唯一索引 |
 | 标签参与的业务明细 | `business_operation_line(label_id, created_at)` |
 | 托盘扫码产生的业务明细 | `business_operation_line(source_pallet_id, created_at)` |
+| 服务端源单明细占用 | `business_operation_line(source_line_id, operation_id)` 过滤索引 |
 | U8 单据追溯 | 环境、账套、年度、单据类型、单据号组合索引 |
 | 标签打印历史 | `inventory_flow(label_id, object_sequence_no)` 中的 PRINT、REPRINT 流水 |
 | 打印失败和重试过程 | `business_operation_event(operation_id, sequence_no)` |
 | 待处理或异常操作 | `business_operation(status, created_at)` |
+| 用户单据状态列表 | `business_operation.submission_group_id` 聚合，按 `operator_id`、`operation_type`、日期和状态过滤 |
 | ERP 库存对账 | `inventory_flow(to_warehouse_code, material_code, to_location_code, batch_no)` |
 | 已启用功能列表 | `system_function(is_enabled, group_sort, function_sort)` |
+| 可选出入库类别 | `u8_rd_style_cache(direction, is_active, is_terminal, rd_style_code)` |
+| 可选仓库与仓位 | `u8_warehouse_cache` 主键过滤、`u8_position_cache(warehouse_code, is_active, position_code)` |
+| 可选部门 | `u8_department_cache(is_active, department_code)` |
+| 登录用户 | `application_user(login_name)` 唯一约束及 `(is_enabled, login_name)` 索引 |
+| 用户有效功能 | `user_function_permission(user_id, function_code)` 主键和功能反查索引 |
+| 用户漫游偏好 | `user_preference(user_id, preference_key)` 主键 |
+| 用户管理审计 | `(target_user_id, created_at)`、`(actor_user_id, created_at)` 索引 |
+| 用户草稿列表 | `(owner_user_id, business_status, client_updated_at)`；管理员列表使用 `(business_status, client_updated_at)` |
+| PDA 最近状态 | `(last_seen_at, user_id, device_id)` |
+| 规则编号 | `label_code_rule.rule_code` 唯一约束 |
+| 当前规则版本 | 每条规则的草稿和启用状态分别使用过滤唯一索引 |
+| 流水并发分配 | `label_code_sequence(rule_version_id, partition_key)` 唯一约束及行版本 |
+| Code 全局登记 | `label_code_registry.code_hash` 唯一约束；按产品、托盘和规则版本建立过滤索引 |
 
 标签成功打印总次数为该标签 `PRINT` 与 `REPRINT` 流水条数之和，补打次数只统计 `REPRINT`。同一请求把同一个标签输出多张时，必须按成功张数写入多条 `REPRINT` 流水，且数量应与对应业务明细的 `printed_label_count` 一致。打印任务数使用不同的 `operation_id` 统计，不能代替标签实际打印张数。
 
@@ -460,19 +628,43 @@ system_function.parent_function_code ── 对应的业务功能
 
 托盘整体调拨或货位调整时，应用必须在同一操作中为托盘自身及全部当前在托有效产品标签分别写入位置流水。只移动部分产品时必须先卸托，不能让实体托盘与其在托产品形成不同当前位置。
 
+调拨、货位调整和盘点预提交已复用现有 `business_operation`、`business_operation_line`、标签/托盘锁和事件表，无需新增迁移。预提交只保存最新库存快照、来源和目标位置并建立 `PENDING` 锁，不生成 `inventory_flow`。盘点产品标签的 `requested_qty` 可为零或高于 `inventory_qty_snapshot`；托盘自身仍受固定数量 1 的约束。
+
+采购到货、委外到货、采购入库、发货单和销售出库预提交同样不新增表。每条扫码数量分配记录在 `business_operation_line.source_line_id`、`source_line_no` 和 `requested_qty`；跨来源单据时建立多个操作并共用 `submission_group_id`。相同标签可因同料来源行拆分出现多条操作明细，但锁只指向业务组根操作。现有来源行占用索引继续用于跨设备并发校验。
+
 材料出库表头不由用户输入仓库。提交时从标签或托盘最新流水读取实际仓库，按仓库拆成多条 `business_operation` 和多张 U8 材料出库单。拆出的操作共用 `submission_group_id`，但各自保存独立 `client_request_id`、U8 单号、状态和操作凭证；部分成功时只对成功仓库组生成库存流水。
 
-## 7. 尚待确认
+单据管理的执行状态以 `business_operation` 为准，`document_draft.business_status` 只保存草稿阶段摘要。预提交和取消会同步草稿摘要；客户端补传时服务端按关联业务组重新计算状态，不能用旧 JSON 覆盖真实业务终态。业务组列表不新增表，继续使用 `submission_group_id` 聚合，并返回组内每个操作的独立状态和异常。
 
-- 新产品标签码的正式编码规则和生成服务。
+库存对象查询同时返回最新 `unit_code`。材料出库预提交不接受 H5 推断或默认单位，服务端把请求单位与产品标签最新库存流水或托盘主记录再次比较；不同单位直接拒绝，不做换算。本次为 API 合同补充，不新增数据库字段或迁移。
+
+## 7. 备份、校验与维护
+
+- 完整备份：三套数据库每天 01:30，压缩、校验和，并立即执行 `RESTORE VERIFYONLY`。
+- 日志备份：生产库每 15 分钟一次，目标 RPO 为 15 分钟。
+- 保留：完整备份和日志备份保留 30 天；草稿按全局 `draft_retention_policy` 清理，默认活跃草稿永久、已完成/取消/删除记录 90 天，均可改为自定义天数或永久；其他业务和审计流水当前不自动清理。
+- 完整性检查：每周日 03:00 对三套数据库执行完整 `DBCC CHECKDB`。
+- 索引和统计：每周日 04:00 更新统计信息；页数不少于 1000 且碎片率达到 10% 的索引执行整理或重建。
+- 容量检查：每 15 分钟检查标签库和 tempdb 所在盘；剩余低于 20% 或 50GB 时作业失败并写入 SQL Server 错误日志。
+- 长事务：每 5 分钟检查一次，标签系统数据库中的用户事务超过 5 分钟时作业失败并写入错误日志。
+- Query Store：开发、测试、生产分别限制为 256MB、512MB、1024MB，用于慢查询、等待和执行计划追踪。
+- 死锁：复用 SQL Server 默认运行的 `system_health` 扩展事件会话采集 `xml_deadlock_report`，不另建重复会话。
+- SQL Server 实例内存上限保持现有 13107MB；服务器物理内存为 32GB，当前无需调整。
+- 首次完整备份已完成并通过校验，生产日志备份链已启动。
+- 每季度执行一次恢复演练，使用 `030_restore_drill.sql` 恢复到固定隔离临时库，核对完整性、表数量和迁移版本后自动删除临时库。恢复演练不得覆盖任何现有环境。首次演练已于 2026-10-11 完成；迁移 002 后又重新生成完整备份并完成恢复验证，恢复 11 张用户表、最新迁移 `002`，`DBCC CHECKDB` 通过，临时库已删除。
+
+SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未配置邮件或短信收件人；作业失败可在 SQL Server Agent 历史和错误日志查看，后续确定通知渠道后补充主动通知。TLS 需要服务器证书和维护窗口，数据库已创建但不在本次数据库脚本中强行切换连接加密。
+
+## 8. 尚待确认
+
+- 正式产品标签和托盘标签分别启用哪些规则，以及流水分区策略。
+- 正式发码、打印和 `label_code_registry` 登记的事务流程。
 - 各单据哪些库存自由项需要提升为普通检索列。
 - 单位换算功能及物料单位换算来源；当前所有数量必须使用同一标签单位。
 - 条码打印阶段“打印尾数”的页面交互、权限和默认开关。
-- 正式数据库容量、数据文件增长策略、备份保留期限和恢复演练频率。
-- 用户、角色、用户功能权限和管理员异常解锁表，待认证权限方案确定后补充；用户功能权限必须引用 `system_function.function_code`。
-- 表结构评审通过后的版本化迁移工具及正式迁移编号。
+- 角色聚合、用户角色关系和外部身份，待正式认证方案确定后补充；当前本地凭据、锁定/解锁和直接用户权限已落地。
 
-## 8. 变更要求
+## 9. 变更要求
 
 业务规则调整时，应同时更新：
 
@@ -481,4 +673,4 @@ system_function.parent_function_code ── 对应的业务功能
 3. 对应的 SQL 迁移脚本。
 4. API 请求、响应及错误码合同。
 
-评审稿通过前不执行生产建表；正式上线后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件。
+迁移 001 至 011 已经在开发、测试和生产库执行。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。

@@ -34,9 +34,11 @@ export interface BusinessDocumentConfig {
   departmentRequired: boolean
   categoryLabel?: string
   categoryRequired?: boolean
+  categoryDirection?: 'IN' | 'OUT'
   productionBatch: boolean
   detailTitle: string
   quantityLabel: string
+  supportsRedBlue?: boolean
 }
 
 const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
@@ -49,9 +51,11 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
     departmentRequired: true,
     categoryLabel: '到货类别',
     categoryRequired: true,
+    categoryDirection: 'IN',
     productionBatch: false,
     detailTitle: '到货明细',
     quantityLabel: '到货数量',
+    supportsRedBlue: true,
   },
   'outsourcing-arrival': {
     title: '委外到货',
@@ -62,9 +66,11 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
     departmentRequired: true,
     categoryLabel: '到货类别',
     categoryRequired: true,
+    categoryDirection: 'IN',
     productionBatch: false,
     detailTitle: '到货明细',
     quantityLabel: '到货数量',
+    supportsRedBlue: true,
   },
   'purchase-inbound': {
     title: '采购入库',
@@ -80,9 +86,11 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
     departmentRequired: true,
     categoryLabel: '入库类别',
     categoryRequired: true,
+    categoryDirection: 'IN',
     productionBatch: false,
     detailTitle: '入库明细',
     quantityLabel: '入库数量',
+    supportsRedBlue: true,
   },
   'delivery-note': {
     title: '发货单',
@@ -95,9 +103,11 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
     departmentRequired: true,
     categoryLabel: '发货类别',
     categoryRequired: true,
+    categoryDirection: 'OUT',
     productionBatch: false,
     detailTitle: '发货明细',
     quantityLabel: '发货数量',
+    supportsRedBlue: true,
   },
   'sales-outbound': {
     title: '销售出库单',
@@ -113,23 +123,26 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
     departmentRequired: true,
     categoryLabel: '出库类别',
     categoryRequired: true,
+    categoryDirection: 'OUT',
     productionBatch: false,
     detailTitle: '出库明细',
     quantityLabel: '出库数量',
+    supportsRedBlue: true,
   },
   'material-outbound': {
     title: '材料出库单',
     draftKey: 'label-system:draft:material-outbound',
     sourceTypes: [
       { value: 'production-order', label: '生产订单' },
-      { value: 'subcontract-order', label: '委外订单' },
     ],
     departmentRequired: true,
     categoryLabel: '出库类别',
     categoryRequired: true,
+    categoryDirection: 'OUT',
     productionBatch: true,
     detailTitle: '出库明细',
     quantityLabel: '出库数量',
+    supportsRedBlue: true,
   },
   'transfer-order': {
     title: '调拨单',

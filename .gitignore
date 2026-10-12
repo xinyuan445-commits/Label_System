@@ -33,6 +33,9 @@ local.properties
 u8-gateway/runtime-data/
 u8-gateway/**/App_Data/
 u8-gateway/**/*.user
+label-api/runtime-data/
+label-api/**/appsettings.Local.json
+label-api/**/*.user
 
 # WeChat DevTools private settings
 project.private.config.json

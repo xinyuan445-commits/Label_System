@@ -4,12 +4,28 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import { getPdaBridge, isMockPdaBridge } from '@/bridge/pda-bridge'
 import type { PdaScanEvent } from '@/bridge/types'
+import DateField from '@/components/DateField.vue'
+import SearchSelect, { type SearchSelectOption } from '@/components/SearchSelect.vue'
 import { getBusinessDocumentConfig } from '@/services/business-document-config'
 import {
+  ensureDocumentFieldSettings,
   ensureDocumentPolicy,
+  fetchBusinessDocumentSettings,
   loadBusinessDocumentSettings,
 } from '@/services/business-document-settings'
+import {
+  getBusinessDocumentFields,
+  type DocumentFieldDefinition,
+} from '@/services/business-document-fields'
 import { lookupInventoryObject } from '@/services/inventory-object-lookup'
+import {
+  fetchDepartments,
+  fetchRdStyles,
+  fetchWarehousePositions,
+  type DepartmentOption,
+  type RdStyleOption,
+  type WarehousePositionOption,
+} from '@/services/reference-data'
 import {
   allocateMaterialScans,
   summarizeMaterialAllocations,
@@ -33,6 +49,7 @@ import {
   type OutboundDocumentType,
   type SourceDocumentLine,
 } from '@/services/source-document-selection'
+import { createUniqueId } from '@/utils/unique-id'
 
 type LineObjectType = 'PRODUCT_LABEL' | 'PALLET'
 
@@ -47,10 +64,12 @@ interface OutboundLine {
   materialCode: string
   materialName: string
   batchNo: string
+  unitCode: string
   warehouseCode: string
   locationCode: string
   availableQty: number | null
   requestedQty: number
+  fieldValues: Record<string, string | number>
   sourcePalletCode?: string
   sourceAllocations?: SourceQuantityAllocation[]
   unallocatedQty?: number
@@ -64,6 +83,7 @@ interface MaterialOutboundSubmissionLine {
   materialCode: string
   materialName: string
   batchNo: string
+  unitCode: string
   locationCode: string
   requirementId: number
   sourceLineId: number
@@ -72,6 +92,7 @@ interface MaterialOutboundSubmissionLine {
   normalQty: number
   overQty: number
   quantity: number
+  fieldValues: Record<string, string | number>
 }
 
 interface MaterialOutboundSubmissionGroup {
@@ -84,6 +105,7 @@ interface MaterialOutboundSubmissionGroup {
 
 interface OutboundDraft {
   documentDate: string
+  documentDirection: 'BLUE' | 'RED'
   sourceDocumentType: string
   sourceDocumentTypeLabel: string
   sourceDocumentNo: string
@@ -96,6 +118,7 @@ interface OutboundDraft {
   outboundCategoryCode: string
   productionBatch: string
   remark: string
+  headerFieldValues: Record<string, string | number>
   selectedSourceLines: SourceDocumentLine[]
   materialRequirements: MaterialRequirementLine[]
   overIssueTargets: Record<string, number>
@@ -111,6 +134,7 @@ const bridge = getPdaBridge()
 const draftId = ref<string | null>(null)
 const currentStep = ref<1 | 2>(1)
 const documentDate = ref(beijingDate())
+const documentDirection = ref<'BLUE' | 'RED'>('BLUE')
 const sourceDocumentType = ref('')
 const sourceDocumentTypeLabel = ref('')
 const sourceDocumentNo = ref('')
@@ -123,6 +147,7 @@ const departmentCode = ref('')
 const outboundCategoryCode = ref('')
 const productionBatch = ref('')
 const remark = ref('')
+const headerFieldValues = ref<Record<string, string | number>>({})
 const selectedSourceLines = ref<SourceDocumentLine[]>([])
 const materialRequirements = ref<MaterialRequirementLine[]>([])
 const overIssueTargets = ref<Record<string, number>>({})
@@ -136,12 +161,59 @@ let baselineSnapshot = ''
 let stopScanListener: (() => void) | null = null
 let messageTimer: ReturnType<typeof setTimeout> | null = null
 const resolvingBarcodes = new Set<string>()
+const rdStyleOptions = ref<RdStyleOption[]>([])
+const warehousePositionOptions = ref<WarehousePositionOption[]>([])
+const departmentOptions = ref<DepartmentOption[]>([])
+const referenceDataLoading = ref(false)
+
+const handledHeaderFieldKeys = new Set([
+  'header.documentDate',
+  'header.partnerCode',
+  'header.warehouseCode',
+  'header.targetWarehouseCode',
+  'header.sourceLocationCode',
+  'header.targetLocationCode',
+  'header.departmentCode',
+  'header.categoryCode',
+  'header.productionBatch',
+  'header.remark',
+])
+const bodyInfoFieldKeys = new Set([
+  'body.materialCode',
+  'body.materialName',
+  'body.batchNo',
+  'body.unitCode',
+  'body.warehouseCode',
+  'body.locationCode',
+  'body.targetWarehouseCode',
+  'body.targetLocationCode',
+  'body.availableQty',
+])
+const derivedBodyFieldKeys = new Set([
+  'body.labelCode',
+  'body.objectType',
+  ...bodyInfoFieldKeys,
+  'body.quantity',
+])
 
 const pageConfig = computed(() => getBusinessDocumentConfig(props.documentType))
-const documentSettings = computed(() => loadBusinessDocumentSettings())
+const documentSettings = ref(loadBusinessDocumentSettings())
 const documentPolicy = computed(() =>
   ensureDocumentPolicy(documentSettings.value, props.documentType),
 )
+const documentFieldSettings = computed(() =>
+  ensureDocumentFieldSettings(documentSettings.value, props.documentType),
+)
+const documentFields = computed(() => getBusinessDocumentFields(props.documentType))
+const headerExtraFields = computed(() => documentFields.value.filter(
+  (field) => field.area === 'header' && fieldVisible(field.key) && !handledHeaderFieldKeys.has(field.key),
+))
+const bodyInputFields = computed(() => documentFields.value.filter(
+  (field) => field.area === 'body' && fieldVisible(field.key) && !derivedBodyFieldKeys.has(field.key),
+))
+const visibleBodyInfoFields = computed(() => documentFields.value.filter(
+  (field) => field.area === 'body' && fieldVisible(field.key) && bodyInfoFieldKeys.has(field.key),
+))
 const allocationByLine = computed(() =>
   props.documentType === 'material-outbound'
     ? allocateMaterialScans(
@@ -164,13 +236,17 @@ const pendingOverIssueLine = computed(() =>
 )
 const pendingOverIssueMaterial = computed(() =>
   materialSummaries.value.find(
-    (item) => item.materialCode === pendingOverIssueLine.value?.materialCode,
+    (item) => item.materialCode.localeCompare(
+      pendingOverIssueLine.value?.materialCode ?? '', undefined, { sensitivity: 'accent' },
+    ) === 0,
   ),
 )
 const overIssueChoices = computed(() => {
   const materialCode = pendingOverIssueMaterial.value?.materialCode
   if (!materialCode) return []
-  return materialRequirements.value.filter((item) => item.materialCode === materialCode)
+  return materialRequirements.value.filter((item) =>
+    item.materialCode.localeCompare(materialCode, undefined, { sensitivity: 'accent' }) === 0,
+  )
 })
 
 const totalQty = computed(() =>
@@ -183,6 +259,39 @@ const sourceDetailButtonLabel = computed(() =>
 )
 const returnRouteName = computed(() =>
   route.query.origin === 'all-functions' ? 'all-functions' : 'home',
+)
+const visibleRdStyles = computed(() => rdStyleOptions.value.filter(
+  (item) => !pageConfig.value.categoryDirection || item.direction === pageConfig.value.categoryDirection,
+))
+const warehouseOptions = computed(() => {
+  const values = new Map<string, string>()
+  for (const item of warehousePositionOptions.value) {
+    if (!values.has(item.warehouseCode)) values.set(item.warehouseCode, item.warehouseName)
+  }
+  return [...values].map(([code, name]) => ({ code, name }))
+})
+const locationOptions = computed(() => warehousePositionOptions.value.filter(
+  (item) => item.positionCode && (!warehouseCode.value || item.warehouseCode === warehouseCode.value),
+))
+const targetLocationOptions = computed(() => warehousePositionOptions.value.filter(
+  (item) => item.positionCode &&
+    (!(targetWarehouseCode.value || warehouseCode.value) ||
+      item.warehouseCode === (targetWarehouseCode.value || warehouseCode.value)),
+))
+const warehouseSelectOptions = computed<SearchSelectOption[]>(() =>
+  warehouseOptions.value.map((item) => ({ value: item.code, label: item.name })),
+)
+const sourceLocationSelectOptions = computed<SearchSelectOption[]>(() =>
+  locationOptions.value.map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
+)
+const targetLocationSelectOptions = computed<SearchSelectOption[]>(() =>
+  targetLocationOptions.value.map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
+)
+const departmentSelectOptions = computed<SearchSelectOption[]>(() =>
+  departmentOptions.value.map((item) => ({ value: item.code, label: item.name })),
+)
+const rdStyleSelectOptions = computed<SearchSelectOption[]>(() =>
+  visibleRdStyles.value.map((item) => ({ value: item.code, label: item.name })),
 )
 
 function beijingDate(): string {
@@ -201,13 +310,87 @@ function normalizeQty(value: number): number {
   return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
 }
 
-function isPalletCode(barcode: string): boolean {
-  return /^(TP|PALLET|托盘)[-_]?/i.test(barcode)
+function fieldVisible(key: string): boolean {
+  return documentFieldSettings.value[key]?.visible ?? false
+}
+
+function fieldRequired(key: string): boolean {
+  return documentFieldSettings.value[key]?.required ?? false
+}
+
+function isBlank(value: unknown): boolean {
+  return value === null || value === undefined || String(value).trim() === ''
+}
+
+function headerValue(key: string): unknown {
+  const values: Record<string, unknown> = {
+    'header.documentDate': documentDate.value,
+    'header.partnerCode': customerCode.value,
+    'header.warehouseCode': warehouseCode.value,
+    'header.targetWarehouseCode': targetWarehouseCode.value,
+    'header.sourceLocationCode': sourceLocationCode.value,
+    'header.targetLocationCode': targetLocationCode.value,
+    'header.departmentCode': departmentCode.value,
+    'header.categoryCode': outboundCategoryCode.value,
+    'header.productionBatch': productionBatch.value,
+    'header.remark': remark.value,
+  }
+  return key in values ? values[key] : headerFieldValues.value[key]
+}
+
+function bodyValue(line: OutboundLine, key: string): unknown {
+  const values: Record<string, unknown> = {
+    'body.labelCode': line.labelCode,
+    'body.objectType': line.objectType,
+    'body.materialCode': line.materialCode,
+    'body.materialName': line.materialName,
+    'body.batchNo': line.batchNo,
+    'body.unitCode': line.unitCode,
+    'body.warehouseCode': line.warehouseCode,
+    'body.locationCode': line.locationCode,
+    'body.targetWarehouseCode': targetWarehouseCode.value,
+    'body.targetLocationCode': targetLocationCode.value,
+    'body.availableQty': line.availableQty,
+    'body.quantity': line.requestedQty,
+  }
+  return key in values ? values[key] : line.fieldValues[key]
+}
+
+function bodyDisplayValue(line: OutboundLine, key: string): string | number {
+  const value = bodyValue(line, key)
+  if (key === 'body.objectType') return value === 'PALLET' ? '托盘' : '标签'
+  return isBlank(value) ? '--' : String(value)
+}
+
+function filterConfiguredValues(
+  area: 'header' | 'body',
+  values: Record<string, string | number>,
+): Record<string, string | number> {
+  const allowed = new Set(documentFields.value.filter(
+    (field) => field.area === area && fieldVisible(field.key),
+  ).map((field) => field.key))
+  return Object.fromEntries(Object.entries(values).filter(
+    ([key, value]) => allowed.has(key) && !isBlank(value),
+  ))
+}
+
+function bodyArchiveValues(line: OutboundLine): Record<string, string | number> {
+  return filterConfiguredValues('body', {
+    ...line.fieldValues,
+    'body.materialName': line.materialName,
+    'body.batchNo': line.batchNo,
+    'body.warehouseCode': line.warehouseCode,
+    'body.locationCode': line.locationCode,
+    ...(!isBlank(line.availableQty) ? { 'body.availableQty': Number(line.availableQty) } : {}),
+  })
+}
+
+function fieldInputType(field: DocumentFieldDefinition): 'text' | 'number' | 'date' {
+  return field.valueType
 }
 
 function createLineId(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  return `line-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return createUniqueId('line')
 }
 
 function notify(text: string, tone: 'success' | 'error' | 'info' = 'info'): void {
@@ -217,6 +400,41 @@ function notify(text: string, tone: 'success' | 'error' | 'info' = 'info'): void
   messageTimer = setTimeout(() => {
     message.value = ''
   }, 2400)
+}
+
+async function loadReferenceData(): Promise<void> {
+  referenceDataLoading.value = true
+  try {
+    const [styles, warehouses, departments] = await Promise.all([
+      fetchRdStyles(pageConfig.value.categoryDirection, props.documentType),
+      fetchWarehousePositions(),
+      fetchDepartments(),
+    ])
+    rdStyleOptions.value = styles
+    warehousePositionOptions.value = warehouses
+    departmentOptions.value = departments
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '基础资料加载失败', 'error')
+  } finally {
+    referenceDataLoading.value = false
+  }
+}
+
+function handleWarehouseChange(): void {
+  const validPositions = new Set(locationOptions.value.map((item) => item.positionCode))
+  if (sourceLocationCode.value && !validPositions.has(sourceLocationCode.value)) {
+    sourceLocationCode.value = ''
+  }
+  if (targetLocationCode.value && !validPositions.has(targetLocationCode.value)) {
+    targetLocationCode.value = ''
+  }
+}
+
+function handleTargetWarehouseChange(): void {
+  const validPositions = new Set(targetLocationOptions.value.map((item) => item.positionCode))
+  if (targetLocationCode.value && !validPositions.has(targetLocationCode.value)) {
+    targetLocationCode.value = ''
+  }
 }
 
 async function addBarcode(rawCode: string): Promise<void> {
@@ -233,25 +451,51 @@ async function addBarcode(rawCode: string): Promise<void> {
   resolvingBarcodes.add(barcode)
 
   try {
-    const found = await lookupInventoryObject(barcode)
-    const isPalletScan = isPalletCode(barcode) || found.length > 1
+    const lookup = await lookupInventoryObject(barcode, props.documentType)
+    const isPalletScan = lookup.pallet !== null
+    const requiresWholePallet = ['transfer-order', 'location-adjustment'].includes(props.documentType)
+    const found = [
+      ...lookup.lines,
+      ...(lookup.pallet && (requiresWholePallet || documentPolicy.value.includePalletByDefault)
+        ? [lookup.pallet]
+        : []),
+    ]
+    if (!found.length) throw new Error('托盘内没有可处理标签')
+    if (found.some((item) => item.status !== 'ACTIVE')) {
+      throw new Error('标签当前不可用')
+    }
     if (
       !isPalletScan &&
       found.some((item) => item.palletCode) &&
-      !documentSettings.value.globalPallet.allowPalletizedLabelDirectUse
+      (requiresWholePallet || !documentSettings.value.globalPallet.allowPalletizedLabelDirectUse)
     ) {
       notify('请扫描托盘码', 'error')
       return
     }
     if (
       props.documentType === 'material-outbound' &&
+      selectedSourceLines.value.length > 0 &&
       found.some((item) =>
         !materialRequirements.value.some(
-          (requirement) => requirement.materialCode === item.materialCode,
+          (requirement) => requirement.materialCode.localeCompare(
+            item.materialCode, undefined, { sensitivity: 'accent' },
+          ) === 0,
         ),
       )
     ) {
       notify('该物料不在领料范围', 'error')
+      return
+    }
+    if (
+      props.documentType !== 'material-outbound' &&
+      selectedSourceLines.value.length > 0 &&
+      found.some((item) =>
+        !selectedSourceLines.value.some((source) =>
+          source.productCode.localeCompare(item.materialCode, undefined, { sensitivity: 'accent' }) === 0,
+        ),
+      )
+    ) {
+      notify('该物料不在所选源单中', 'error')
       return
     }
     if (found.some((item) => lines.value.some((line) => line.labelCode === item.labelCode))) {
@@ -261,15 +505,17 @@ async function addBarcode(rawCode: string): Promise<void> {
     const additions = found.map<OutboundLine>((item) => ({
       id: createLineId(),
       labelCode: item.labelCode,
-      objectType: isPalletScan ? 'PALLET' : item.objectType,
+      objectType: item.objectType,
       materialCode: item.materialCode,
       materialName: item.materialName,
       batchNo: item.batchNo,
+      unitCode: item.unitCode,
       warehouseCode: item.warehouseCode,
       locationCode: item.locationCode,
       availableQty: item.availableQty,
       requestedQty: item.availableQty,
-      sourcePalletCode: item.palletCode,
+      fieldValues: {},
+      sourcePalletCode: item.objectType === 'PRODUCT_LABEL' ? item.palletCode : undefined,
     }))
     lines.value = [...lines.value, ...additions]
     notify('已添加', 'success')
@@ -296,7 +542,21 @@ function simulateOrAdd(): void {
 }
 
 function removeLine(id: string): void {
-  lines.value = lines.value.filter((line) => line.id !== id)
+  const selected = lines.value.find((line) => line.id === id)
+  if (
+    selected &&
+    ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
+    (selected.objectType === 'PALLET' || selected.sourcePalletCode)
+  ) {
+    const palletCode = selected.objectType === 'PALLET'
+      ? selected.labelCode
+      : selected.sourcePalletCode
+    lines.value = lines.value.filter(
+      (line) => line.labelCode !== palletCode && line.sourcePalletCode !== palletCode,
+    )
+  } else {
+    lines.value = lines.value.filter((line) => line.id !== id)
+  }
   if (overIssueTargets.value[id]) {
     const next = { ...overIssueTargets.value }
     delete next[id]
@@ -351,6 +611,7 @@ function buildMaterialOutboundSubmissionGroups(
         materialCode: line.materialCode,
         materialName: line.materialName,
         batchNo: line.batchNo,
+        unitCode: line.unitCode,
         locationCode: line.locationCode,
         requirementId: allocation.requirementId,
         sourceLineId: allocation.sourceLineId,
@@ -359,6 +620,7 @@ function buildMaterialOutboundSubmissionGroups(
         normalQty: allocation.normalQty,
         overQty: allocation.overQty,
         quantity: allocation.normalQty + allocation.overQty,
+        fieldValues: bodyArchiveValues(line),
       })
     }
   }
@@ -372,11 +634,13 @@ function createDraft(): OutboundDraft {
   const draftLines = lines.value.map((line) => ({
     ...line,
     requestedQty: normalizeQty(line.requestedQty),
+    fieldValues: bodyArchiveValues(line),
     sourceAllocations: allocationByLine.value[line.id]?.allocations ?? [],
     unallocatedQty: allocationByLine.value[line.id]?.unallocatedQty ?? 0,
   }))
   return {
     documentDate: documentDate.value,
+    documentDirection: documentDirection.value,
     sourceDocumentType: sourceDocumentType.value,
     sourceDocumentTypeLabel: sourceDocumentTypeLabel.value,
     sourceDocumentNo: sourceDocumentNo.value,
@@ -389,6 +653,7 @@ function createDraft(): OutboundDraft {
     outboundCategoryCode: outboundCategoryCode.value.trim(),
     productionBatch: productionBatch.value.trim(),
     remark: remark.value.trim(),
+    headerFieldValues: filterConfiguredValues('header', headerFieldValues.value),
     selectedSourceLines: selectedSourceLines.value,
     materialRequirements: materialRequirements.value,
     overIssueTargets: overIssueTargets.value,
@@ -408,6 +673,7 @@ function hasUnsavedChanges(): boolean {
 function applyDraft(draft: Partial<OutboundDraft>): void {
   currentStep.value = 1
   documentDate.value = draft.documentDate || beijingDate()
+  documentDirection.value = draft.documentDirection === 'RED' ? 'RED' : 'BLUE'
   sourceDocumentType.value = draft.sourceDocumentType || ''
   sourceDocumentTypeLabel.value = draft.sourceDocumentTypeLabel || ''
   sourceDocumentNo.value = draft.sourceDocumentNo || ''
@@ -420,6 +686,9 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
   outboundCategoryCode.value = draft.outboundCategoryCode || ''
   productionBatch.value = draft.productionBatch || ''
   remark.value = draft.remark || ''
+  headerFieldValues.value = draft.headerFieldValues && typeof draft.headerFieldValues === 'object'
+    ? draft.headerFieldValues
+    : {}
   selectedSourceLines.value = Array.isArray(draft.selectedSourceLines)
     ? draft.selectedSourceLines
     : []
@@ -429,7 +698,14 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
   overIssueTargets.value = draft.overIssueTargets && typeof draft.overIssueTargets === 'object'
     ? draft.overIssueTargets
     : {}
-  lines.value = Array.isArray(draft.lines) ? draft.lines : []
+  lines.value = Array.isArray(draft.lines)
+    ? draft.lines.map((line) => ({
+        ...line,
+        fieldValues: line.fieldValues && typeof line.fieldValues === 'object'
+          ? line.fieldValues
+          : {},
+      }))
+    : []
 }
 
 function createSummary(payload: unknown): OutboundDocumentSummary {
@@ -447,12 +723,12 @@ function createSummary(payload: unknown): OutboundDocumentSummary {
   }
 }
 
-function loadRequestedDraft(): void {
-  migrateLegacyOutboundDraft(props.documentType, pageConfig.value.draftKey, createSummary)
+async function loadRequestedDraft(): Promise<void> {
+  await migrateLegacyOutboundDraft(props.documentType, pageConfig.value.draftKey, createSummary)
   const request = consumeOutboundDocumentEditRequest(props.documentType)
   if (request) {
     clearOutboundDocumentWorkingState()
-    const stored = getOutboundDocument(request.documentId)
+    const stored = await getOutboundDocument(request.documentId)
     if (!stored || stored.documentType !== props.documentType) return
     draftId.value = stored.id
     applyDraft(stored.payload as Partial<OutboundDraft>)
@@ -478,7 +754,7 @@ function saveWorkingState(): void {
   })
 }
 
-function saveCompletedDocument(): StoredOutboundDocument | null {
+async function saveCompletedDocument(): Promise<StoredOutboundDocument | null> {
   const error = validate()
   if (error) {
     notify(error, 'error')
@@ -486,7 +762,7 @@ function saveCompletedDocument(): StoredOutboundDocument | null {
   }
 
   const payload = createDraft()
-  const stored = saveOutboundDocument({
+  const stored = await saveOutboundDocument({
     id: draftId.value || undefined,
     documentType: props.documentType,
     summary: createSummary(payload),
@@ -500,7 +776,8 @@ function saveCompletedDocument(): StoredOutboundDocument | null {
 
 function hasDraftContent(): boolean {
   return Boolean(
-    sourceDocumentNo.value ||
+    documentDirection.value === 'RED' ||
+      sourceDocumentNo.value ||
       customerCode.value.trim() ||
       warehouseCode.value.trim() ||
       targetWarehouseCode.value.trim() ||
@@ -510,6 +787,7 @@ function hasDraftContent(): boolean {
       outboundCategoryCode.value.trim() ||
       productionBatch.value.trim() ||
       remark.value.trim() ||
+      Object.values(headerFieldValues.value).some((value) => !isBlank(value)) ||
       lines.value.length,
   )
 }
@@ -534,6 +812,16 @@ async function openSwitchSettings(): Promise<void> {
   })
 }
 
+async function openDocumentFieldSettings(): Promise<void> {
+  saveWorkingState()
+  allowNavigation = true
+  await router.replace({
+    name: 'document-field-settings',
+    params: { code: props.documentType },
+    query: route.query,
+  })
+}
+
 async function openSourceDetails(): Promise<void> {
   saveWorkingState()
   allowNavigation = true
@@ -545,54 +833,65 @@ async function openSourceDetails(): Promise<void> {
 }
 
 function validateHeader(): string {
-  if (!documentDate.value) return '请选择日期'
-  if (pageConfig.value.sourceTypes.length && !selectedSourceLines.value.length) {
-    return '请选择源单明细'
-  }
-  if (pageConfig.value.partnerRequired && !customerCode.value.trim()) {
-    return `请输入${pageConfig.value.partnerLabel}`
-  }
-  if (pageConfig.value.warehouseRequired && !warehouseCode.value.trim()) {
-    return `请输入${pageConfig.value.warehouseLabel}`
-  }
-  if (pageConfig.value.targetWarehouseRequired && !targetWarehouseCode.value.trim()) {
-    return `请输入${pageConfig.value.targetWarehouseLabel}`
-  }
-  if (pageConfig.value.sourceLocationRequired && !sourceLocationCode.value.trim()) {
-    return `请输入${pageConfig.value.sourceLocationLabel}`
-  }
-  if (pageConfig.value.targetLocationRequired && !targetLocationCode.value.trim()) {
-    return `请输入${pageConfig.value.targetLocationLabel}`
-  }
-  if (pageConfig.value.departmentRequired && !departmentCode.value.trim()) return '请输入部门'
-  if (pageConfig.value.categoryRequired && !outboundCategoryCode.value.trim()) {
-    return `请输入${pageConfig.value.categoryLabel}`
-  }
+  const missing = documentFields.value.find(
+    (field) => field.area === 'header' && fieldRequired(field.key) && isBlank(headerValue(field.key)),
+  )
+  if (missing) return `${missing.valueType === 'date' ? '请选择' : '请输入'}${missing.label}`
   return ''
 }
 
 function validate(): string {
   const headerError = validateHeader()
   if (headerError) return headerError
-  if (!lines.value.length && !selectedSourceLines.value.length) return '请扫描标签或托盘'
-  if (lines.value.some((line) => normalizeQty(line.requestedQty) <= 0)) {
+  if (!lines.value.length) return '请扫描标签或托盘'
+  const requiredBodyFields = documentFields.value.filter(
+    (field) => field.area === 'body' && fieldRequired(field.key),
+  )
+  for (const line of lines.value) {
+    const missing = requiredBodyFields.find((field) => isBlank(bodyValue(line, field.key)))
+    if (missing) return `请填写${missing.label}`
+  }
+  if (
+    props.documentType !== 'inventory-count' &&
+    lines.value.some((line) => normalizeQty(line.requestedQty) <= 0)
+  ) {
     return `${pageConfig.value.quantityLabel}必须大于0`
   }
   if (
+    props.documentType === 'inventory-count' &&
+    lines.value.some((line) => Number(line.requestedQty) < 0 || !Number.isFinite(Number(line.requestedQty)))
+  ) return `${pageConfig.value.quantityLabel}不能小于0`
+  if (
+    props.documentType !== 'inventory-count' &&
     lines.value.some(
       (line) => line.availableQty !== null && normalizeQty(line.requestedQty) > line.availableQty,
     )
   ) return '本次处理数量不能超过标签当前数量'
+  if (
+    ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
+    lines.value.some((line) => normalizeQty(line.requestedQty) !== line.availableQty)
+  ) return '调拨和货位调整必须整件处理'
+  if (
+    props.documentType !== 'material-outbound' &&
+    selectedSourceLines.value.length > 0 &&
+    lines.value.some((line) =>
+      !selectedSourceLines.value.some((source) =>
+        source.productCode.localeCompare(line.materialCode, undefined, { sensitivity: 'accent' }) === 0,
+      ),
+    )
+  ) return '存在不属于所选源单的物料'
   if (props.documentType === 'material-outbound') {
     if (lines.value.some((line) => !line.warehouseCode.trim())) return '标签缺少仓库'
-    if (materialSummaries.value.some((item) => item.unallocatedQty > 0)) {
+    if (lines.value.some((line) => !line.unitCode?.trim())) return '标签缺少计量单位，请重新扫描'
+    if (
+      selectedSourceLines.value.length > 0 &&
+      materialSummaries.value.some((item) => item.unallocatedQty > 0)
+    ) {
       return documentPolicy.value.allowOverIssue ? '请选择超领产品' : '存在超过可领数量的物料'
     }
-    if (
-      materialSummaries.value.some((item) => item.overQty > 0) &&
-      documentSettings.value.globalOperation.reasonRequired &&
-      !remark.value.trim()
-    ) return '请输入超领原因'
+    if (documentSettings.value.globalOperation.reasonRequired && !remark.value.trim()) {
+      return '请输入原因'
+    }
   }
   return ''
 }
@@ -636,7 +935,7 @@ function resetDocument(): void {
 }
 
 async function finishDocument(): Promise<void> {
-  const stored = saveCompletedDocument()
+  const stored = await saveCompletedDocument()
   if (!stored) return
   if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
     try {
@@ -654,7 +953,7 @@ async function finishDocument(): Promise<void> {
 }
 
 async function finishAndLeave(): Promise<void> {
-  const stored = saveCompletedDocument()
+  const stored = await saveCompletedDocument()
   if (!stored) {
     showLeaveConfirm.value = false
     return
@@ -682,19 +981,28 @@ async function leaveDocument(): Promise<void> {
   await router.replace({ name: returnRouteName.value })
 }
 
+async function refreshDocumentSettings(): Promise<void> {
+  try {
+    documentSettings.value = await fetchBusinessDocumentSettings(props.documentType)
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '设置加载失败', 'error')
+  }
+}
+
 watch(
   () => props.documentType,
-  () => {
+  async () => {
     draftId.value = null
     applyDraft({})
     baselineSnapshot = snapshotDraft()
-    loadRequestedDraft()
+    await loadRequestedDraft()
+    void refreshDocumentSettings()
   },
 )
 
-onMounted(() => {
+onMounted(async () => {
   baselineSnapshot = snapshotDraft()
-  loadRequestedDraft()
+  await loadRequestedDraft()
   const sourceSelection = consumeSourceDocumentSelection(props.documentType)
   if (sourceSelection) {
     sourceDocumentType.value = sourceSelection.sourceType
@@ -711,6 +1019,8 @@ onMounted(() => {
     }
   }
   stopScanListener = bridge.subscribeScan(handleScan)
+  void refreshDocumentSettings()
+  void loadReferenceData()
 })
 
 onBeforeUnmount(() => {
@@ -755,7 +1065,12 @@ onBeforeRouteLeave((to) => {
             开关设置
           </button>
         </div>
-        <span v-else aria-hidden="true"></span>
+        <button
+          v-else
+          class="document-settings-button"
+          type="button"
+          @click="openDocumentFieldSettings"
+        >单据设置</button>
       </div>
     </header>
 
@@ -785,58 +1100,112 @@ onBeforeRouteLeave((to) => {
             </div>
           </div>
 
-          <label class="field">
-            <span><i>*</i>日期</span>
-            <input v-model="documentDate" type="date" />
+          <div v-if="pageConfig.supportsRedBlue" class="field full-width">
+            <span><i>*</i>单据类型</span>
+            <div class="document-direction" role="group" aria-label="单据类型">
+              <button
+                type="button"
+                :class="{ active: documentDirection === 'BLUE' }"
+                @click="documentDirection = 'BLUE'"
+              >蓝字</button>
+              <button
+                type="button"
+                :class="{ active: documentDirection === 'RED', red: documentDirection === 'RED' }"
+                @click="documentDirection = 'RED'"
+              >红字</button>
+            </div>
+          </div>
+
+          <label v-if="fieldVisible('header.documentDate')" class="field">
+            <span><i v-if="fieldRequired('header.documentDate')">*</i>日期</span>
+            <DateField v-model="documentDate" aria-label="单据日期" />
           </label>
 
-          <label v-if="pageConfig.partnerLabel" class="field">
-            <span><i v-if="pageConfig.partnerRequired">*</i>{{ pageConfig.partnerLabel }}</span>
+          <label v-if="pageConfig.partnerLabel && fieldVisible('header.partnerCode')" class="field">
+            <span><i v-if="fieldRequired('header.partnerCode')">*</i>{{ pageConfig.partnerLabel }}</span>
             <input v-model="customerCode" autocomplete="off" placeholder="编码或名称" />
           </label>
 
-          <label v-if="pageConfig.warehouseLabel" class="field">
-            <span><i v-if="pageConfig.warehouseRequired">*</i>{{ pageConfig.warehouseLabel }}</span>
-            <input v-model="warehouseCode" autocomplete="off" placeholder="编码或名称" />
-          </label>
-
-          <label v-if="pageConfig.targetWarehouseLabel" class="field">
-            <span><i v-if="pageConfig.targetWarehouseRequired">*</i>{{ pageConfig.targetWarehouseLabel }}</span>
-            <input v-model="targetWarehouseCode" autocomplete="off" placeholder="编码或名称" />
-          </label>
-
-          <label v-if="pageConfig.sourceLocationLabel" class="field">
-            <span><i v-if="pageConfig.sourceLocationRequired">*</i>{{ pageConfig.sourceLocationLabel }}</span>
-            <input v-model="sourceLocationCode" autocomplete="off" placeholder="编码或名称" />
-          </label>
-
-          <label v-if="pageConfig.targetLocationLabel" class="field">
-            <span><i v-if="pageConfig.targetLocationRequired">*</i>{{ pageConfig.targetLocationLabel }}</span>
-            <input v-model="targetLocationCode" autocomplete="off" placeholder="编码或名称" />
-          </label>
-
-          <label v-if="pageConfig.departmentRequired" class="field">
-            <span><i>*</i>部门</span>
-            <input v-model="departmentCode" autocomplete="off" placeholder="编码或名称" />
-          </label>
-
-          <label v-if="pageConfig.categoryLabel" class="field">
-            <span><i v-if="pageConfig.categoryRequired">*</i>{{ pageConfig.categoryLabel }}</span>
-            <input
-              v-model="outboundCategoryCode"
-              autocomplete="off"
-              placeholder="编码或名称"
+          <label v-if="pageConfig.warehouseLabel && fieldVisible('header.warehouseCode')" class="field">
+            <span><i v-if="fieldRequired('header.warehouseCode')">*</i>{{ pageConfig.warehouseLabel }}</span>
+            <SearchSelect
+              v-model="warehouseCode"
+              :options="warehouseSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="handleWarehouseChange"
             />
           </label>
 
-          <label v-if="pageConfig.productionBatch" class="field">
-            <span>生产批号</span>
+          <label v-if="pageConfig.targetWarehouseLabel && fieldVisible('header.targetWarehouseCode')" class="field">
+            <span><i v-if="fieldRequired('header.targetWarehouseCode')">*</i>{{ pageConfig.targetWarehouseLabel }}</span>
+            <SearchSelect
+              v-model="targetWarehouseCode"
+              :options="warehouseSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="handleTargetWarehouseChange"
+            />
+          </label>
+
+          <label v-if="pageConfig.sourceLocationLabel && fieldVisible('header.sourceLocationCode')" class="field">
+            <span><i v-if="fieldRequired('header.sourceLocationCode')">*</i>{{ pageConfig.sourceLocationLabel }}</span>
+            <SearchSelect
+              v-model="sourceLocationCode"
+              :options="sourceLocationSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+            />
+          </label>
+
+          <label v-if="pageConfig.targetLocationLabel && fieldVisible('header.targetLocationCode')" class="field">
+            <span><i v-if="fieldRequired('header.targetLocationCode')">*</i>{{ pageConfig.targetLocationLabel }}</span>
+            <SearchSelect
+              v-model="targetLocationCode"
+              :options="targetLocationSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+            />
+          </label>
+
+          <label v-if="fieldVisible('header.departmentCode')" class="field">
+            <span><i v-if="fieldRequired('header.departmentCode')">*</i>部门</span>
+            <SearchSelect
+              v-model="departmentCode"
+              :options="departmentSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+            />
+          </label>
+
+          <label v-if="pageConfig.categoryLabel && fieldVisible('header.categoryCode')" class="field">
+            <span><i v-if="fieldRequired('header.categoryCode')">*</i>{{ pageConfig.categoryLabel }}</span>
+            <SearchSelect
+              v-model="outboundCategoryCode"
+              :options="rdStyleSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+            />
+          </label>
+
+          <label v-if="pageConfig.productionBatch && fieldVisible('header.productionBatch')" class="field">
+            <span><i v-if="fieldRequired('header.productionBatch')">*</i>生产批号</span>
             <input v-model="productionBatch" autocomplete="off" placeholder="选填" />
           </label>
 
-          <label class="field full-width">
-            <span>备注</span>
+          <label v-if="fieldVisible('header.remark')" class="field full-width">
+            <span><i v-if="fieldRequired('header.remark')">*</i>备注</span>
             <input v-model="remark" autocomplete="off" placeholder="选填" />
+          </label>
+
+          <label v-for="field in headerExtraFields" :key="field.key" class="field">
+            <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
+            <input
+              v-model="headerFieldValues[field.key]"
+              :type="fieldInputType(field)"
+              :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
+              autocomplete="off"
+            />
           </label>
         </div>
       </section>
@@ -872,10 +1241,14 @@ onBeforeRouteLeave((to) => {
           <article v-for="line in lines" :key="line.id" class="line-card">
             <div class="line-heading">
               <div class="code-wrap">
-                <span class="object-badge" :class="{ pallet: line.objectType === 'PALLET' }">
+                <span
+                  v-if="fieldVisible('body.objectType')"
+                  class="object-badge"
+                  :class="{ pallet: line.objectType === 'PALLET' }"
+                >
                   {{ line.objectType === 'PALLET' ? '托盘' : '标签' }}
                 </span>
-                <strong>{{ line.labelCode }}</strong>
+                <strong v-if="fieldVisible('body.labelCode')">{{ line.labelCode }}</strong>
               </div>
               <button type="button" aria-label="删除" @click="removeLine(line.id)">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -884,18 +1257,35 @@ onBeforeRouteLeave((to) => {
               </button>
             </div>
 
-            <dl class="line-info">
-              <div><dt>料号</dt><dd>{{ line.materialCode || '--' }}</dd></div>
-              <div><dt>批号</dt><dd>{{ line.batchNo || '--' }}</dd></div>
-              <div><dt>仓库</dt><dd>{{ line.warehouseCode || '--' }}</dd></div>
-              <div><dt>货位</dt><dd>{{ line.locationCode || '--' }}</dd></div>
-              <div><dt>可用量</dt><dd>{{ line.availableQty ?? '--' }}</dd></div>
+            <dl v-if="visibleBodyInfoFields.length" class="line-info">
+              <div v-for="field in visibleBodyInfoFields" :key="field.key">
+                <dt>{{ field.label }}</dt><dd>{{ bodyDisplayValue(line, field.key) }}</dd>
+              </div>
             </dl>
 
-            <label class="qty-field">
-              <span>{{ pageConfig.quantityLabel }}</span>
-              <input v-model.number="line.requestedQty" type="number" inputmode="decimal" min="0.000001" step="0.000001" />
+            <label v-if="fieldVisible('body.quantity')" class="qty-field">
+              <span><i v-if="fieldRequired('body.quantity')">*</i>{{ pageConfig.quantityLabel }}</span>
+              <input
+                v-model.number="line.requestedQty"
+                type="number"
+                inputmode="decimal"
+                :min="documentType === 'inventory-count' ? 0 : 0.000001"
+                step="0.000001"
+                :readonly="['transfer-order', 'location-adjustment'].includes(documentType)"
+              />
             </label>
+
+            <div v-if="bodyInputFields.length" class="line-input-grid">
+              <label v-for="field in bodyInputFields" :key="field.key" class="field">
+                <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
+                <input
+                  v-model="line.fieldValues[field.key]"
+                  :type="fieldInputType(field)"
+                  :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
+                  autocomplete="off"
+                />
+              </label>
+            </div>
 
             <div
               v-if="allocationByLine[line.id]?.allocations.length"
@@ -1077,7 +1467,8 @@ h1 {
 }
 
 .switch-settings-button,
-.source-details-button {
+.source-details-button,
+.document-settings-button {
   height: 38px;
   padding: 0 10px;
   border: 0;
@@ -1135,7 +1526,8 @@ h1 {
   font-weight: 650;
 }
 
-.field i {
+.field i,
+.qty-field i {
   margin-right: 3px;
   color: #d64040;
   font-style: normal;
@@ -1205,7 +1597,36 @@ h1 {
   font-size: 24px;
 }
 
+.document-direction {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.document-direction button {
+  height: 44px;
+  border: 1px solid #d4deea;
+  border-radius: 10px;
+  background: #fff;
+  color: #63748a;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.document-direction button.active {
+  border-color: #76a5dc;
+  background: #eaf3fd;
+  color: #1f63ad;
+}
+
+.document-direction button.active.red {
+  border-color: #e1a3a3;
+  background: #fff0f0;
+  color: #b23d3d;
+}
+
 .field input,
+.field select,
 .scan-input-row input,
 .qty-field input {
   width: 100%;
@@ -1215,7 +1636,15 @@ h1 {
   outline: none;
 }
 
-.field input {
+.line-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.field input,
+.field select {
   height: 44px;
   padding: 0 11px;
   border-radius: 10px;
@@ -1223,6 +1652,7 @@ h1 {
 }
 
 .field input:focus,
+.field select:focus,
 .scan-input-row input:focus,
 .qty-field input:focus {
   border-color: #3378cf;
@@ -1773,6 +2203,10 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .line-input-grid {
+    grid-template-columns: 1fr;
+  }
+
   .field.full-width {
     grid-column: auto;
   }
@@ -1785,5 +2219,16 @@ h1 {
     grid-template-columns: minmax(66px, 1fr) 78px 96px;
     padding-inline: 12px;
   }
+}
+.outbound-page {
+  padding-top: var(--app-header-height);
+}
+
+.topbar-shell {
+  height: var(--app-header-height);
+}
+
+.topbar {
+  padding-top: var(--app-safe-top);
 }
 </style>

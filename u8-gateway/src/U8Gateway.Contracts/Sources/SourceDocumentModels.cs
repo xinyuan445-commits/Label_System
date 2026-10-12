@@ -7,6 +7,11 @@ namespace U8Gateway.Contracts.Sources
     {
         public const string ProductionOrder = "production-order";
         public const string SubcontractOrder = "subcontract-order";
+        public const string OutsourcingOrder = "outsourcing-order";
+        public const string PurchaseOrder = "purchase-order";
+        public const string PurchaseArrival = "purchase-arrival";
+        public const string SalesOrder = "sales-order";
+        public const string SalesDelivery = "sales-delivery";
     }
 
     public sealed class SourceDocumentLine

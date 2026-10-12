@@ -1,21 +1,26 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { readSession } from '@/services/auth'
 import { createDefaultShellConfig, loadShellConfig } from '@/services/shell-config'
 
 const router = useRouter()
 const h5Version = __APP_VERSION__
 const shellConfig = ref(createDefaultShellConfig())
 
-const entries = [
+const allEntries = [
   { name: 'settings-address', label: '地址设置', icon: 'link' },
   { name: 'settings-features', label: '功能开关', icon: 'features' },
   { name: 'settings-data-sync', label: '数据同步', icon: 'sync' },
   { name: 'settings-users', label: '用户管理', icon: 'users' },
+  { name: 'settings-label-code-rules', label: '标签编码规则', icon: 'barcode', adminOnly: true },
   { name: 'settings-scanner', label: '扫码测试', icon: 'scan' },
   { name: 'settings-sound', label: '扫码提示音测试', icon: 'sound' },
 ] as const
+
+const isAdmin = readSession()?.user.roles.some((role) => role.toLowerCase() === 'admin') === true
+const entries = computed(() => allEntries.filter((entry) => !('adminOnly' in entry) || !entry.adminOnly || isAdmin))
 
 onMounted(async () => {
   try {
@@ -70,6 +75,9 @@ onMounted(async () => {
             <path d="M3 21a6 6 0 0 1 12 0" />
             <path d="M17 8a3 3 0 0 1 0 6M16 16a5 5 0 0 1 5 5" />
           </svg>
+          <svg v-else-if="entry.icon === 'barcode'" viewBox="0 0 24 24">
+            <path d="M4 5v14M7 5v14M11 5v14M14 5v14M16.5 5v14M20 5v14" />
+          </svg>
           <svg v-else viewBox="0 0 24 24">
             <path d="M11 5 7 9H4v6h3l4 4V5Z" />
             <path d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12" />
@@ -93,7 +101,7 @@ onMounted(async () => {
 <style scoped>
 .settings-page {
   min-height: 100dvh;
-  padding: 20px 16px 36px;
+  padding: calc(20px + var(--app-safe-top)) 16px 36px;
   background: #f3f6fa;
 }
 

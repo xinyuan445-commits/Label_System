@@ -1,5 +1,11 @@
 # U8 Gateway API 设计
 
+## 审核单据只读接口（0.3.7）
+
+- `GET /api/v1/approval-documents?documentType=&status=&documentNo=&startDate=&endDate=&limit=`：按 U8 当前状态返回单据摘要，`status` 为 `pending` 或 `audited`，`limit` 最大 100。
+- `GET /api/v1/approval-documents/{documentType}/{id}`：返回表头和全部明细。
+- 支持的稳定类型：`purchase-arrival`、`subcontract-arrival`、`purchase-receipt`、`sales-delivery`、`sales-outbound`、`material-outbound`、`transfer`、`location-adjustment`、`inventory-count`。
+- `version` 为 U8 `ufts` 的 `0x...` 十六进制值，用于后续审核/弃审并发校验；读取接口不调用 U8 COM 写操作。
 ## 1. 设计原则
 
 通用的是认证、路径、响应、幂等、状态、错误码和字段描述方式；每种 U8 单据保留独立字段合同、校验器和适配器。禁止通过 API 接收任意数据库表名、列名或原始 SQL。
@@ -117,14 +123,25 @@ RECONCILIATION_REQUIRED
 
 H5 不直接查询 U8 数据库。按单据需要提供仓库、货位、存货、批号和结存、计量单位、供应商、客户、部门、业务员、收发类别、采购订单、销售订单、生产订单及来源单据明细查询。
 
-当前已开放生产订单只读查询：
+源单只读查询路由：
 
 ```text
 GET  /api/v1/source-documents
 POST /api/v1/source-documents/lines
 POST /api/v1/source-documents/material-requirements
+GET  /api/v1/reference-data/rd-styles
+GET  /api/v1/reference-data/warehouse-positions
+GET  /api/v1/reference-data/departments
 ```
 
-`GET` 按 `sourceType=production-order`、关键字、订单日期范围和条数查询已审核、未关闭且存在子件的生产订单明细行。`POST /lines` 根据生产订单内部 ID 重新读取该订单全部有效明细，供合并选单使用；`POST /material-requirements` 根据最多 1000 个生产订单明细内部 ID 返回对应子件分配 ID、产品、物料、计划量、累计已领量、剩余量和批次控制标志。审核使用 U8 专用审核标志判断；是否关闭根据关闭日期、关闭时间判断，不使用订单状态推断。三个接口都执行相同的审核、关闭校验。所有 SQL 使用固定表和参数化 `SELECT`，不接受表名、字段名或 SQL 文本。
+`GET` 支持 `production-order`、`purchase-order`、`purchase-arrival`、`sales-order`、`sales-delivery` 和 `outsourcing-order`，按关键字、单据日期范围和条数查询当前可用明细；`POST /lines` 按来源单据内部 ID 重新读取有效明细。采购和销售读取器从固定候选字段中按目标账套实际结构解析主键、行号、审核、关闭和累计执行数量，只生成固定 SQL 并对业务条件使用参数，不接受客户端表名、字段名或 SQL 文本。
 
-委外订单源单查询尚未开放。标签系统业务后端负责持有网关密钥并转发稳定 JSON；H5 不直接持有密钥或访问 U8 数据库。
+`POST /material-requirements` 只适用于生产订单，根据最多 1000 个生产订单明细内部 ID 返回子件分配 ID、产品、物料、计划量、累计已领量、剩余量和批次控制标志。生产订单审核和关闭规则保持原有验证口径。
+
+六类源单搜索和整单明细读取已通过服务器测试账套只读验证，包含委外订单源单。委外到货单本身仍没有历史样例，原有未验收边界不变。标签系统业务后端负责持有网关密钥并转发稳定 JSON；H5 不直接持有密钥或访问 U8 数据库。
+
+`GET /reference-data/rd-styles` 使用固定 SQL 读取 `dbo.Rd_Style`，将 `bRdFlag=1` 映射为 `IN`、`bRdFlag=0` 映射为 `OUT`，并返回 `bRdEnd` 末级标志。接口不接受表名、字段名或 SQL 参数，不写 U8；测试账套已只读验证 52 条记录。
+
+`GET /reference-data/warehouse-positions` 使用固定 SQL 将 `dbo.Warehouse` 左连接 `dbo.Position`，只读取 `dWhEndDate IS NULL` 的仓库；没有仓位的仓库仍返回一行。`GET /reference-data/departments` 使用固定 SQL 读取 `dbo.Department` 中 `dDepEndDate IS NULL` 的部门。两者都不接受客户端 SQL，不写 U8；测试账套已只读验证 45 个仓库、475 个仓位和 50 个部门。
+
+写接口合同中的 `operatorName` 映射到 U8 `cmaker`。Gateway 不访问标签系统用户表，因此 Business API 在调用写接口前必须用当前应用用户的 ERP 制单人映射覆盖该字段；不得透传 H5 姓名或使用 Gateway 默认制单人替代。ERP 映射缺失时请求应在 Business API 层拒绝。

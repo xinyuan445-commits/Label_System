@@ -7,6 +7,7 @@ export interface RuntimeConfig {
   h5Version: string
   bridgeProtocol: string
   enableMockLogin: boolean
+  enableMockBusinessUploads: boolean
   enableMockScanner: boolean
   enableMockSourceDocuments: boolean
   enableVConsole: boolean
@@ -15,11 +16,12 @@ export interface RuntimeConfig {
 
 const fallbackConfig: RuntimeConfig = {
   environment: 'development',
-  apiBaseUrl: 'http://127.0.0.1:3000',
-  sourceDocumentApiBaseUrl: '/__u8',
-  h5Version: '0.1.0-dev.1',
+  apiBaseUrl: 'http://172.16.1.159:9890',
+  sourceDocumentApiBaseUrl: 'http://172.16.1.159:9890',
+  h5Version: '0.2.0-dev.22',
   bridgeProtocol: 'pda-bridge-v1',
-  enableMockLogin: true,
+  enableMockLogin: false,
+  enableMockBusinessUploads: false,
   enableMockScanner: true,
   enableMockSourceDocuments: false,
   enableVConsole: false,
@@ -52,6 +54,7 @@ function parseRuntimeConfig(value: unknown): RuntimeConfig {
     h5Version: String(candidate.h5Version || fallbackConfig.h5Version),
     bridgeProtocol: String(candidate.bridgeProtocol || fallbackConfig.bridgeProtocol),
     enableMockLogin: candidate.enableMockLogin === true,
+    enableMockBusinessUploads: candidate.enableMockBusinessUploads === true,
     enableMockScanner: candidate.enableMockScanner === true,
     enableMockSourceDocuments: candidate.enableMockSourceDocuments === true,
     enableVConsole: candidate.enableVConsole === true,
