@@ -154,13 +154,27 @@ public sealed class DocumentPrepareService(
         if (request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > 500)
             throw new ApiException(StatusCodes.Status400BadRequest, "LINES_INVALID", "明细数量无效。");
 
+        if (IsRequired(requiredFields, "header.documentDate", true) && request.Header.DocumentDate == default)
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "DOCUMENT_DATE_REQUIRED", "请选择日期。");
+        Require(request.Header.PartnerCode,
+            IsRequired(requiredFields, "header.partnerCode", RequiresPartner(definition.DocumentType)),
+            "PARTNER_REQUIRED", "请输入往来单位。");
         Require(request.Header.WarehouseCode, IsRequired(requiredFields, "header.warehouseCode", definition.RequireWarehouse), "WAREHOUSE_REQUIRED", "请输入仓库。");
         Require(request.Header.TargetWarehouseCode, IsRequired(requiredFields, "header.targetWarehouseCode", definition.RequireTargetWarehouse),
             "TARGET_WAREHOUSE_REQUIRED", "请输入调入仓库。");
         Require(request.Header.TargetLocationCode, IsRequired(requiredFields, "header.targetLocationCode", definition.RequireTargetLocation),
             "TARGET_LOCATION_REQUIRED", "请输入目标货位。");
+        Require(request.Header.SourceLocationCode,
+            IsRequired(requiredFields, "header.sourceLocationCode", false),
+            "SOURCE_LOCATION_REQUIRED", "请输入原货位。");
         Require(request.Header.DepartmentCode, IsRequired(requiredFields, "header.departmentCode", definition.RequireDepartment), "DEPARTMENT_REQUIRED", "请输入部门。");
         Require(request.Header.CategoryCode, IsRequired(requiredFields, "header.categoryCode", definition.RequireCategory), "CATEGORY_REQUIRED", "请输入业务类别。");
+        Require(request.Header.ProductionBatch,
+            IsRequired(requiredFields, "header.productionBatch", false),
+            "PRODUCTION_BATCH_REQUIRED", "请输入生产批号。");
+        Require(request.Reason, IsRequired(requiredFields, "header.remark", false),
+            "REMARK_REQUIRED", "请输入备注。");
         DocumentAdditionalFields.Validate(request.Header.AdditionalFields);
         DocumentAdditionalFields.ValidateRequired(
             request.Header.AdditionalFields, requiredFields, "header.", MappedHeaderFields);
@@ -222,6 +236,10 @@ public sealed class DocumentPrepareService(
         IReadOnlyDictionary<string, bool> requiredFields,
         string key,
         bool fallback) => requiredFields.TryGetValue(key, out var required) ? required : fallback;
+
+    private static bool RequiresPartner(string documentType) => documentType is
+        "purchase-arrival" or "outsourcing-arrival" or "purchase-inbound" or
+        "delivery-note" or "sales-outbound";
 
     private static void ValidateDocumentDirection(string? value)
     {

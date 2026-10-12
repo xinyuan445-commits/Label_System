@@ -132,6 +132,13 @@ public sealed class MaterialOutboundService(
             throw new ApiException(StatusCodes.Status400BadRequest, "LINES_INVALID", "明细数量无效。");
         if (request.ProductionBatch?.Length > 100)
             throw new ApiException(StatusCodes.Status400BadRequest, "PRODUCTION_BATCH_INVALID", "生产批号无效。");
+        if (IsRequired(requiredFields, "header.productionBatch", false) &&
+            string.IsNullOrWhiteSpace(request.ProductionBatch))
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "PRODUCTION_BATCH_REQUIRED", "请输入生产批号。");
+        if (IsRequired(requiredFields, "header.remark", false) &&
+            string.IsNullOrWhiteSpace(request.Reason))
+            throw new ApiException(StatusCodes.Status400BadRequest, "REMARK_REQUIRED", "请输入备注。");
         DocumentAdditionalFields.Validate(request.AdditionalFields);
         DocumentAdditionalFields.ValidateRequired(
             request.AdditionalFields, requiredFields, "header.", MappedHeaderFields);
