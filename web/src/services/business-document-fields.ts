@@ -101,26 +101,27 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
   }
   if (['purchase-arrival', 'outsourcing-arrival'].includes(documentType)) {
     fields.push(
-      field('header.purchaseTypeCode', '采购类型', 'header', 'text'),
+      field('header.purchaseTypeCode', '采购类型', 'header', 'text', true, true),
       field('header.paymentCode', '付款条件', 'header', 'text'),
-      field('header.currencyCode', '币种', 'header', 'text'),
-      field('header.exchangeRate', '汇率', 'header', 'number'),
+      field('header.currencyCode', '币种', 'header', 'text', true, true),
+      field('header.exchangeRate', '汇率', 'header', 'number', true, true),
       field('header.taxRate', '税率', 'header', 'number'),
     )
   }
   if (documentType === 'purchase-inbound') {
     fields.push(
-      field('header.purchaseTypeCode', '采购类型', 'header', 'text'),
-      field('header.currencyCode', '币种', 'header', 'text'),
-      field('header.exchangeRate', '汇率', 'header', 'number'),
+      field('header.purchaseTypeCode', '采购类型', 'header', 'text', true, true),
+      field('header.currencyCode', '币种', 'header', 'text', true, true),
+      field('header.exchangeRate', '汇率', 'header', 'number', true, true),
       field('header.taxRate', '税率', 'header', 'number'),
     )
   }
   if (documentType === 'delivery-note') {
     fields.push(
+      field('header.salesTypeCode', '销售类型', 'header', 'text', true, true),
       field('header.paymentCode', '收款条件', 'header', 'text'),
-      field('header.currencyCode', '币种', 'header', 'text'),
-      field('header.exchangeRate', '汇率', 'header', 'number'),
+      field('header.currencyCode', '币种', 'header', 'text', true, true),
+      field('header.exchangeRate', '汇率', 'header', 'number', true, true),
       field('header.taxRate', '税率', 'header', 'number'),
       field('header.deliveryAddress', '送货地址', 'header', 'text'),
       field('header.contactName', '联系人', 'header', 'text'),
@@ -129,6 +130,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
   }
   if (documentType === 'sales-outbound') {
     fields.push(
+      field('header.salesTypeCode', '销售类型', 'header', 'text', true, true),
       field('header.deliveryUnit', '收货单位', 'header', 'text'),
       field('header.deliveryAddress', '收货地址', 'header', 'text'),
       field('header.contactName', '联系人', 'header', 'text'),
@@ -136,13 +138,20 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
     )
   }
   if (documentType === 'transfer-order') {
-    fields.push(field('header.targetDepartmentCode', '调入部门', 'header', 'text'))
+    fields.push(
+      field('header.targetDepartmentCode', '调入部门', 'header', 'text'),
+      field('header.outCategoryCode', '调出类别', 'header', 'text', true, true),
+      field('header.inCategoryCode', '调入类别', 'header', 'text', true, true),
+    )
   }
   if (documentType === 'inventory-count') {
     fields.push(
+      field('header.outCategoryCode', '盘亏类别', 'header', 'text', true, true),
+      field('header.inCategoryCode', '盘盈类别', 'header', 'text', true, true),
       field('header.inventoryBatch', '盘点批号', 'header', 'text'),
       field('header.locationCode', '货位', 'header', 'text'),
       field('header.countPeriod', '盘点期间', 'header', 'text'),
+      field('header.countType', '盘点类型', 'header', 'text'),
     )
   }
   fields.push(field('header.remark', '备注', 'header', 'text', true))

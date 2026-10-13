@@ -677,4 +677,4 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 3. 对应的 SQL 迁移脚本。
 4. API 请求、响应及错误码合同。
 
-迁移 001 至 011 已经在开发、测试和生产库执行。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。
+迁移 001 至 012 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。类型缓存保存关联出入库类别和默认标志；币种缓存保存本位币标志、小数位及最新可用汇率。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。

@@ -486,6 +486,49 @@ public sealed record DepartmentCacheItem(
     string Name,
     DateTimeOffset UpdatedAt);
 
+public sealed record DocumentTypeSourceItem(
+    string Code,
+    string Name,
+    string? RdStyleCode,
+    bool IsDefault,
+    string? SourceRowVersion);
+
+public sealed record CurrencySourceItem(
+    string Code,
+    string Name,
+    bool IsLocal,
+    bool UsesExchangeRate,
+    byte DecimalDigits,
+    decimal? LatestRate,
+    int? RateYear,
+    byte? RatePeriod,
+    string? RateDate,
+    string? SourceRowVersion);
+
+public sealed record DocumentMasterDataSource(
+    IReadOnlyList<DocumentTypeSourceItem> PurchaseTypes,
+    IReadOnlyList<DocumentTypeSourceItem> SalesTypes,
+    IReadOnlyList<CurrencySourceItem> Currencies);
+
+public sealed record DocumentTypeCacheItem(
+    string Code,
+    string Name,
+    string? RdStyleCode,
+    bool IsDefault,
+    DateTimeOffset UpdatedAt);
+
+public sealed record CurrencyCacheItem(
+    string Code,
+    string Name,
+    bool IsLocal,
+    bool UsesExchangeRate,
+    byte DecimalDigits,
+    decimal? LatestRate,
+    int? RateYear,
+    byte? RatePeriod,
+    string? RateDate,
+    DateTimeOffset UpdatedAt);
+
 public sealed record DataSyncStatusItem(
     string Key,
     string Name,

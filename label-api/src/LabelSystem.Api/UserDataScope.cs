@@ -88,6 +88,35 @@ public sealed class UserDataScopeService(
         }
 
         var direction = CategoryDirection(functionCode);
+        await ValidateRdStyleCoreAsync(
+            userId, functionCode, categoryCode, direction, required, cancellationToken);
+    }
+
+    public Task ValidateRdStyleDirectionAsync(
+        string userId,
+        string functionCode,
+        string? categoryCode,
+        string direction,
+        bool required,
+        CancellationToken cancellationToken) =>
+        ValidateRdStyleCoreAsync(
+            userId, functionCode, categoryCode, direction, required, cancellationToken);
+
+    private async Task ValidateRdStyleCoreAsync(
+        string userId,
+        string functionCode,
+        string? categoryCode,
+        string? direction,
+        bool required,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(categoryCode))
+        {
+            if (required)
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "CATEGORY_REQUIRED", "请选择业务类别。");
+            return;
+        }
         var styles = await referenceData.ListRdStylesAsync(direction, true, cancellationToken);
         var code = categoryCode.Trim();
         if (!styles.Any(item => string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase)))

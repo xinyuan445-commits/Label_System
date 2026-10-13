@@ -621,6 +621,24 @@ app.MapGet("/api/v1/reference-data/departments", async (
     CancellationToken cancellationToken) =>
     ApiResults.Ok(context, await repository.ListDepartmentsAsync(cancellationToken)));
 
+app.MapGet("/api/v1/reference-data/purchase-types", async (
+    HttpContext context,
+    ReferenceDataRepository repository,
+    CancellationToken cancellationToken) =>
+    ApiResults.Ok(context, await repository.ListPurchaseTypesAsync(cancellationToken)));
+
+app.MapGet("/api/v1/reference-data/sales-types", async (
+    HttpContext context,
+    ReferenceDataRepository repository,
+    CancellationToken cancellationToken) =>
+    ApiResults.Ok(context, await repository.ListSalesTypesAsync(cancellationToken)));
+
+app.MapGet("/api/v1/reference-data/currencies", async (
+    HttpContext context,
+    ReferenceDataRepository repository,
+    CancellationToken cancellationToken) =>
+    ApiResults.Ok(context, await repository.ListCurrenciesAsync(cancellationToken)));
+
 app.MapGet("/api/v1/admin/data-sync/status", async (
     HttpContext context,
     ReferenceDataRepository repository,
@@ -658,6 +676,16 @@ app.MapPost("/api/v1/admin/data-sync/departments", async (
     RequireAdmin(context);
     return ApiResults.Ok(context,
         await service.SyncDepartmentsAsync(RequestContext.User(context).Id, cancellationToken));
+});
+
+app.MapPost("/api/v1/admin/data-sync/document-master-data", async (
+    HttpContext context,
+    ReferenceDataSyncService service,
+    CancellationToken cancellationToken) =>
+{
+    RequireAdmin(context);
+    return ApiResults.Ok(context,
+        await service.SyncDocumentMasterDataAsync(RequestContext.User(context).Id, cancellationToken));
 });
 
 app.MapGet("/api/v1/source-documents", async (
@@ -824,6 +852,7 @@ app.MapPost("/api/v1/operations/documents/{documentType}/submit", async (
     MaterialOutboundSubmissionService service,
     UserRepository users,
     UserDataScopeService dataScopes,
+    ReferenceDataRepository referenceData,
     LabelSystemRepository settings,
     CancellationToken cancellationToken) =>
 {
@@ -835,14 +864,10 @@ app.MapPost("/api/v1/operations/documents/{documentType}/submit", async (
         throw new ApiException(StatusCodes.Status403Forbidden, "OPERATOR_MISMATCH", "操作人不匹配。");
     request = request with { OperatorId = session.Id, OperatorName = session.Name };
     await users.GetErpOperatorAsync(session.Id, cancellationToken);
-    if (!string.Equals(functionCode, "location-adjustment", StringComparison.OrdinalIgnoreCase))
-    {
-        var requiredFields = await settings.GetRequiredDocumentFieldsAsync(documentType, cancellationToken);
-        await dataScopes.ValidateRdStyleAsync(
-            session.Id, functionCode, request.Header?.CategoryCode,
-            !requiredFields.TryGetValue("header.categoryCode", out var categoryRequired) || categoryRequired,
-            cancellationToken);
-    }
+    var requiredFields = await settings.GetRequiredDocumentFieldsAsync(documentType, cancellationToken);
+    await ValidateDocumentReferenceDataAsync(
+        documentType, request, session.Id, functionCode, requiredFields,
+        dataScopes, referenceData, cancellationToken);
     var result = await service.SubmitAsync(
         documentType, request, session, RequestContext.Id(context), autoApprove, cancellationToken);
     return ApiResults.Ok(context, result);
@@ -937,6 +962,84 @@ app.Run();
 
 static IResult RejectPrepareOnly() => throw new ApiException(
     StatusCodes.Status409Conflict, "DIRECT_SUBMIT_REQUIRED", "请刷新后直接上传 ERP。");
+
+static async Task ValidateDocumentReferenceDataAsync(
+    string documentType,
+    DocumentPrepareRequest request,
+    string userId,
+    string functionCode,
+    IReadOnlyDictionary<string, bool> requiredFields,
+    UserDataScopeService dataScopes,
+    ReferenceDataRepository referenceData,
+    CancellationToken cancellationToken)
+{
+    var header = request.Header ?? throw new ApiException(
+        StatusCodes.Status400BadRequest, "HEADER_REQUIRED", "单据表头不能为空。");
+    var purchaseType = AdditionalText(header.AdditionalFields, "purchaseTypeCode");
+    var salesType = AdditionalText(header.AdditionalFields, "salesTypeCode");
+    if (documentType is "purchase-arrival" or "outsourcing-arrival" or "purchase-inbound")
+    {
+        purchaseType ??= documentType is "purchase-arrival" or "outsourcing-arrival"
+            ? header.CategoryCode : null;
+        if (string.IsNullOrWhiteSpace(purchaseType) ||
+            !await referenceData.DocumentTypeExistsAsync("PURCHASE", purchaseType, cancellationToken))
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "PURCHASE_TYPE_INVALID", "请选择有效采购类型。");
+    }
+    if (documentType is "delivery-note" or "sales-outbound")
+    {
+        salesType ??= documentType == "delivery-note" ? header.CategoryCode : null;
+        if (string.IsNullOrWhiteSpace(salesType) ||
+            !await referenceData.DocumentTypeExistsAsync("SALES", salesType, cancellationToken))
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "SALES_TYPE_INVALID", "请选择有效销售类型。");
+    }
+
+    if (documentType is "purchase-arrival" or "outsourcing-arrival" or "purchase-inbound" or "delivery-note")
+    {
+        var currency = AdditionalText(header.AdditionalFields, "currencyCode");
+        if (string.IsNullOrWhiteSpace(currency) ||
+            await referenceData.FindCurrencyAsync(currency, cancellationToken) is null)
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "CURRENCY_INVALID", "请选择有效币种。");
+    }
+
+    if (documentType == "location-adjustment" ||
+        documentType is "purchase-arrival" or "outsourcing-arrival" or "delivery-note") return;
+
+    if (documentType is "transfer-order" or "inventory-count")
+    {
+        await dataScopes.ValidateRdStyleDirectionAsync(
+            userId, functionCode, AdditionalText(header.AdditionalFields, "outCategoryCode"),
+            "OUT", Required(requiredFields, "header.outCategoryCode"), cancellationToken);
+        await dataScopes.ValidateRdStyleDirectionAsync(
+            userId, functionCode, AdditionalText(header.AdditionalFields, "inCategoryCode"),
+            "IN", Required(requiredFields, "header.inCategoryCode"), cancellationToken);
+        return;
+    }
+
+    await dataScopes.ValidateRdStyleAsync(
+        userId, functionCode, header.CategoryCode,
+        Required(requiredFields, "header.categoryCode"), cancellationToken);
+
+    static bool Required(IReadOnlyDictionary<string, bool> fields, string key) =>
+        !fields.TryGetValue(key, out var required) || required;
+}
+
+static string? AdditionalText(JsonElement? fields, string name)
+{
+    if (fields is not { ValueKind: JsonValueKind.Object } value) return null;
+    foreach (var property in value.EnumerateObject())
+    {
+        var logical = property.Name.StartsWith("header.", StringComparison.OrdinalIgnoreCase)
+            ? property.Name[7..] : property.Name;
+        if (!logical.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+            property.Value.ValueKind == JsonValueKind.Null) continue;
+        var text = property.Value.ToString().Trim();
+        return text.Length == 0 ? null : text;
+    }
+    return null;
+}
 
 static void RequireAdmin(HttpContext context)
 {

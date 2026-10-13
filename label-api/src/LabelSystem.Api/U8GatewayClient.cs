@@ -103,6 +103,22 @@ public sealed class U8GatewayClient(
         return envelope.Data;
     }
 
+    public async Task<DocumentMasterDataSource> GetDocumentMasterDataAsync(
+        CancellationToken cancellationToken)
+    {
+        using var message = CreateRequest(HttpMethod.Get, "/api/v1/reference-data/document-master-data");
+        using var response = await Client().SendAsync(message, cancellationToken);
+        var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<DocumentMasterDataSource>>(
+            JsonOptions, cancellationToken);
+        if (!response.IsSuccessStatusCode || envelope?.Success != true || envelope.Data is null)
+        {
+            throw new ApiException(StatusCodes.Status503ServiceUnavailable,
+                envelope?.Code ?? "U8_REFERENCE_QUERY_FAILED",
+                envelope?.Message ?? "U8 基础资料查询失败。");
+        }
+        return envelope.Data;
+    }
+
     public async Task ValidateDocumentAsync(
         string documentType,
         GatewayDocumentRequest request,

@@ -43,25 +43,25 @@ public sealed class DocumentPrepareService(
         {
             ["transfer-order"] = new(
                 "transfer-order", "调拨单", "TRANSFER", "transfer", "TR",
-                true, true, false, true, true, true, false, false, false, true),
+                true, true, false, true, false, true, false, false, false, true),
             ["location-adjustment"] = new(
                 "location-adjustment", "货位调整", "LOCATION_ADJUSTMENT", "location-adjustment", "LA",
                 true, false, true, false, false, true, false, false, false, true),
             ["inventory-count"] = new(
                 "inventory-count", "盘点单", "INVENTORY_COUNT", "inventory-count", "IC",
-                true, false, false, true, true, false, true, false, false, true),
+                true, false, false, true, false, false, true, false, false, true),
             ["purchase-arrival"] = new(
                 "purchase-arrival", "采购到货", "PURCHASE_ARRIVAL", "purchase-arrival", "PA",
-                false, false, false, true, true, false, false, true, false, false),
+                false, false, false, true, false, false, false, true, false, false),
             ["outsourcing-arrival"] = new(
                 "outsourcing-arrival", "委外到货", "SUBCONTRACT_ARRIVAL", "subcontract-arrival", "OA",
-                false, false, false, true, true, false, false, true, false, false),
+                false, false, false, true, false, false, false, true, false, false),
             ["purchase-inbound"] = new(
                 "purchase-inbound", "采购入库", "PURCHASE_RECEIPT", "purchase-receipt", "PI",
                 true, false, false, true, true, false, false, true, false, false),
             ["delivery-note"] = new(
                 "delivery-note", "发货单", "SALES_DELIVERY", "sales-delivery", "SD",
-                true, false, false, true, true, false, false, true, false, true),
+                true, false, false, true, false, false, false, true, false, true),
             ["sales-outbound"] = new(
                 "sales-outbound", "销售出库单", "SALES_OUTBOUND", "sales-outbound", "SO",
                 true, false, false, true, true, false, false, true, false, true),

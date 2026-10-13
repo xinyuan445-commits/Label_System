@@ -64,6 +64,29 @@ public sealed class ReferenceDataSyncService(
         }
     }
 
+    public async Task<DataSyncResult> SyncDocumentMasterDataAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        const string syncKey = "document-master-data";
+        await repository.BeginSyncAsync(syncKey, userId, cancellationToken);
+        try
+        {
+            var source = await gateway.GetDocumentMasterDataAsync(cancellationToken);
+            var purchaseTypes = ValidateDocumentTypes(source.PurchaseTypes, "PURCHASE_TYPE_SOURCE_INVALID");
+            var salesTypes = ValidateDocumentTypes(source.SalesTypes, "SALES_TYPE_SOURCE_INVALID");
+            var currencies = ValidateCurrencies(source.Currencies);
+            return await repository.ReplaceDocumentMasterDataAsync(
+                purchaseTypes, salesTypes, currencies, userId, cancellationToken);
+        }
+        catch
+        {
+            try { await repository.FailSyncAsync(syncKey, userId, CancellationToken.None); }
+            catch { /* 保留原始同步异常。 */ }
+            throw;
+        }
+    }
+
     private static IReadOnlyList<RdStyleSourceItem> ValidateRdStyles(
         IReadOnlyList<RdStyleSourceItem> source)
     {
@@ -144,6 +167,55 @@ public sealed class ReferenceDataSyncService(
 
         static ApiException InvalidSource() => new(StatusCodes.Status503ServiceUnavailable,
             "DEPARTMENT_SOURCE_INVALID", "U8 部门数据无效。");
+    }
+
+    private static IReadOnlyList<DocumentTypeSourceItem> ValidateDocumentTypes(
+        IReadOnlyList<DocumentTypeSourceItem> source,
+        string errorCode)
+    {
+        if (source.Count == 0 || source.Count > 1000) throw InvalidSource();
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<DocumentTypeSourceItem>(source.Count);
+        foreach (var item in source)
+        {
+            var code = item.Code?.Trim() ?? string.Empty;
+            var name = item.Name?.Trim() ?? string.Empty;
+            var rdStyleCode = NullIfWhiteSpace(item.RdStyleCode);
+            if (code.Length is < 1 or > 20 || name.Length is < 1 or > 100 ||
+                rdStyleCode?.Length > 20 || !codes.Add(code)) throw InvalidSource();
+            result.Add(item with { Code = code, Name = name, RdStyleCode = rdStyleCode });
+        }
+        return result;
+
+        ApiException InvalidSource() => new(StatusCodes.Status503ServiceUnavailable,
+            errorCode, "U8 单据基础档案无效。");
+    }
+
+    private static IReadOnlyList<CurrencySourceItem> ValidateCurrencies(
+        IReadOnlyList<CurrencySourceItem> source)
+    {
+        if (source.Count == 0 || source.Count > 1000) throw InvalidSource();
+        var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<CurrencySourceItem>(source.Count);
+        foreach (var item in source)
+        {
+            var code = item.Code?.Trim() ?? string.Empty;
+            var name = item.Name?.Trim() ?? string.Empty;
+            if (code.Length is < 1 or > 20 || name.Length is < 1 or > 100 ||
+                item.DecimalDigits > 10 || (item.LatestRate.HasValue && item.LatestRate.Value <= 0) ||
+                !codes.Add(code) || !names.Add(name)) throw InvalidSource();
+            result.Add(item with
+            {
+                Code = code,
+                Name = name,
+                RateDate = NullIfWhiteSpace(item.RateDate)
+            });
+        }
+        return result;
+
+        static ApiException InvalidSource() => new(StatusCodes.Status503ServiceUnavailable,
+            "CURRENCY_SOURCE_INVALID", "U8 币种数据无效。");
     }
 
     private static string? NullIfWhiteSpace(string? value) =>

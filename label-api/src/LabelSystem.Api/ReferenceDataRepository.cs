@@ -8,6 +8,7 @@ public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
     private const string RdStyleSyncKey = "rd-styles";
     private const string WarehousePositionSyncKey = "warehouse-positions";
     private const string DepartmentSyncKey = "departments";
+    private const string DocumentMasterDataSyncKey = "document-master-data";
 
     public async Task<IReadOnlyList<DataSyncStatusItem>> ListSyncStatusAsync(
         CancellationToken cancellationToken)
@@ -117,6 +118,85 @@ public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
             result.Add(new DepartmentCacheItem(
                 reader.GetString(0), reader.GetString(1), ToBeijingOffset(reader.GetDateTime(2))));
         return result;
+    }
+
+    public Task<IReadOnlyList<DocumentTypeCacheItem>> ListPurchaseTypesAsync(
+        CancellationToken cancellationToken) =>
+        ListDocumentTypesAsync("u8_purchase_type_cache", cancellationToken);
+
+    public Task<IReadOnlyList<DocumentTypeCacheItem>> ListSalesTypesAsync(
+        CancellationToken cancellationToken) =>
+        ListDocumentTypesAsync("u8_sales_type_cache", cancellationToken);
+
+    public async Task<IReadOnlyList<CurrencyCacheItem>> ListCurrenciesAsync(
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT currency_code,currency_name,is_local,uses_exchange_rate,decimal_digits,
+                   latest_rate,rate_year,rate_period,rate_date,updated_at
+            FROM dbo.u8_currency_cache
+            WHERE is_active=1
+            ORDER BY is_local DESC,currency_code;
+            """;
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<CurrencyCacheItem>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(new CurrencyCacheItem(
+                reader.GetString(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3),
+                reader.GetByte(4), reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+                reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                reader.IsDBNull(7) ? null : reader.GetByte(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                ToBeijingOffset(reader.GetDateTime(9))));
+        }
+        return result;
+    }
+
+    public async Task<bool> DocumentTypeExistsAsync(
+        string kind,
+        string code,
+        CancellationToken cancellationToken)
+    {
+        var table = kind.Equals("PURCHASE", StringComparison.OrdinalIgnoreCase)
+            ? "u8_purchase_type_cache"
+            : kind.Equals("SALES", StringComparison.OrdinalIgnoreCase)
+                ? "u8_sales_type_cache"
+                : throw new ArgumentOutOfRangeException(nameof(kind));
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(
+            $"SELECT COUNT(*) FROM dbo.{table} WHERE type_code=@code AND is_active=1;", connection);
+        command.Parameters.Add("@code", SqlDbType.NVarChar, 20).Value = code.Trim();
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) == 1;
+    }
+
+    public async Task<CurrencyCacheItem?> FindCurrencyAsync(
+        string codeOrName,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT TOP (1) currency_code,currency_name,is_local,uses_exchange_rate,decimal_digits,
+                   latest_rate,rate_year,rate_period,rate_date,updated_at
+            FROM dbo.u8_currency_cache
+            WHERE is_active=1 AND (currency_code=@value OR currency_name=@value);
+            """;
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@value", SqlDbType.NVarChar, 100).Value = codeOrName.Trim();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        return new CurrencyCacheItem(
+            reader.GetString(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3),
+            reader.GetByte(4), reader.IsDBNull(5) ? null : reader.GetDecimal(5),
+            reader.IsDBNull(6) ? null : reader.GetInt32(6),
+            reader.IsDBNull(7) ? null : reader.GetByte(7),
+            reader.IsDBNull(8) ? null : reader.GetString(8),
+            ToBeijingOffset(reader.GetDateTime(9)));
     }
 
     public async Task BeginSyncAsync(
@@ -316,6 +396,69 @@ public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
         return new DataSyncResult(DepartmentSyncKey, "SUCCESS", rows.Count, completedAt);
     }
 
+    public async Task<DataSyncResult> ReplaceDocumentMasterDataAsync(
+        IReadOnlyList<DocumentTypeSourceItem> purchaseTypes,
+        IReadOnlyList<DocumentTypeSourceItem> salesTypes,
+        IReadOnlyList<CurrencySourceItem> currencies,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+
+        await ReplaceDocumentTypesAsync(
+            connection, transaction, "u8_purchase_type_cache", purchaseTypes, cancellationToken);
+        await ReplaceDocumentTypesAsync(
+            connection, transaction, "u8_sales_type_cache", salesTypes, cancellationToken);
+
+        await using (var deactivate = new SqlCommand(
+            "UPDATE dbo.u8_currency_cache SET is_active=0,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME());",
+            connection, transaction))
+            await deactivate.ExecuteNonQueryAsync(cancellationToken);
+        const string currencySql = """
+            UPDATE dbo.u8_currency_cache
+            SET currency_name=@name,is_local=@is_local,uses_exchange_rate=@uses_rate,
+                decimal_digits=@digits,latest_rate=@rate,rate_year=@year,rate_period=@period,
+                rate_date=@date,source_row_version=@source_version,is_active=1,
+                last_seen_at=DATEADD(HOUR,8,SYSUTCDATETIME()),updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE currency_code=@code;
+            IF @@ROWCOUNT=0
+                INSERT INTO dbo.u8_currency_cache
+                    (currency_code,currency_name,is_local,uses_exchange_rate,decimal_digits,
+                     latest_rate,rate_year,rate_period,rate_date,source_row_version,is_active,last_seen_at)
+                VALUES
+                    (@code,@name,@is_local,@uses_rate,@digits,@rate,@year,@period,@date,
+                     @source_version,1,DATEADD(HOUR,8,SYSUTCDATETIME()));
+            """;
+        foreach (var row in currencies)
+        {
+            await using var command = new SqlCommand(currencySql, connection, transaction);
+            command.Parameters.Add("@code", SqlDbType.NVarChar, 20).Value = row.Code;
+            command.Parameters.Add("@name", SqlDbType.NVarChar, 100).Value = row.Name;
+            command.Parameters.Add("@is_local", SqlDbType.Bit).Value = row.IsLocal;
+            command.Parameters.Add("@uses_rate", SqlDbType.Bit).Value = row.UsesExchangeRate;
+            command.Parameters.Add("@digits", SqlDbType.TinyInt).Value = row.DecimalDigits;
+            var rate = command.Parameters.Add("@rate", SqlDbType.Decimal);
+            rate.Precision = 24;
+            rate.Scale = 10;
+            rate.Value = row.LatestRate.HasValue ? row.LatestRate.Value : DBNull.Value;
+            command.Parameters.Add("@year", SqlDbType.Int).Value = row.RateYear.HasValue ? row.RateYear.Value : DBNull.Value;
+            command.Parameters.Add("@period", SqlDbType.TinyInt).Value = row.RatePeriod.HasValue ? row.RatePeriod.Value : DBNull.Value;
+            command.Parameters.Add("@date", SqlDbType.NVarChar, 20).Value = DbValue(row.RateDate, 20);
+            command.Parameters.Add("@source_version", SqlDbType.Binary, 8).Value = DecodeSourceRowVersion(row.SourceRowVersion);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var completedAt = BusinessClock.Now;
+        var itemCount = purchaseTypes.Count + salesTypes.Count + currencies.Count;
+        await CompleteSyncAsync(connection, transaction, DocumentMasterDataSyncKey,
+            itemCount, userId, completedAt, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return new DataSyncResult(DocumentMasterDataSyncKey, "SUCCESS", itemCount, completedAt);
+    }
+
     public async Task FailSyncAsync(
         string syncKey,
         string userId,
@@ -361,6 +504,59 @@ public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
                 "SYNC_STATE_MISSING", "同步配置尚未初始化。");
     }
 
+    private async Task<IReadOnlyList<DocumentTypeCacheItem>> ListDocumentTypesAsync(
+        string table,
+        CancellationToken cancellationToken)
+    {
+        const string select = "SELECT type_code,type_name,rd_style_code,is_default,updated_at FROM dbo.{0} WHERE is_active=1 ORDER BY is_default DESC,type_code;";
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(string.Format(select, table), connection);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<DocumentTypeCacheItem>();
+        while (await reader.ReadAsync(cancellationToken))
+            result.Add(new DocumentTypeCacheItem(
+                reader.GetString(0), reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetBoolean(3),
+                ToBeijingOffset(reader.GetDateTime(4))));
+        return result;
+    }
+
+    private static async Task ReplaceDocumentTypesAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string table,
+        IReadOnlyList<DocumentTypeSourceItem> rows,
+        CancellationToken cancellationToken)
+    {
+        await using (var deactivate = new SqlCommand(
+            $"UPDATE dbo.{table} SET is_active=0,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME());",
+            connection, transaction))
+            await deactivate.ExecuteNonQueryAsync(cancellationToken);
+        var sql = $"""
+            UPDATE dbo.{table}
+            SET type_name=@name,rd_style_code=@rd_style,is_default=@is_default,
+                source_row_version=@source_version,is_active=1,
+                last_seen_at=DATEADD(HOUR,8,SYSUTCDATETIME()),updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE type_code=@code;
+            IF @@ROWCOUNT=0
+                INSERT INTO dbo.{table}
+                    (type_code,type_name,rd_style_code,is_default,source_row_version,is_active,last_seen_at)
+                VALUES (@code,@name,@rd_style,@is_default,@source_version,1,
+                        DATEADD(HOUR,8,SYSUTCDATETIME()));
+            """;
+        foreach (var row in rows)
+        {
+            await using var command = new SqlCommand(sql, connection, transaction);
+            command.Parameters.Add("@code", SqlDbType.NVarChar, 20).Value = row.Code;
+            command.Parameters.Add("@name", SqlDbType.NVarChar, 100).Value = row.Name;
+            command.Parameters.Add("@rd_style", SqlDbType.NVarChar, 20).Value = DbValue(row.RdStyleCode, 20);
+            command.Parameters.Add("@is_default", SqlDbType.Bit).Value = row.IsDefault;
+            command.Parameters.Add("@source_version", SqlDbType.Binary, 8).Value = DecodeSourceRowVersion(row.SourceRowVersion);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
     private static object DecodeSourceRowVersion(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return DBNull.Value;
@@ -373,6 +569,13 @@ public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
         {
             return DBNull.Value;
         }
+    }
+
+    private static object DbValue(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return DBNull.Value;
+        var normalized = value.Trim();
+        return normalized.Length <= maxLength ? normalized : normalized[..maxLength];
     }
 
     private static DateTimeOffset? ReadDateTimeOffset(SqlDataReader reader, int ordinal) =>

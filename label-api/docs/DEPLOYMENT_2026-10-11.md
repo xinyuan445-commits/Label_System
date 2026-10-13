@@ -6,15 +6,17 @@
 Site: LabelSystemApi
 Application pool: LabelSystemApiPool
 URL: http://172.16.1.159:9890
-Release: D:\LabelSystem\Api\releases\20261013_144858
+Release: D:\LabelSystem\Api\releases\20261013_151740
 External config: D:\LabelSystem\Config\label-api.json
 Operation archive: D:\LabelSystem\OperationArchive
 Environment: development
 Database: LabelSystem_Dev
 U8 account: 888
-Service version: 0.7.0
+Service version: 0.8.0
 U8 writes: disabled
 ```
+
+2026-10-13 15:18 已发布 Business API `0.8.0` 到 `D:\LabelSystem\Api\releases\20261013_151740`，部署 Gateway `0.4.0`，H5 更新为 `0.2.0-dev.39`。三套业务库执行迁移 `012` 并记录相同脚本哈希，新增采购类型、销售类型和币种缓存；development 从 888 首次同步 16 个采购类型、11 个销售类型和 4 个币种。H5 到货/发货改用业务类型，采购/销售出库同时选择业务类型和出入库类别，调拨与盘点分别选择两个方向类别。八类通用单据使用合法基础档案执行安全提交均返回 `409 U8_WRITE_DISABLED`，业务组数量未增加；健康检查 `ready`、数据库就绪，`U8WritesEnabled=false`。未调用 U8 保存、未产生 888 单据、未修改标签余额；APK 未更新，部署回收后需重新登录。
 
 2026-10-13 14:48 已发布 Business API `0.7.0` 到 `D:\LabelSystem\Api\releases\20261013_144858`，并部署 U8 Gateway `0.3.9`。九类制单统一完成“归档复核、按单据映射、Gateway 校验与新增、按单号回查、本地事务收口”执行链；采购、销售和库存三组 CO 候选新增路径均已编码。发布后健康检查 `ready`、数据库就绪，IIS 两个站点和应用池均为 `Started`。Business API 合法提交探针返回 `409 U8_WRITE_DISABLED` 且业务组总数未增加；Gateway 九类新增、修改、审核、弃审、删除能力全部为 `false`，新增探针返回 `409 DOCUMENT_OPERATION_DISABLED`。两层总开关保持关闭，未调用 U8 保存、未产生 888 单据、未修改标签余额；无数据库迁移，H5 和 APK 未更新。应用池回收后原登录会话失效，需要重新登录。
 

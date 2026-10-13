@@ -68,8 +68,8 @@ internal static class DocumentGatewayRequestBuilder
                 header["cdepcode"] = Empty(value.DepartmentCode);
                 header["cpocode"] = operation.SourceDocumentType == "purchase-order" ? Empty(operation.SourceDocumentNo) : null;
                 header["cpaycode"] = AdditionalText(value.AdditionalFields, "paymentCode");
-                header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyCode") ?? "人民币";
-                header["cexch_code"] = AdditionalText(value.AdditionalFields, "currencyCode") ?? "人民币";
+                header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyName") ?? "人民币";
+                header["cexch_code"] = AdditionalText(value.AdditionalFields, "currencyCode") ?? "RMB";
                 header["iexchrate"] = AdditionalDecimal(value.AdditionalFields, "exchangeRate") ?? 1m;
                 header["itaxrate"] = AdditionalDecimal(value.AdditionalFields, "taxRate");
                 header["cmemo"] = Empty(request.Reason);
@@ -83,7 +83,7 @@ internal static class DocumentGatewayRequestBuilder
                 header["cdepcode"] = Empty(value.DepartmentCode);
                 header["cptcode"] = AdditionalText(value.AdditionalFields, "purchaseTypeCode") ?? value.CategoryCode;
                 header["cvencode"] = Empty(value.PartnerCode);
-                header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyCode") ?? "人民币";
+                header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyName") ?? "人民币";
                 header["iexchrate"] = AdditionalDecimal(value.AdditionalFields, "exchangeRate") ?? 1m;
                 header["itaxrate"] = AdditionalDecimal(value.AdditionalFields, "taxRate");
                 header["cmemo"] = Empty(request.Reason);
@@ -98,10 +98,10 @@ internal static class DocumentGatewayRequestBuilder
                 break;
             case "sales-delivery":
                 header["ddate"] = date;
-                header["cstcode"] = Empty(value.CategoryCode);
+                header["cstcode"] = AdditionalText(value.AdditionalFields, "salesTypeCode") ?? value.CategoryCode;
                 header["cdepcode"] = Empty(value.DepartmentCode);
                 header["ccuscode"] = Empty(value.PartnerCode);
-                header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyCode") ?? "人民币";
+                header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyName") ?? "人民币";
                 header["iexchrate"] = AdditionalDecimal(value.AdditionalFields, "exchangeRate") ?? 1m;
                 header["itaxrate"] = AdditionalDecimal(value.AdditionalFields, "taxRate");
                 header["cpaycode"] = AdditionalText(value.AdditionalFields, "paymentCode");

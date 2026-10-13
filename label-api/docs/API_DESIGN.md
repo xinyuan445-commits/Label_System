@@ -60,10 +60,14 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | GET | `/reference-data/rd-styles?direction=...&terminalOnly=...` | 查询本地出入库类别缓存 |
 | GET | `/reference-data/warehouse-positions` | 查询本地仓库与仓位缓存 |
 | GET | `/reference-data/departments` | 查询本地部门缓存 |
+| GET | `/reference-data/purchase-types` | 查询采购类型缓存 |
+| GET | `/reference-data/sales-types` | 查询销售类型缓存 |
+| GET | `/reference-data/currencies` | 查询币种及最新汇率缓存 |
 | GET | `/admin/data-sync/status` | 查询基础资料同步状态 |
 | POST | `/admin/data-sync/rd-styles` | 从 U8 同步出入库类别 |
 | POST | `/admin/data-sync/warehouse-positions` | 从 U8 同步仓库与仓位 |
 | POST | `/admin/data-sync/departments` | 从 U8 同步部门 |
+| POST | `/admin/data-sync/document-master-data` | 从 U8 同步采购类型、销售类型和币种 |
 | PUT | `/drafts/{draftId}` | 新增或覆盖当前用户的最新草稿 JSON |
 | GET | `/drafts?documentType=...&status=...` | 查询当前用户草稿；管理员可加 `allUsers=true` |
 | GET | `/drafts/{draftId}` | 查询草稿正文；其他用户正文只允许管理员角色查看 |
@@ -128,9 +132,11 @@ H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API �
 
 `POST /admin/data-sync/warehouse-positions` 和 `POST /admin/data-sync/departments` 采用相同的管理员权限、完整读取、先校验后事务替换和失败保留旧缓存规则。仓位同步同时维护仓库与仓位缓存；无仓位的有效仓库仍可作为仓库选项。
 
+`POST /admin/data-sync/document-master-data` 一次读取并事务替换采购类型、销售类型和币种缓存。采购、销售类型同时保存其关联出入库类别；币种保存 U8 名称、编码、本币标志和最新可用汇率。同步失败时三组旧缓存全部保留，不允许只更新其中一组。
+
 重复同步开始时保留上一轮 `last_success_at`，本轮完成后再更新成功时间。数据库唯一键或检查约束冲突返回 `409 DATABASE_CONFLICT`，不再误报为数据库连接失败。
 
-`GET /admin/data-sync/status` 返回三个同步项的状态、条数和最近成功时间。三个 `/reference-data/*` 查询都只读取标签数据库缓存；类别的 `direction` 可为 `IN` 或 `OUT`，`terminalOnly=true` 只返回末级类别。接口不实时查询 U8，也不调用 U8 写能力。
+`GET /admin/data-sync/status` 返回四个同步项的状态、条数和最近成功时间。所有 `/reference-data/*` 查询都只读取标签数据库缓存；类别的 `direction` 可为 `IN` 或 `OUT`，`terminalOnly=true` 只返回末级类别。接口不实时查询 U8，也不调用 U8 写能力。
 
 ## 用户、权限与漫游数据
 

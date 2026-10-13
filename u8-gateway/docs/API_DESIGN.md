@@ -1,5 +1,9 @@
 # U8 Gateway API 设计
 
+## 单据基础档案只读接口（0.4.0）
+
+`GET /api/v1/reference-data/document-master-data` 使用固定 SQL 读取 `PurchaseType`、`SaleType`、`foreigncurrency` 和 `exch`，返回采购类型、销售类型、币种及最新可用汇率。接口不接受客户端表名、字段名或 SQL，不写 U8；888 已只读验证返回 16 个采购类型、11 个销售类型和 4 个币种。
+
 ## 九类新增候选运行时（0.3.9）
 
 库存单据适配器已为六类库存单据实现 `USERPCO.VoucherCO.GetNewVouchCode + Insert`；采购适配器为采购到货和委外到货实现 `VoucherCO_PU.GetVoucherNO + VoucherSave`；销售适配器为发货单实现 `VoucherCO_SA.GetVoucherNO + Save`。保存后均按单号解析 ID，再使用既有只读加载器回查表头、明细、货位和版本；未回查确认不得返回成功。请求继续经过字段白名单、操作凭证、幂等记录和四重写入门禁。当前九类 `capabilities.create=false` 且服务器 `EnableWrites=false`，因此这些代码路径尚不可从接口触发真实写入。
@@ -136,6 +140,7 @@ POST /api/v1/source-documents/material-requirements
 GET  /api/v1/reference-data/rd-styles
 GET  /api/v1/reference-data/warehouse-positions
 GET  /api/v1/reference-data/departments
+GET  /api/v1/reference-data/document-master-data
 ```
 
 `GET` 支持 `production-order`、`purchase-order`、`purchase-arrival`、`sales-order`、`sales-delivery` 和 `outsourcing-order`，按关键字、单据日期范围和条数查询当前可用明细；`POST /lines` 按来源单据内部 ID 重新读取有效明细。采购和销售读取器从固定候选字段中按目标账套实际结构解析主键、行号、审核、关闭和累计执行数量，只生成固定 SQL 并对业务条件使用参数，不接受客户端表名、字段名或 SQL 文本。
@@ -147,5 +152,7 @@ GET  /api/v1/reference-data/departments
 `GET /reference-data/rd-styles` 使用固定 SQL 读取 `dbo.Rd_Style`，将 `bRdFlag=1` 映射为 `IN`、`bRdFlag=0` 映射为 `OUT`，并返回 `bRdEnd` 末级标志。接口不接受表名、字段名或 SQL 参数，不写 U8；测试账套已只读验证 52 条记录。
 
 `GET /reference-data/warehouse-positions` 使用固定 SQL 将 `dbo.Warehouse` 左连接 `dbo.Position`，只读取 `dWhEndDate IS NULL` 的仓库；没有仓位的仓库仍返回一行。`GET /reference-data/departments` 使用固定 SQL 读取 `dbo.Department` 中 `dDepEndDate IS NULL` 的部门。两者都不接受客户端 SQL，不写 U8；测试账套已只读验证 45 个仓库、475 个仓位和 50 个部门。
+
+`GET /reference-data/document-master-data` 使用固定 SQL 读取 `PurchaseType`、`SaleType`、`foreigncurrency` 和 `exch`，返回采购类型、销售类型、币种及各币种最新可用汇率。接口不接受任意 SQL，不写 U8；888 已验证返回 16、11、4 条。
 
 写接口合同中的 `operatorName` 映射到 U8 `cmaker`。Gateway 不访问标签系统用户表，因此 Business API 在调用写接口前必须用当前应用用户的 ERP 制单人映射覆盖该字段；不得透传 H5 姓名或使用 Gateway 默认制单人替代。ERP 映射缺失时请求应在 Business API 层拒绝。

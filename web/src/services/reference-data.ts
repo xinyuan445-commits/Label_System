@@ -26,6 +26,27 @@ export interface DepartmentOption {
   updatedAt: string
 }
 
+export interface DocumentTypeOption {
+  code: string
+  name: string
+  rdStyleCode: string | null
+  isDefault: boolean
+  updatedAt: string
+}
+
+export interface CurrencyOption {
+  code: string
+  name: string
+  isLocal: boolean
+  usesExchangeRate: boolean
+  decimalDigits: number
+  latestRate: number | null
+  rateYear: number | null
+  ratePeriod: number | null
+  rateDate: string | null
+  updatedAt: string
+}
+
 export async function fetchRdStyles(
   direction?: 'IN' | 'OUT',
   functionCode?: string,
@@ -43,4 +64,16 @@ export async function fetchWarehousePositions(): Promise<WarehousePositionOption
 
 export async function fetchDepartments(): Promise<DepartmentOption[]> {
   return apiRequest<DepartmentOption[]>('/api/v1/reference-data/departments')
+}
+
+export async function fetchPurchaseTypes(): Promise<DocumentTypeOption[]> {
+  return apiRequest<DocumentTypeOption[]>('/api/v1/reference-data/purchase-types')
+}
+
+export async function fetchSalesTypes(): Promise<DocumentTypeOption[]> {
+  return apiRequest<DocumentTypeOption[]>('/api/v1/reference-data/sales-types')
+}
+
+export async function fetchCurrencies(): Promise<CurrencyOption[]> {
+  return apiRequest<CurrencyOption[]>('/api/v1/reference-data/currencies')
 }

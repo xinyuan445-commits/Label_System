@@ -72,6 +72,27 @@ namespace U8Gateway.Api.Controllers
             }
         }
 
+        [HttpGet]
+        [Route("document-master-data")]
+        public IHttpActionResult GetDocumentMasterData()
+        {
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    Reader().GetDocumentMasterData(), GatewayRequestContext.Id));
+            }
+            catch (SqlException)
+            {
+                return Error(HttpStatusCode.ServiceUnavailable,
+                    "U8_REFERENCE_QUERY_FAILED", "U8 基础资料查询失败。");
+            }
+            catch (InvalidOperationException)
+            {
+                return Error(HttpStatusCode.ServiceUnavailable,
+                    "U8_GATEWAY_NOT_CONFIGURED", "U8 Gateway 尚未完成配置。");
+            }
+        }
+
         private static U8ReferenceDataReader Reader()
         {
             GatewaySettings settings = AppRuntime.CurrentSettings;

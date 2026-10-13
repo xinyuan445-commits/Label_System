@@ -122,3 +122,10 @@ export async function syncDepartments(): Promise<DataSyncResult> {
     timeoutMs: 45_000,
   })
 }
+
+export async function syncDocumentMasterData(): Promise<DataSyncResult> {
+  return apiRequest<DataSyncResult>('/api/v1/admin/data-sync/document-master-data', {
+    method: 'POST',
+    timeoutMs: 45_000,
+  })
+}

@@ -21,9 +21,14 @@ import { markDocumentSubpage } from '@/services/document-subpage-navigation'
 import { lookupInventoryObject } from '@/services/inventory-object-lookup'
 import {
   fetchDepartments,
+  fetchCurrencies,
+  fetchPurchaseTypes,
   fetchRdStyles,
+  fetchSalesTypes,
   fetchWarehousePositions,
+  type CurrencyOption,
   type DepartmentOption,
+  type DocumentTypeOption,
   type RdStyleOption,
   type WarehousePositionOption,
 } from '@/services/reference-data'
@@ -175,6 +180,9 @@ const resolvingBarcodes = new Set<string>()
 const rdStyleOptions = ref<RdStyleOption[]>([])
 const warehousePositionOptions = ref<WarehousePositionOption[]>([])
 const departmentOptions = ref<DepartmentOption[]>([])
+const purchaseTypeOptions = ref<DocumentTypeOption[]>([])
+const salesTypeOptions = ref<DocumentTypeOption[]>([])
+const currencyOptions = ref<CurrencyOption[]>([])
 const referenceDataLoading = ref(false)
 const finishing = ref(false)
 const completionError = ref('')
@@ -335,6 +343,23 @@ const departmentSelectOptions = computed<SearchSelectOption[]>(() =>
 const rdStyleSelectOptions = computed<SearchSelectOption[]>(() =>
   visibleRdStyles.value.map((item) => ({ value: item.code, label: item.name })),
 )
+const inRdStyleSelectOptions = computed<SearchSelectOption[]>(() =>
+  rdStyleOptions.value.filter((item) => item.direction === 'IN' && item.isTerminal)
+    .map((item) => ({ value: item.code, label: item.name })),
+)
+const outRdStyleSelectOptions = computed<SearchSelectOption[]>(() =>
+  rdStyleOptions.value.filter((item) => item.direction === 'OUT' && item.isTerminal)
+    .map((item) => ({ value: item.code, label: item.name })),
+)
+const purchaseTypeSelectOptions = computed<SearchSelectOption[]>(() =>
+  purchaseTypeOptions.value.map((item) => ({ value: item.code, label: item.name })),
+)
+const salesTypeSelectOptions = computed<SearchSelectOption[]>(() =>
+  salesTypeOptions.value.map((item) => ({ value: item.code, label: item.name })),
+)
+const currencySelectOptions = computed<SearchSelectOption[]>(() =>
+  currencyOptions.value.map((item) => ({ value: item.code, label: item.name })),
+)
 
 function beijingDate(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -454,6 +479,7 @@ function filterConfiguredValues(
   const allowed = new Set(documentFields.value.filter(
     (field) => field.area === area && fieldVisible(field.key),
   ).map((field) => field.key))
+  if (area === 'header' && allowed.has('header.currencyCode')) allowed.add('header.currencyName')
   return Object.fromEntries(Object.entries(values).filter(
     ([key, value]) => allowed.has(key) && !isBlank(value),
   ))
@@ -653,18 +679,70 @@ function notify(text: string, tone: 'success' | 'error' | 'info' = 'info'): void
 async function loadReferenceData(): Promise<void> {
   referenceDataLoading.value = true
   try {
-    const [styles, warehouses, departments] = await Promise.all([
+    const [styles, warehouses, departments, purchaseTypes, salesTypes, currencies] = await Promise.all([
       fetchRdStyles(pageConfig.value.categoryDirection, props.documentType),
       fetchWarehousePositions(),
       fetchDepartments(),
+      fetchPurchaseTypes(),
+      fetchSalesTypes(),
+      fetchCurrencies(),
     ])
     rdStyleOptions.value = styles
     warehousePositionOptions.value = warehouses
     departmentOptions.value = departments
+    purchaseTypeOptions.value = purchaseTypes
+    salesTypeOptions.value = salesTypes
+    currencyOptions.value = currencies
+    applyReferenceDefaults()
   } catch (error) {
     notify(error instanceof Error ? error.message : '基础资料加载失败', 'error')
   } finally {
     referenceDataLoading.value = false
+  }
+}
+
+function setHeaderField(key: string, value: string | number): void {
+  headerFieldValues.value[key] = value
+}
+
+function handlePurchaseTypeChange(value: string): void {
+  setHeaderField('header.purchaseTypeCode', value)
+  const selected = purchaseTypeOptions.value.find((item) => item.code === value)
+  if (props.documentType === 'purchase-inbound' && selected?.rdStyleCode && !outboundCategoryCode.value) {
+    outboundCategoryCode.value = selected.rdStyleCode
+  }
+}
+
+function handleSalesTypeChange(value: string): void {
+  setHeaderField('header.salesTypeCode', value)
+  const selected = salesTypeOptions.value.find((item) => item.code === value)
+  if (props.documentType === 'sales-outbound' && selected?.rdStyleCode && !outboundCategoryCode.value) {
+    outboundCategoryCode.value = selected.rdStyleCode
+  }
+}
+
+function handleCurrencyChange(value: string): void {
+  setHeaderField('header.currencyCode', value)
+  const selected = currencyOptions.value.find((item) => item.code === value)
+  setHeaderField('header.currencyName', selected?.name ?? '')
+  if (selected?.latestRate) setHeaderField('header.exchangeRate', selected.latestRate)
+}
+
+function applyReferenceDefaults(): void {
+  if (documentFields.value.some((field) => field.key === 'header.purchaseTypeCode') &&
+      isBlank(headerFieldValues.value['header.purchaseTypeCode'])) {
+    const selected = purchaseTypeOptions.value.find((item) => item.isDefault) ?? purchaseTypeOptions.value[0]
+    if (selected) handlePurchaseTypeChange(selected.code)
+  }
+  if (documentFields.value.some((field) => field.key === 'header.salesTypeCode') &&
+      isBlank(headerFieldValues.value['header.salesTypeCode'])) {
+    const selected = salesTypeOptions.value.find((item) => item.isDefault) ?? salesTypeOptions.value[0]
+    if (selected) handleSalesTypeChange(selected.code)
+  }
+  if (documentFields.value.some((field) => field.key === 'header.currencyCode') &&
+      isBlank(headerFieldValues.value['header.currencyCode'])) {
+    const selected = currencyOptions.value.find((item) => item.isLocal) ?? currencyOptions.value[0]
+    if (selected) handleCurrencyChange(selected.code)
   }
 }
 
@@ -1531,7 +1609,56 @@ onBeforeRouteLeave((to) => {
 
           <label v-for="field in headerExtraFields" :key="field.key" class="field">
             <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
+            <SearchSelect
+              v-if="field.key === 'header.purchaseTypeCode'"
+              :model-value="String(headerFieldValues[field.key] ?? '')"
+              :options="purchaseTypeSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="handlePurchaseTypeChange"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'header.salesTypeCode'"
+              :model-value="String(headerFieldValues[field.key] ?? '')"
+              :options="salesTypeSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="handleSalesTypeChange"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'header.currencyCode'"
+              :model-value="String(headerFieldValues[field.key] ?? '')"
+              :options="currencySelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="handleCurrencyChange"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'header.outCategoryCode'"
+              :model-value="String(headerFieldValues[field.key] ?? '')"
+              :options="outRdStyleSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="setHeaderField(field.key, $event)"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'header.inCategoryCode'"
+              :model-value="String(headerFieldValues[field.key] ?? '')"
+              :options="inRdStyleSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="setHeaderField(field.key, $event)"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'header.targetDepartmentCode'"
+              :model-value="String(headerFieldValues[field.key] ?? '')"
+              :options="departmentSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="setHeaderField(field.key, $event)"
+            />
             <input
+              v-else
               v-model="headerFieldValues[field.key]"
               :type="fieldInputType(field)"
               :inputmode="field.valueType === 'number' ? 'decimal' : undefined"

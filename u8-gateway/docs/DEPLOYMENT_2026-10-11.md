@@ -1,5 +1,7 @@
 # 2026-10-11 IIS 部署记录
 
+2026-10-13 15:17 已部署 `0.4.0`：新增采购类型、销售类型、币种及最新可用汇率固定只读接口，888 验证返回 16、11、4 条；Business API 首次同步成功。Release 构建通过，IIS 站点和应用池为 `Started`，外部健康检查版本为 `0.4.0.0`。九类新增、修改、审核、弃审、删除能力及服务器测试写入总开关保持关闭，未调用 U8 保存，未产生 888 单据。
+
 2026-10-13 14:47 已部署 `0.3.9`：采购/委外到货增加 `VoucherCO_PU` 候选新增路径，发货单增加 `VoucherCO_SA` 候选新增路径；连同既有 `USERPCO.VoucherCO`，九类单据均具备生成单号、保存和按单号回查的候选运行时。采购入库和销售出库补齐来源到货/发货关联字段白名单。Debug、Release 构建及编解码合同、写入安全门禁、操作凭证烟测全部通过；IIS 站点和应用池为 `Started`，外部健康检查版本为 `0.3.9.0`。九类新增、修改、审核、弃审、删除能力全部保持 `false`，安全新增探针返回 `409 DOCUMENT_OPERATION_DISABLED`；服务器测试写入总开关未开启，未调用任何 U8 保存方法，未产生 888 单据。
 
 2026-10-13 13:40 已部署 `0.3.8`：材料出库 `USERPCO.VoucherCO` 增加候选 `GetNewVouchCode + Insert + 回查` 运行时。编译、编解码合同和写入安全门禁测试通过；Business API 当前材料出库测试组的 2 个拆组、3 条明细通过 Gateway 无写入字段校验。材料出库 `create` 能力和服务器测试写入总开关均保持关闭，未调用 `Insert`，未产生 U8 单据。
@@ -19,7 +21,7 @@ Environment: test
 Database: UFDATA_888_2021
 U8 account: (default)@888
 Test writes: disabled
-Service version: 0.3.9.0
+Service version: 0.4.0.0
 ```
 
 原有 `Default Web Site`、`PDA` 和 `MaterialOutboundApi` 站点名称、目录和绑定未修改。
