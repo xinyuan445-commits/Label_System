@@ -333,8 +333,10 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
             throw new ApiException(StatusCodes.Status409Conflict, "BARCODE_DUPLICATED", "条码数据异常。");
         if (product is not null)
             return new InventoryLookupResult([new InventoryObjectLine(
-                product.Code, "PRODUCT_LABEL", product.MaterialCode, product.MaterialCode,
-                product.BatchNo, product.UnitCode, product.WarehouseCode, product.LocationCode, product.CurrentQty,
+                product.Code, "PRODUCT_LABEL", product.MaterialCode,
+                string.IsNullOrWhiteSpace(product.MaterialName) ? product.MaterialCode : product.MaterialName,
+                product.BatchNo, product.UnitCode, product.UnitName,
+                product.WarehouseCode, product.WarehouseName, product.LocationCode, product.LocationName, product.CurrentQty,
                 product.PalletCode, product.Status, RowVersions.Encode(product.RowVersion))], null);
         if (pallet is null)
             throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", "未找到标签。");
@@ -342,11 +344,19 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         const string contentsSql = """
             SELECT pl.label_code, f.material_code, f.batch_no, f.unit_code,
                    f.to_warehouse_code, f.to_location_code, pl.current_qty,
-                   p.pallet_code, pl.status, pl.row_version
+                   p.pallet_code, pl.status, pl.row_version,
+                   JSON_VALUE(f.inventory_attributes_json, '$.materialName'),
+                   JSON_VALUE(f.inventory_attributes_json, '$.unitName'),
+                   w.warehouse_name, pos.position_name
             FROM dbo.pallet_label_relation AS rel
             INNER JOIN dbo.product_label AS pl ON pl.id = rel.label_id
             INNER JOIN dbo.pallet AS p ON p.id = rel.pallet_id
             LEFT JOIN dbo.inventory_flow AS f ON f.id = pl.last_flow_id
+            LEFT JOIN dbo.u8_warehouse_cache AS w
+              ON w.warehouse_code = f.to_warehouse_code AND w.is_active = 1
+            LEFT JOIN dbo.u8_position_cache AS pos
+              ON pos.position_code = f.to_location_code
+             AND pos.warehouse_code = f.to_warehouse_code AND pos.is_active = 1
             WHERE rel.pallet_id = @pallet_id AND rel.unloaded_at IS NULL
             ORDER BY pl.label_code;
             """;
@@ -357,8 +367,11 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         while (await reader.ReadAsync(cancellationToken))
         {
             lines.Add(new InventoryObjectLine(
-                reader.GetString(0), "PRODUCT_LABEL", DbString(reader, 1), DbString(reader, 1),
-                DbString(reader, 2), DbString(reader, 3), DbString(reader, 4), DbString(reader, 5), reader.GetDecimal(6),
+                reader.GetString(0), "PRODUCT_LABEL", DbString(reader, 1),
+                reader.IsDBNull(10) ? DbString(reader, 1) : reader.GetString(10),
+                DbString(reader, 2), DbString(reader, 3), reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
+                DbString(reader, 4), reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
+                DbString(reader, 5), reader.IsDBNull(13) ? string.Empty : reader.GetString(13), reader.GetDecimal(6),
                 reader.GetString(7), reader.GetString(8), RowVersions.Encode((byte[])reader[9])));
         }
         return new InventoryLookupResult(lines, pallet.Line);
@@ -375,9 +388,17 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         var sql = $"""
             SELECT pl.id, pl.label_code, pl.current_qty, pl.status, pl.locked_operation_id,
                    pl.row_version, f.material_code, f.batch_no, f.unit_code,
-                   f.to_warehouse_code, f.to_location_code, p.id, p.pallet_code
+                   f.to_warehouse_code, f.to_location_code, p.id, p.pallet_code,
+                   JSON_VALUE(f.inventory_attributes_json, '$.materialName'),
+                   JSON_VALUE(f.inventory_attributes_json, '$.unitName'),
+                   w.warehouse_name, pos.position_name
             FROM dbo.product_label AS pl{hint}
             LEFT JOIN dbo.inventory_flow AS f ON f.id = pl.last_flow_id
+            LEFT JOIN dbo.u8_warehouse_cache AS w
+              ON w.warehouse_code = f.to_warehouse_code AND w.is_active = 1
+            LEFT JOIN dbo.u8_position_cache AS pos
+              ON pos.position_code = f.to_location_code
+             AND pos.warehouse_code = f.to_warehouse_code AND pos.is_active = 1
             OUTER APPLY
             (
                 SELECT TOP (1) pallet.id, pallet.pallet_code
@@ -395,6 +416,10 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
             reader.GetInt64(0), reader.GetString(1), reader.GetDecimal(2), reader.GetString(3),
             reader.IsDBNull(4) ? null : reader.GetInt64(4), (byte[])reader[5], DbString(reader, 6),
             DbString(reader, 7), DbString(reader, 8), DbString(reader, 9), DbString(reader, 10),
+            reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
+            reader.IsDBNull(14) ? string.Empty : reader.GetString(14),
+            reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
+            reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
             reader.IsDBNull(11) ? null : reader.GetInt64(11), reader.IsDBNull(12) ? null : reader.GetString(12));
     }
 
@@ -409,8 +434,14 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         var sql = $"""
             SELECT p.id, p.pallet_code, p.material_code, p.batch_no, p.unit_code,
                    p.current_warehouse_code, p.current_location_code, p.current_qty,
-                   p.status, p.locked_operation_id, p.row_version
+                   p.status, p.locked_operation_id, p.row_version,
+                   w.warehouse_name, pos.position_name
             FROM dbo.pallet AS p{hint}
+            LEFT JOIN dbo.u8_warehouse_cache AS w
+              ON w.warehouse_code = p.current_warehouse_code AND w.is_active = 1
+            LEFT JOIN dbo.u8_position_cache AS pos
+              ON pos.position_code = p.current_location_code
+             AND pos.warehouse_code = p.current_warehouse_code AND pos.is_active = 1
             WHERE p.pallet_code = @code;
             """;
         await using var command = new SqlCommand(sql, connection, transaction);
@@ -420,7 +451,9 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         var id = reader.GetInt64(0);
         var line = new InventoryObjectLine(
             reader.GetString(1), "PALLET", reader.GetString(2), reader.GetString(2),
-            DbString(reader, 3), reader.GetString(4), DbString(reader, 5), DbString(reader, 6), reader.GetDecimal(7),
+            DbString(reader, 3), reader.GetString(4), string.Empty,
+            DbString(reader, 5), reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
+            DbString(reader, 6), reader.IsDBNull(12) ? string.Empty : reader.GetString(12), reader.GetDecimal(7),
             reader.GetString(1), reader.GetString(8), RowVersions.Encode((byte[])reader[10]));
         return new PalletSnapshot(id, line, reader.IsDBNull(9) ? null : reader.GetInt64(9));
     }
@@ -453,6 +486,10 @@ public sealed record ProductLabelSnapshot(
     string UnitCode,
     string WarehouseCode,
     string LocationCode,
+    string MaterialName,
+    string UnitName,
+    string WarehouseName,
+    string LocationName,
     long? PalletId,
     string? PalletCode);
 

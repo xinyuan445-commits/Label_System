@@ -142,7 +142,7 @@ development 管理员密码校验仍受环境开关保护；`LOCAL` 用户使用
 
 ## 材料出库预提交
 
-库存查询的每个产品标签及托盘对象均返回 `unitCode`、当前仓库、货位、可用数量、状态和行版本。查询托盘时，`lines` 是托内产品标签，`pallet` 是托盘自身；H5 不得把托内标签改写为 `PALLET`。
+库存查询的每个产品标签及托盘对象均返回 `materialCode/materialName`、`unitCode/unitName`、`warehouseCode/warehouseName`、`locationCode/locationName`、可用数量、状态和行版本。仓库和货位名称读取本地 U8 缓存；物料和单位名称读取库存流水属性快照，旧流水没有名称时返回空名称并由客户端回退显示编码。查询托盘时，`lines` 是托内产品标签，`pallet` 是托盘自身；H5 不得把托内标签改写为 `PALLET`。
 
 选择生产订单时，专用预提交表头必须带单据日期、`documentDirection=BLUE|RED`、部门、出库类别和可选生产批号；每条分配必须带来源生产订单、生产订单行、子件需求、产品、材料、标签或托盘、正常数量和超领数量。服务端不会相信 H5 的汇总结果，而是重新读取 U8 领料需求并校验：
 

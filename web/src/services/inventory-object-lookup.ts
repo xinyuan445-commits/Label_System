@@ -9,8 +9,11 @@ export interface InventoryObjectLine {
   materialName: string
   batchNo: string
   unitCode: string
+  unitName?: string
   warehouseCode: string
+  warehouseName?: string
   locationCode: string
+  locationName?: string
   availableQty: number
   palletCode?: string
   status: string

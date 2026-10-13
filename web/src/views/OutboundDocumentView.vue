@@ -68,8 +68,11 @@ interface OutboundLine {
   materialName: string
   batchNo: string
   unitCode: string
+  unitName?: string
   warehouseCode: string
+  warehouseName?: string
   locationCode: string
+  locationName?: string
   availableQty: number | null
   requestedQty: number
   fieldValues: Record<string, string | number>
@@ -159,6 +162,7 @@ const lines = ref<OutboundLine[]>([])
 const pendingScanLines = ref<OutboundLine[]>([])
 const confirmedScanLines = ref<OutboundLine[]>([])
 const editingLine = ref<OutboundLine | null>(null)
+const editingExistingLineId = ref<string | null>(null)
 const pendingScanTotal = ref(0)
 const message = ref('')
 const messageTone = ref<'success' | 'error' | 'info'>('info')
@@ -172,6 +176,7 @@ const rdStyleOptions = ref<RdStyleOption[]>([])
 const warehousePositionOptions = ref<WarehousePositionOption[]>([])
 const departmentOptions = ref<DepartmentOption[]>([])
 const referenceDataLoading = ref(false)
+const finishing = ref(false)
 
 const handledHeaderFieldKeys = new Set([
   'header.documentDate',
@@ -185,22 +190,16 @@ const handledHeaderFieldKeys = new Set([
   'header.productionBatch',
   'header.remark',
 ])
-const bodyInfoFieldKeys = new Set([
+const inventoryIdentityFieldKeys = new Set([
+  'body.labelCode',
+  'body.objectType',
   'body.materialCode',
   'body.materialName',
   'body.batchNo',
   'body.unitCode',
   'body.warehouseCode',
   'body.locationCode',
-  'body.targetWarehouseCode',
-  'body.targetLocationCode',
   'body.availableQty',
-])
-const derivedBodyFieldKeys = new Set([
-  'body.labelCode',
-  'body.objectType',
-  ...bodyInfoFieldKeys,
-  'body.quantity',
 ])
 
 const pageConfig = computed(() => getBusinessDocumentConfig(props.documentType))
@@ -221,19 +220,13 @@ const documentFields = computed(() => getBusinessDocumentFields(props.documentTy
 const headerExtraFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'header' && fieldVisible(field.key) && !handledHeaderFieldKeys.has(field.key),
 ))
-const bodyInputFields = computed(() => documentFields.value.filter(
-  (field) => field.area === 'body' && fieldVisible(field.key) && !derivedBodyFieldKeys.has(field.key),
-))
 const editableBodyFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) &&
-    !['body.labelCode', 'body.objectType', 'body.availableQty'].includes(field.key),
+    !inventoryIdentityFieldKeys.has(field.key),
 ))
 const readonlyEditorFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) &&
-    ['body.labelCode', 'body.objectType', 'body.availableQty'].includes(field.key),
-))
-const visibleBodyInfoFields = computed(() => documentFields.value.filter(
-  (field) => field.area === 'body' && fieldVisible(field.key) && bodyInfoFieldKeys.has(field.key),
+    inventoryIdentityFieldKeys.has(field.key),
 ))
 const allocationByLine = computed(() =>
   props.documentType === 'material-outbound'
@@ -345,6 +338,11 @@ function normalizeQty(value: number): number {
   return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
 }
 
+function formatQty(value: number | null): string {
+  if (value === null || !Number.isFinite(Number(value))) return '--'
+  return Number(value).toFixed(6).replace(/\.?0+$/, '')
+}
+
 function fieldVisible(key: string): boolean {
   return documentFieldSettings.value[key]?.visible ?? false
 }
@@ -391,9 +389,47 @@ function bodyValue(line: OutboundLine, key: string): unknown {
   return key in values ? values[key] : line.fieldValues[key]
 }
 
+function materialNameFor(line: OutboundLine): string {
+  if (line.materialName && line.materialName !== line.materialCode) return line.materialName
+  return materialRequirements.value.find((item) =>
+    item.materialCode.localeCompare(line.materialCode, undefined, { sensitivity: 'accent' }) === 0,
+  )?.materialName ?? ''
+}
+
+function warehouseNameFor(code: string, snapshotName = ''): string {
+  return snapshotName || warehousePositionOptions.value.find(
+    (item) => item.warehouseCode === code,
+  )?.warehouseName || code
+}
+
+function locationNameFor(warehouse: string, code: string, snapshotName = ''): string {
+  return snapshotName || warehousePositionOptions.value.find(
+    (item) => item.warehouseCode === warehouse && item.positionCode === code,
+  )?.positionName || code
+}
+
 function bodyDisplayValue(line: OutboundLine, key: string): string | number {
   const value = bodyValue(line, key)
   if (key === 'body.objectType') return value === 'PALLET' ? '托盘' : '标签'
+  if (key === 'body.materialName') return materialNameFor(line) || '--'
+  if (key === 'body.unitCode') return line.unitName || line.unitCode || '--'
+  if (key === 'body.warehouseCode') {
+    return warehouseNameFor(line.warehouseCode, line.warehouseName)
+  }
+  if (key === 'body.locationCode') {
+    return line.locationCode
+      ? locationNameFor(line.warehouseCode, line.locationCode, line.locationName)
+      : '--'
+  }
+  if (key === 'body.targetWarehouseCode') {
+    const code = String(value ?? '')
+    return code ? warehouseNameFor(code) : '--'
+  }
+  if (key === 'body.targetLocationCode') {
+    const code = String(value ?? '')
+    const targetWarehouse = String(bodyValue(line, 'body.targetWarehouseCode') ?? '')
+    return code ? locationNameFor(targetWarehouse, code) : '--'
+  }
   return isBlank(value) ? '--' : String(value)
 }
 
@@ -513,10 +549,23 @@ function lineEditError(line: OutboundLine): string {
 }
 
 function openLineConfirmation(additions: OutboundLine[]): void {
+  editingExistingLineId.value = null
   pendingScanTotal.value = additions.length
   confirmedScanLines.value = []
   pendingScanLines.value = additions.slice(1)
   editingLine.value = { ...additions[0], fieldValues: { ...additions[0].fieldValues } }
+}
+
+function openExistingLineEditor(line: OutboundLine): void {
+  editingExistingLineId.value = line.id
+  pendingScanTotal.value = 0
+  confirmedScanLines.value = []
+  pendingScanLines.value = []
+  editingLine.value = {
+    ...line,
+    fieldValues: { ...line.fieldValues },
+    sourceAllocations: line.sourceAllocations?.map((item) => ({ ...item })),
+  }
 }
 
 function confirmEditingLine(): void {
@@ -527,7 +576,7 @@ function confirmEditingLine(): void {
     notify(error, 'error')
     return
   }
-  confirmedScanLines.value.push({
+  const normalizedLine: OutboundLine = {
     ...current,
     materialCode: current.materialCode.trim(),
     materialName: current.materialName.trim(),
@@ -536,7 +585,17 @@ function confirmEditingLine(): void {
     warehouseCode: current.warehouseCode.trim(),
     locationCode: current.locationCode.trim(),
     fieldValues: { ...current.fieldValues },
-  })
+  }
+  if (editingExistingLineId.value) {
+    lines.value = lines.value.map((line) =>
+      line.id === editingExistingLineId.value ? normalizedLine : line,
+    )
+    editingLine.value = null
+    editingExistingLineId.value = null
+    notify('已保存', 'success')
+    return
+  }
+  confirmedScanLines.value.push(normalizedLine)
   const next = pendingScanLines.value.shift()
   if (next) {
     editingLine.value = { ...next, fieldValues: { ...next.fieldValues } }
@@ -548,11 +607,13 @@ function confirmEditingLine(): void {
   confirmedScanLines.value = []
   pendingScanLines.value = []
   pendingScanTotal.value = 0
+  editingExistingLineId.value = null
   notify(count > 1 ? `已添加${count}项` : '已添加', 'success')
 }
 
 function cancelLineConfirmation(): void {
   editingLine.value = null
+  editingExistingLineId.value = null
   confirmedScanLines.value = []
   pendingScanLines.value = []
   pendingScanTotal.value = 0
@@ -608,6 +669,23 @@ function handleTargetWarehouseChange(): void {
   if (targetLocationCode.value && !validPositions.has(targetLocationCode.value)) {
     targetLocationCode.value = ''
   }
+}
+
+function materialKey(value: string): string {
+  return value.trim().toLocaleUpperCase()
+}
+
+function remainingDemandByMaterial(): Map<string, number> {
+  const remaining = new Map<string, number>()
+  for (const requirement of materialRequirements.value) {
+    const key = materialKey(requirement.materialCode)
+    remaining.set(key, normalizeQty((remaining.get(key) ?? 0) + requirement.remainingQuantity))
+  }
+  for (const line of lines.value) {
+    const key = materialKey(line.materialCode)
+    remaining.set(key, Math.max(0, normalizeQty((remaining.get(key) ?? 0) - line.requestedQty)))
+  }
+  return remaining
 }
 
 async function addBarcode(rawCode: string): Promise<void> {
@@ -675,34 +753,67 @@ async function addBarcode(rawCode: string): Promise<void> {
       notify('标签已添加', 'error')
       return
     }
-    const additions = found.map<OutboundLine>((item) => ({
-      id: createLineId(),
-      labelCode: item.labelCode,
-      objectType: item.objectType,
-      materialCode: item.materialCode,
-      materialName: item.materialName,
-      batchNo: item.batchNo,
-      unitCode: item.unitCode,
-      warehouseCode: item.warehouseCode,
-      locationCode: item.locationCode,
-      availableQty: item.availableQty,
-      requestedQty: item.availableQty,
-      fieldValues: {
-        ...(targetWarehouseCode.value
-          ? { 'body.targetWarehouseCode': targetWarehouseCode.value }
-          : {}),
-        ...(targetLocationCode.value
-          ? { 'body.targetLocationCode': targetLocationCode.value }
-          : {}),
-      },
-      sourcePalletCode: item.objectType === 'PRODUCT_LABEL' ? item.palletCode : undefined,
-    }))
+    const sourceRemaining = remainingDemandByMaterial()
+    const useSourceRemainder = props.documentType === 'material-outbound' &&
+      selectedSourceLines.value.length > 0
+    const additions: OutboundLine[] = []
+    let skippedSatisfied = 0
+    for (const item of found) {
+      const key = materialKey(item.materialCode)
+      const remaining = sourceRemaining.get(key) ?? 0
+      if (useSourceRemainder && remaining <= 0) {
+        skippedSatisfied += 1
+        continue
+      }
+      const requestedQty = useSourceRemainder
+        ? Math.min(item.availableQty, remaining)
+        : item.availableQty
+      if (useSourceRemainder) sourceRemaining.set(key, normalizeQty(remaining - requestedQty))
+      const requirementName = materialRequirements.value.find(
+        (requirement) => materialKey(requirement.materialCode) === key,
+      )?.materialName ?? ''
+      additions.push({
+        id: createLineId(),
+        labelCode: item.labelCode,
+        objectType: item.objectType,
+        materialCode: item.materialCode,
+        materialName: item.materialName !== item.materialCode ? item.materialName : requirementName,
+        batchNo: item.batchNo,
+        unitCode: item.unitCode,
+        unitName: item.unitName,
+        warehouseCode: item.warehouseCode,
+        warehouseName: item.warehouseName || warehouseNameFor(item.warehouseCode),
+        locationCode: item.locationCode,
+        locationName: item.locationName || locationNameFor(
+          item.warehouseCode, item.locationCode,
+        ),
+        availableQty: item.availableQty,
+        requestedQty,
+        fieldValues: {
+          ...(targetWarehouseCode.value
+            ? { 'body.targetWarehouseCode': targetWarehouseCode.value }
+            : {}),
+          ...(targetLocationCode.value
+            ? { 'body.targetLocationCode': targetLocationCode.value }
+            : {}),
+        },
+        sourcePalletCode: item.objectType === 'PRODUCT_LABEL' ? item.palletCode : undefined,
+      })
+    }
+    if (!additions.length) {
+      throw new Error(skippedSatisfied ? '该物料已拣足' : '没有可添加的标签')
+    }
     if (
       documentPolicy.value.autoAddScannedDetail &&
       !additions.some((line) => missingRequiredBodyField(line))
     ) {
       lines.value = [...lines.value, ...additions]
-      notify(additions.length > 1 ? `已添加${additions.length}项` : '已添加', 'success')
+      notify(
+        skippedSatisfied
+          ? `已添加${additions.length}项，跳过${skippedSatisfied}项`
+          : additions.length > 1 ? `已添加${additions.length}项` : '已添加',
+        'success',
+      )
     } else {
       openLineConfirmation(additions)
     }
@@ -1129,21 +1240,30 @@ function resetDocument(): void {
 }
 
 async function finishDocument(): Promise<void> {
-  const stored = await saveCompletedDocument()
-  if (!stored) return
-  if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
-    try {
-      await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
-    } catch (error) {
-      notify(error instanceof Error ? error.message : '上传失败', 'error')
+  if (finishing.value) return
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  finishing.value = true
+  try {
+    const stored = await saveCompletedDocument()
+    if (!stored) return
+    if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
+      try {
+        await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
+      } catch (error) {
+        notify(error instanceof Error ? error.message : '上传失败', 'error')
+      }
     }
+    allowNavigation = true
+    await router.replace({
+      name: 'outbound-document-manager',
+      params: { code: props.documentType },
+      query: route.query,
+    })
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '保存失败', 'error')
+  } finally {
+    finishing.value = false
   }
-  allowNavigation = true
-  await router.replace({
-    name: 'outbound-document-manager',
-    params: { code: props.documentType },
-    query: route.query,
-  })
 }
 
 async function finishAndLeave(): Promise<void> {
@@ -1312,6 +1432,7 @@ onBeforeRouteLeave((to) => {
             <SearchSelect
               v-model="warehouseCode"
               :options="warehouseSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
               @update:model-value="handleWarehouseChange"
@@ -1323,6 +1444,7 @@ onBeforeRouteLeave((to) => {
             <SearchSelect
               v-model="targetWarehouseCode"
               :options="warehouseSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
               @update:model-value="handleTargetWarehouseChange"
@@ -1334,6 +1456,7 @@ onBeforeRouteLeave((to) => {
             <SearchSelect
               v-model="sourceLocationCode"
               :options="sourceLocationSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
             />
@@ -1344,6 +1467,7 @@ onBeforeRouteLeave((to) => {
             <SearchSelect
               v-model="targetLocationCode"
               :options="targetLocationSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
             />
@@ -1419,70 +1543,35 @@ onBeforeRouteLeave((to) => {
         </div>
 
         <div v-if="lines.length" class="line-list">
-          <article v-for="line in lines" :key="line.id" class="line-card">
+          <article
+            v-for="line in lines"
+            :key="line.id"
+            class="line-card"
+            role="button"
+            tabindex="0"
+            @click="openExistingLineEditor(line)"
+            @keydown.enter.prevent="openExistingLineEditor(line)"
+          >
             <div class="line-heading">
               <div class="code-wrap">
-                <span
-                  v-if="fieldVisible('body.objectType')"
-                  class="object-badge"
-                  :class="{ pallet: line.objectType === 'PALLET' }"
-                >
-                  {{ line.objectType === 'PALLET' ? '托盘' : '标签' }}
-                </span>
-                <strong v-if="fieldVisible('body.labelCode')">{{ line.labelCode }}</strong>
+                <strong>{{ line.materialCode }}</strong>
+                <span>{{ materialNameFor(line) || '暂无描述' }}</span>
               </div>
-              <button type="button" aria-label="删除" @click="removeLine(line.id)">
+              <button type="button" aria-label="删除" @click.stop="removeLine(line.id)">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M7 7l1 14h8l1-14" />
                 </svg>
               </button>
             </div>
 
-            <dl v-if="visibleBodyInfoFields.length" class="line-info">
-              <div v-for="field in visibleBodyInfoFields" :key="field.key">
-                <dt>{{ field.label }}</dt><dd>{{ bodyDisplayValue(line, field.key) }}</dd>
-              </div>
+            <dl class="compact-line-info">
+              <div v-if="line.batchNo"><dt>批号</dt><dd>{{ line.batchNo }}</dd></div>
+              <div><dt>仓库</dt><dd>{{ warehouseNameFor(line.warehouseCode, line.warehouseName) }}</dd></div>
+              <div v-if="line.locationCode"><dt>货位</dt><dd>{{ locationNameFor(line.warehouseCode, line.locationCode, line.locationName) }}</dd></div>
+              <div v-if="line.unitCode"><dt>单位</dt><dd>{{ line.unitName || line.unitCode }}</dd></div>
+              <div><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
+              <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
             </dl>
-
-            <label v-if="fieldVisible('body.quantity')" class="qty-field">
-              <span><i v-if="fieldRequired('body.quantity')">*</i>{{ pageConfig.quantityLabel }}</span>
-              <input
-                v-model.number="line.requestedQty"
-                type="number"
-                inputmode="decimal"
-                :min="documentType === 'inventory-count' ? 0 : 0.000001"
-                step="0.000001"
-                :readonly="['transfer-order', 'location-adjustment'].includes(documentType)"
-              />
-            </label>
-
-            <div v-if="bodyInputFields.length" class="line-input-grid">
-              <label v-for="field in bodyInputFields" :key="field.key" class="field">
-                <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
-                <input
-                  v-model="line.fieldValues[field.key]"
-                  :type="fieldInputType(field)"
-                  :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
-                  autocomplete="off"
-                />
-              </label>
-            </div>
-
-            <div
-              v-if="allocationByLine[line.id]?.allocations.length"
-              class="allocation-list"
-            >
-              <div
-                v-for="allocation in allocationByLine[line.id]?.allocations"
-                :key="allocation.requirementId"
-              >
-                <span>{{ allocation.productCode }} {{ allocation.productName }}</span>
-                <strong>
-                  {{ allocation.normalQty + allocation.overQty }}
-                  <i v-if="allocation.overQty > 0">超{{ allocation.overQty }}</i>
-                </strong>
-              </div>
-            </div>
           </article>
         </div>
 
@@ -1534,9 +1623,10 @@ onBeforeRouteLeave((to) => {
       <button
         class="primary-action"
         type="button"
+        :disabled="finishing"
         @click="currentStep === 1 ? goToScanStep() : finishDocument()"
       >
-        {{ currentStep === 1 ? '下一步' : '完成做单' }}
+        {{ currentStep === 1 ? '下一步' : finishing ? '处理中' : '完成做单' }}
       </button>
     </footer>
 
@@ -1545,11 +1635,14 @@ onBeforeRouteLeave((to) => {
         <button type="button" aria-label="取消" @click="cancelLineConfirmation">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
         </button>
-        <div>
-          <h2>明细确认</h2>
+        <div class="editor-title-heading">
+          <h2>{{ editingExistingLineId ? '编辑明细' : '明细确认' }}</h2>
           <span v-if="pendingScanTotal > 1">{{ confirmedScanLines.length + 1 }}/{{ pendingScanTotal }}</span>
         </div>
-        <strong>{{ editingLine.labelCode }}</strong>
+        <div class="editor-product-heading">
+          <strong>{{ editingLine.materialCode }}</strong>
+          <small>{{ materialNameFor(editingLine) || '暂无描述' }}</small>
+        </div>
       </header>
 
       <div class="line-editor-content">
@@ -1583,6 +1676,7 @@ onBeforeRouteLeave((to) => {
               v-else-if="field.key === 'body.targetWarehouseCode'"
               :model-value="String(editorFieldValue(editingLine, field.key))"
               :options="warehouseSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
               @update:model-value="updateEditorTargetWarehouse"
@@ -1591,6 +1685,7 @@ onBeforeRouteLeave((to) => {
               v-else-if="field.key === 'body.targetLocationCode'"
               :model-value="String(editorFieldValue(editingLine, field.key))"
               :options="editorTargetLocationSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
               @update:model-value="updateEditorField(field.key, $event)"
@@ -1611,7 +1706,7 @@ onBeforeRouteLeave((to) => {
       <footer class="line-editor-actions">
         <button type="button" @click="cancelLineConfirmation">取消</button>
         <button class="confirm" type="button" @click="confirmEditingLine">
-          {{ pendingScanLines.length ? '确认并继续' : '确认添加' }}
+          {{ editingExistingLineId ? '保存' : pendingScanLines.length ? '确认并继续' : '确认添加' }}
         </button>
       </footer>
     </div>
@@ -1973,6 +2068,12 @@ h1 {
 .line-card {
   padding: 14px;
   border-radius: 15px;
+  cursor: pointer;
+}
+
+.line-card:focus-visible {
+  border-color: #3378cf;
+  outline: 3px solid rgba(51, 120, 207, 0.12);
 }
 
 .line-heading {
@@ -1984,15 +2085,22 @@ h1 {
 
 .code-wrap {
   min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 9px;
+  display: grid;
+  gap: 3px;
 }
 
 .code-wrap strong {
   overflow-wrap: anywhere;
   color: #203552;
   font: 700 15px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.code-wrap span {
+  overflow: hidden;
+  color: #6f7f92;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .object-badge {
@@ -2049,6 +2157,46 @@ h1 {
 .line-info dd {
   margin: 0;
   font-size: 12px;
+}
+
+.compact-line-info {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 14px;
+  margin: 11px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #edf1f5;
+}
+
+.compact-line-info div {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.compact-line-info dt,
+.compact-line-info dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.compact-line-info dt {
+  flex: 0 0 auto;
+  color: #8995a5;
+}
+
+.compact-line-info dd {
+  overflow: hidden;
+  color: #42566d;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-line-info .picked-qty dd {
+  color: #176b50;
+  font-size: 14px;
 }
 
 .line-info dt {
@@ -2154,6 +2302,10 @@ h1 {
   border-radius: 11px;
   font-size: 14px;
   font-weight: 750;
+}
+
+.primary-action:disabled {
+  opacity: .62;
 }
 
 .secondary-action {
@@ -2265,7 +2417,7 @@ h1 {
   stroke-width: 2;
 }
 
-.line-editor-header > div {
+.editor-title-heading {
   min-width: 0;
   display: flex;
   align-items: baseline;
@@ -2282,13 +2434,29 @@ h1 {
   font-size: 12px;
 }
 
-.line-editor-header > strong {
+.editor-product-heading {
+  min-width: 0;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.editor-product-heading strong,
+.editor-product-heading small {
   max-width: 38vw;
   overflow: hidden;
-  color: #607086;
-  font: 650 12px ui-monospace, SFMono-Regular, Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.editor-product-heading strong {
+  color: #344760;
+  font: 700 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.editor-product-heading small {
+  color: #7b899b;
+  font-size: 10px;
 }
 
 .line-editor-content {
