@@ -87,6 +87,16 @@ namespace U8Gateway.CodecSmokeTest
                     material.WritePolicyStatus == "candidate-reference-derived",
                     "材料出库写入策略没有载入。");
                 Require(
+                    material.U8.NumberType == "0412",
+                    "材料出库自动取号卡片号不正确。");
+                Require(
+                    definitions.Get("purchase-receipt").U8.NumberType == "24" &&
+                    definitions.Get("sales-outbound").U8.NumberType == "0303" &&
+                    definitions.Get("transfer").U8.NumberType == "0304" &&
+                    definitions.Get("location-adjustment").U8.NumberType == "0313" &&
+                    definitions.Get("inventory-count").U8.NumberType == "0307",
+                    "库存单据自动取号卡片号不正确。");
+                Require(
                     material.Fields.Single(x => x.Scope == "header" && x.Name == "cwhcode")
                         .CreateWritable,
                     "材料出库仓库字段应允许新增。");

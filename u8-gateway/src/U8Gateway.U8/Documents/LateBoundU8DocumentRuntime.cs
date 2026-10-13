@@ -147,22 +147,66 @@ namespace U8Gateway.U8.Documents
                     throw new InvalidOperationException(Empty(error, "USERPCO 初始化失败。"));
                 }
 
-                head = ParseXml(packet.HeaderXml, "表头");
+                string numberError = string.Empty;
+                string[] numberTypes = new[]
+                {
+                    execution.Profile.ComponentDocumentType,
+                    definition.U8?.NumberType
+                }.Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                foreach (string numberType in numberTypes)
+                {
+                    for (int attempt = 0; attempt < 2; attempt++)
+                    {
+                        IXMLDOMDocument2 numberHead = null;
+                        try
+                        {
+                            numberHead = ParseXml(packet.HeaderXml, "自动取号表头");
+                            string attemptError = string.Empty;
+                            bool validate = false;
+                            bool phase = false;
+                            try
+                            {
+                                voucherCode = native.GetNewVouchCode(
+                                    numberType,
+                                    numberHead,
+                                    ref attemptError,
+                                    ref validate,
+                                    ref phase);
+                            }
+                            catch (COMException exception)
+                            {
+                                attemptError = "COM HRESULT=0x" +
+                                    exception.ErrorCode.ToString("X8") + "，" +
+                                    exception.Message;
+                            }
+                            if (!string.IsNullOrWhiteSpace(voucherCode)) break;
+                            numberError = attemptError;
+                        }
+                        finally
+                        {
+                            Release(numberHead);
+                        }
+                        if (attempt == 0) Thread.Sleep(300);
+                    }
+                    if (!string.IsNullOrWhiteSpace(voucherCode)) break;
+                }
+                if (string.IsNullOrWhiteSpace(voucherCode))
+                {
+                    return Failure(
+                        "U8_VOUCHER_NUMBER_FAILED",
+                        Empty(numberError, "U8 未生成单据号。"),
+                        null);
+                }
+
+                head = ParseXml(
+                    SetFirstRowAttribute(packet.HeaderXml, "ccode", voucherCode.Trim()),
+                    "表头");
                 body = ParseXml(packet.BodyXml, "表体");
                 position = ParseXml(packet.PositionXml, "货位");
                 messageDocument = new DOMDocument26Class();
-                bool validate = true;
-                bool phase = false;
-                voucherCode = native.GetNewVouchCode(
-                    execution.Profile.ComponentDocumentType,
-                    head,
-                    ref error,
-                    ref validate,
-                    ref phase);
-                if (string.IsNullOrWhiteSpace(voucherCode))
-                {
-                    throw new InvalidOperationException(Empty(error, "U8 未生成单据号。"));
-                }
+                error = string.Empty;
 
                 bool check = true;
                 bool beforeCheckStock = true;
@@ -855,6 +899,20 @@ namespace U8Gateway.U8.Documents
                     label + " XML 无效：" + Empty(reason, "内容为空。"));
             }
             return document;
+        }
+
+        private static string SetFirstRowAttribute(
+            string xml,
+            string attributeName,
+            string value)
+        {
+            XDocument document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            XElement row = document.Descendants().FirstOrDefault(x => string.Equals(
+                x.Name.LocalName, "row", StringComparison.OrdinalIgnoreCase));
+            if (row == null)
+                throw new InvalidOperationException("表头 XML 中找不到 row 节点。");
+            row.SetAttributeValue(attributeName, value);
+            return document.ToString(SaveOptions.DisableFormatting);
         }
 
         private static U8XmlPacket QueryInventory(

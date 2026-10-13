@@ -8,7 +8,7 @@
     "component": "USERPCO",
     "componentDocumentType": "19",
     "voucherType": "19",
-    "numberType": null,
+    "numberType": "0313",
     "businessType": null,
     "headerTable": "AdjustPVouch",
     "lineTable": "AdjustPVouchs",

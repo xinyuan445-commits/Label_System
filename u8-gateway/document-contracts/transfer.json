@@ -8,7 +8,7 @@
     "component": "USERPCO",
     "componentDocumentType": "12",
     "voucherType": "12",
-    "numberType": null,
+    "numberType": "0304",
     "businessType": null,
     "headerTable": "TransVouch",
     "lineTable": "TransVouchs",

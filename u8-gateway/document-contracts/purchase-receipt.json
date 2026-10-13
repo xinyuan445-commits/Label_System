@@ -8,7 +8,7 @@
     "component": "USERPCO",
     "componentDocumentType": "01",
     "voucherType": "01",
-    "numberType": null,
+    "numberType": "24",
     "businessType": null,
     "headerTable": "RdRecord01",
     "lineTable": "RdRecords01",

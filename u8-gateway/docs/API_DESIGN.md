@@ -8,6 +8,8 @@
 
 库存单据适配器已为六类库存单据实现 `USERPCO.VoucherCO.GetNewVouchCode + Insert`；采购适配器为采购到货和委外到货实现 `VoucherCO_PU.GetVoucherNO + VoucherSave`；销售适配器为发货单实现 `VoucherCO_SA.GetVoucherNO + Save`。保存后均按单号解析 ID，再使用既有只读加载器回查表头、明细、货位和版本；未回查确认不得返回成功。请求继续经过字段白名单、操作凭证、幂等记录和四重写入门禁。测试环境九类单据的 `create`、`verify`、`unverify` 已开放；`update` 和 `delete` 仍关闭。服务器总开关只允许 `UFDATA_888_2021` 和 888 账套。
 
+库存类单据自动取号先尝试组件单据类型，再尝试合同登记的 `numberType`。888 当前映射为采购入库 `24`、销售出库 `0303`、材料出库 `0412`、调拨 `0304`、货位调整 `0313`、盘点 `0307`。每次取号使用新的表头 DOM；取得单号后重新生成表头并写入 `ccode` 再调用 `Insert`。取号失败发生在 `Insert` 前，必须返回明确失败，不得误记为结果未知。
+
 ## 审核单据只读接口（0.3.7）
 
 - `GET /api/v1/approval-documents?documentType=&status=&documentNo=&startDate=&endDate=&limit=`：按 U8 当前状态返回单据摘要，`status` 为 `pending` 或 `audited`，`limit` 最大 100。
