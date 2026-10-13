@@ -6,7 +6,7 @@
 Site: LabelSystemApi
 Application pool: LabelSystemApiPool
 URL: http://172.16.1.159:9890
-Release: D:\LabelSystem\Api\releases\20261013_141617
+Release: D:\LabelSystem\Api\releases\20261013_141821
 External config: D:\LabelSystem\Config\label-api.json
 Operation archive: D:\LabelSystem\OperationArchive
 Environment: development
@@ -16,7 +16,7 @@ Service version: 0.6.1
 U8 writes: disabled
 ```
 
-2026-10-13 14:16 已发布 Business API `0.6.1` 到 `D:\LabelSystem\Api\releases\20261013_141617`，H5 更新为 `0.2.0-dev.38`。材料出库改为一次“上传 ERP”直接完成服务器准备与执行，旧准备路由不再建组；写入总开关关闭时在建档和锁定前返回 `U8_WRITE_DISABLED`。H5 删除“待处理”页签和续期/二次上传操作，服务端删除标记会先清除本人 PDA 本机草稿。用户本日测试组已取消后清理：2 个拆分操作、3 条明细和 1 份凭证已删除，漫游草稿正文已清空并保留删除标记；开发库业务组为 0、标签锁为 0，3 张联调标签数量仍为 14、7、130。健康检查 `ready`、数据库就绪，安全提交返回 `409 U8_WRITE_DISABLED` 且业务组仍为 0，旧准备路由返回 `DIRECT_SUBMIT_REQUIRED`；未写 U8、未改 Gateway、无数据库迁移。
+2026-10-13 14:18 已发布 Business API `0.6.1` 到 `D:\LabelSystem\Api\releases\20261013_141821`，H5 更新为 `0.2.0-dev.38`。材料出库改为一次“上传 ERP”直接完成服务器准备与执行，旧准备路由不再建组；写入总开关关闭时在建档和锁定前返回 `U8_WRITE_DISABLED`。H5 删除“待处理”页签和续期/二次上传操作，服务端删除标记会先清除本人 PDA 本机草稿。用户本日测试组已取消后清理：2 个拆分操作、3 条明细和 1 份凭证已删除，漫游草稿正文已清空并保留删除标记；开发库业务组为 0、标签锁为 0，3 张联调标签数量仍为 14、7、130。健康检查 `ready`、数据库就绪，安全提交返回 `409 U8_WRITE_DISABLED` 且业务组仍为 0，旧准备路由返回 `DIRECT_SUBMIT_REQUIRED`；未写 U8、未改 Gateway、无数据库迁移。
 
 2026-10-13 13:52 已发布 Business API `0.6.0` 到 `D:\LabelSystem\Api\releases\20261013_135221`，并部署 Gateway `0.3.8`、更新 H5 `0.2.0-dev.37`。材料出库增加归档复核、U8 需求重读、字段映射、拆组校验、受控执行、回查确认、本地库存事务提交和待核对处理；部分领用后剩余标签继续保留原仓库货位，结果不明确时停止本组后续拆组。H5 待处理卡片增加“上传 ERP”并按真实终态提示。现有用户测试组 `f0546e0a-cd96-402b-8177-7715d5c19051` 的 2 个拆组、3 条明细通过无写入校验；执行安全请求返回 `U8_WRITE_DISABLED`，组及 ERP 状态仍为 `PENDING`，无 U8 单号。3 张标签余额仍为 14、7、130，状态 `ACTIVE` 且锁仍归原根操作。健康检查 `ready`、数据库就绪、`U8WritesEnabled=false`；未写 U8、未新增模拟标签、无数据库迁移。
 
