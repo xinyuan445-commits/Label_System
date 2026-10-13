@@ -799,6 +799,7 @@ app.MapPost("/api/v1/operations/material-outbound/prepare", async (
         !RequestContext.IsAdmin(context))
         throw new ApiException(StatusCodes.Status403Forbidden, "OPERATOR_MISMATCH", "操作人不匹配。");
     request = request with { OperatorId = session.Id, OperatorName = session.Name };
+    await users.GetErpOperatorAsync(session.Id, cancellationToken);
     var materialRequiredFields = await settings.GetRequiredDocumentFieldsAsync(
         "material-outbound", cancellationToken);
     await dataScopes.ValidateRdStyleAsync(
@@ -827,6 +828,7 @@ app.MapPost("/api/v1/operations/documents/{documentType}/prepare", async (
         !RequestContext.IsAdmin(context))
         throw new ApiException(StatusCodes.Status403Forbidden, "OPERATOR_MISMATCH", "操作人不匹配。");
     request = request with { OperatorId = session.Id, OperatorName = session.Name };
+    await users.GetErpOperatorAsync(session.Id, cancellationToken);
     if (!string.Equals(functionCode, "location-adjustment", StringComparison.OrdinalIgnoreCase))
     {
         var requiredFields = await settings.GetRequiredDocumentFieldsAsync(documentType, cancellationToken);

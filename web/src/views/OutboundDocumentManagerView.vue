@@ -190,11 +190,11 @@ async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
     const settings = loadBusinessDocumentSettings()
     const policy = ensureDocumentPolicy(settings, documentType.value)
     await uploadOutboundDocument(document, policy.autoApproveAfterUpload)
-    message.value = '已预提交'
+    message.value = '已提交处理'
     activeStatus.value = 'prepared'
     await refresh()
   } catch (error) {
-    message.value = error instanceof Error ? error.message : '预提交失败'
+    message.value = error instanceof Error ? error.message : '上传失败'
     await refresh()
   } finally {
     uploadingId.value = ''
@@ -409,7 +409,7 @@ onBeforeRouteLeave((to) => {
               :disabled="uploadingId === document.id || !canUpload(document)"
               @click.stop="uploadDocument(document)"
             >
-              {{ uploadingId === document.id ? '提交中' : '预提交' }}
+              {{ uploadingId === document.id ? '上传中' : '上传 ERP' }}
             </button>
             <button class="danger" type="button" @click.stop="removeDocument(document)">删除</button>
           </div>

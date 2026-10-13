@@ -361,7 +361,7 @@ export async function uploadOutboundDocument(
       u8WriteEnabled: result.u8WriteEnabled,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : '预提交失败'
+    const message = error instanceof Error ? error.message : '上传失败'
     await markOutboundDocumentUploadFailed(document.id, message)
     throw new Error(message)
   }

@@ -80,6 +80,8 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | POST | `/operations/groups/{groupId}/heartbeat` | 续期业务锁 |
 | POST | `/operations/groups/{groupId}/cancel` | 取消未写 U8 的待处理组 |
 
+`prepare` 是 Business API 内部的安全阶段，H5 不把“预提交”作为用户操作名称。用户界面统一显示“上传 ERP”；服务端必须先确认当前应用用户已配置 U8 制单人，再创建 `PENDING` 操作和库存锁。缺少映射返回 `409 ERP_OPERATOR_NOT_CONFIGURED`，且不得留下业务操作、来源占用或标签锁。
+
 普通用户调用 `POST /auth/management-access` 验证管理密码后，当前会话获得 10 分钟管理权限，可访问 `/admin/*`；该权限不改变用户角色，也不增加 `/functions` 返回的业务功能。管理密码仅在服务器外置配置保存哈希，客户端不保存。管理员角色不需要再次验证。
 
 `/source-documents*` 和 `/inventory-objects/lookup` 要求 H5 通过 `X-Function-Code` 传入当前单据或 `label-query` 功能编码，Business API 按当前账号有效功能复核后才读取数据。待处理组只有创建人可以续期或取消；管理员角色可以跨用户查询，短时管理会话不扩大业务组范围。

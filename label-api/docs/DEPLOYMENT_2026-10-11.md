@@ -6,13 +6,13 @@
 Site: LabelSystemApi
 Application pool: LabelSystemApiPool
 URL: http://172.16.1.159:9890
-Release: D:\LabelSystem\Api\releases\20261013_000110
+Release: D:\LabelSystem\Api\releases\20261013_125054
 External config: D:\LabelSystem\Config\label-api.json
 Operation archive: D:\LabelSystem\OperationArchive
 Environment: development
 Database: LabelSystem_Dev
 U8 account: 888
-Service version: 0.5.3
+Service version: 0.5.8
 U8 writes: disabled
 ```
 
@@ -55,6 +55,8 @@ U8 writes: disabled
 2026-10-13 H5 更新为 `0.2.0-dev.33`：有源材料出库增加料号级需拣/已拣自动汇总和“拣货完成”印章；修复 Vue 响应式 Proxy 直接写入 IndexedDB 导致完成做单保存失败，并增加持续错误提示。Business API 保持 `0.5.7`，未重启 IIS，数据库和 U8 均未修改。
 
 2026-10-13 H5 更新为 `0.2.0-dev.34`：扫码卡片增加单条明细的“本标签使用”，与同料汇总“已拣数量”分开显示。Business API 保持 `0.5.7`，数据库和 U8 不变。
+
+2026-10-13 12:51 Business API `0.5.8` 已发布到 `D:\LabelSystem\Api\releases\20261013_125054`，H5 更新为 `0.2.0-dev.35`：单据管理将用户操作由“预提交”改为“上传 ERP”；九类制单在建立待处理记录、来源占用和标签锁之前强制检查当前用户 U8 制单人映射。发布后健康检查 `ready`、数据库就绪、`U8WritesEnabled=false`，站点和应用池均为 Started。空明细安全请求在已配置 ERP 映射的账号下返回 `LINES_INVALID`，未创建测试业务；用户刚建立的材料出库业务组仍为 `PENDING`，包含 2 个按仓库拆分的操作，未被修改或取消。未操作 9880 Gateway，未写 U8。
 
 2026-10-13 材料出库联调数据：先从 U8 测试账套 `888` 复核 `CurrentStock` 和 `InvPositionSum`，再只向 `LabelSystem_Dev` 登记 3 张 `INV008_STANDARD` V2 产品标签。其中 `11103-FOSB-ENF-4918-CKB2330` 的批号 `20260227QF`/`20260402MY` 分别登记 14/7，仓库 `KML_KSW`、货位编码 `486`（名称 `1216`）；`3401-49-CKB903-BH2` 批号 `20260202` 登记 130，仓库 `KML_ZK`、货位编码 `655`（名称 `Z001`），该货位 U8 现存量为 198。产品标签、初始流水、Code 登记和操作审计在同一事务内完成；未修改 `LabelSystem_Test`/`LabelSystem_Prod`，未写 U8，`U8WritesEnabled=false`。
 
