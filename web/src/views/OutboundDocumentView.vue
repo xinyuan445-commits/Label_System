@@ -1057,14 +1057,6 @@ onBeforeRouteLeave((to) => {
         </button>
         <h1>{{ pageConfig.title }}</h1>
         <div v-if="currentStep === 2" class="topbar-actions">
-          <button
-            v-if="selectedSourceLines.length"
-            class="source-details-button"
-            type="button"
-            @click="openSourceDetails"
-          >
-            {{ sourceDetailButtonLabel }}
-          </button>
           <button class="switch-settings-button" type="button" @click="openSwitchSettings">
             开关设置
           </button>
@@ -1311,6 +1303,7 @@ onBeforeRouteLeave((to) => {
         'header-actions': currentStep === 1,
         'with-reset': currentStep === 1 && hasDraftContent(),
         'scan-actions': currentStep === 2,
+        'with-source-details': currentStep === 2 && selectedSourceLines.length,
       }"
     >
       <div class="summary">
@@ -1336,6 +1329,14 @@ onBeforeRouteLeave((to) => {
         @click="resetDocument"
       >
         重置
+      </button>
+      <button
+        v-if="currentStep === 2 && selectedSourceLines.length"
+        class="source-footer-action"
+        type="button"
+        @click="openSourceDetails"
+      >
+        {{ sourceDetailButtonLabel }}
       </button>
       <button
         class="primary-action"
@@ -1463,7 +1464,6 @@ h1 {
 }
 
 .switch-settings-button,
-.source-details-button,
 .document-settings-button {
   height: 38px;
   padding: 0 10px;
@@ -1474,11 +1474,6 @@ h1 {
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.source-details-button {
-  background: #2368c4;
-  color: #fff;
 }
 
 .page-content {
@@ -1855,6 +1850,10 @@ h1 {
   grid-template-columns: minmax(0, 1fr) minmax(140px, 1fr);
 }
 
+.action-shell.scan-actions.with-source-details {
+  grid-template-columns: minmax(52px, 1fr) minmax(96px, 0.85fr) minmax(118px, 1fr);
+}
+
 .action-shell.header-actions .summary {
   display: none;
 }
@@ -1880,6 +1879,7 @@ h1 {
 
 .secondary-action,
 .reset-action,
+.source-footer-action,
 .primary-action {
   height: 46px;
   border-radius: 11px;
@@ -1897,6 +1897,12 @@ h1 {
   border: 1px solid #d4dce7;
   background: #f5f7fa;
   color: #68788c;
+}
+
+.source-footer-action {
+  border: 1px solid #9dbce1;
+  background: #edf4fd;
+  color: #2368c4;
 }
 
 .primary-action {
