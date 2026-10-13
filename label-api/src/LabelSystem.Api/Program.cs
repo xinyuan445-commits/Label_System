@@ -335,7 +335,11 @@ app.MapPut("/api/v1/admin/settings/{scope}/{key}", async (
     LabelSystemRepository repository,
     CancellationToken cancellationToken) =>
 {
-    RequireAdmin(context);
+    if (string.Equals(scope, "document", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(key, "field_input_rules", StringComparison.OrdinalIgnoreCase))
+        RequireRealAdmin(context);
+    else
+        RequireAdmin(context);
     ValidateSetting(scope, key, request);
     var user = RequestContext.User(context);
     return ApiResults.Ok(context,

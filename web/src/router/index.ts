@@ -103,7 +103,7 @@ export const router = createRouter({
       path: '/work/:code/document-settings',
       name: 'document-field-settings',
       component: () => import('@/views/DocumentFieldSettingsView.vue'),
-      meta: { requiresAuth: true, requiresManagement: true },
+      meta: { requiresAuth: true, requiresAdmin: true },
     },
     {
       path: '/work/:code',

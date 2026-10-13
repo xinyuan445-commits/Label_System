@@ -50,6 +50,7 @@ import {
   type SourceDocumentLine,
 } from '@/services/source-document-selection'
 import { createUniqueId } from '@/utils/unique-id'
+import { readSession } from '@/services/auth'
 
 type LineObjectType = 'PRODUCT_LABEL' | 'PALLET'
 
@@ -197,6 +198,9 @@ const derivedBodyFieldKeys = new Set([
 ])
 
 const pageConfig = computed(() => getBusinessDocumentConfig(props.documentType))
+const isAdmin = computed(() =>
+  readSession()?.user.roles.some((role) => role.toLowerCase() === 'admin') ?? false,
+)
 const documentSettings = ref(loadBusinessDocumentSettings())
 const documentPolicy = computed(() =>
   ensureDocumentPolicy(documentSettings.value, props.documentType),
@@ -1066,7 +1070,7 @@ onBeforeRouteLeave((to) => {
           </button>
         </div>
         <button
-          v-else
+          v-else-if="isAdmin"
           class="document-settings-button"
           type="button"
           @click="openDocumentFieldSettings"
