@@ -177,6 +177,7 @@ const warehousePositionOptions = ref<WarehousePositionOption[]>([])
 const departmentOptions = ref<DepartmentOption[]>([])
 const referenceDataLoading = ref(false)
 const finishing = ref(false)
+const completionError = ref('')
 
 const handledHeaderFieldKeys = new Set([
   'header.documentDate',
@@ -243,6 +244,19 @@ const materialSummaries = computed(() =>
     ? summarizeMaterialAllocations(lines.value, materialRequirements.value, allocationByLine.value)
     : [],
 )
+
+function materialProgressFor(line: OutboundLine) {
+  return materialSummaries.value.find((item) =>
+    item.materialCode.localeCompare(line.materialCode, undefined, { sensitivity: 'accent' }) === 0,
+  )
+}
+
+function materialPickingComplete(line: OutboundLine): boolean {
+  if (!selectedSourceLines.value.length) return false
+  const progress = materialProgressFor(line)
+  return Boolean(progress && progress.remainingQty > 0 &&
+    progress.scannedQty >= progress.remainingQty && progress.unallocatedQty <= 0)
+}
 const pendingOverIssueLine = computed(() =>
   documentPolicy.value.allowOverIssue
     ? lines.value.find((line) => allocationByLine.value[line.id]?.requiresOverIssueTarget)
@@ -633,7 +647,7 @@ function notify(text: string, tone: 'success' | 'error' | 'info' = 'info'): void
   if (messageTimer) clearTimeout(messageTimer)
   messageTimer = setTimeout(() => {
     message.value = ''
-  }, 2400)
+  }, tone === 'error' ? 5000 : 2400)
 }
 
 async function loadReferenceData(): Promise<void> {
@@ -1242,10 +1256,20 @@ function resetDocument(): void {
 async function finishDocument(): Promise<void> {
   if (finishing.value) return
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  completionError.value = ''
+  const validationError = validate()
+  if (validationError) {
+    completionError.value = validationError
+    notify(validationError, 'error')
+    return
+  }
   finishing.value = true
   try {
     const stored = await saveCompletedDocument()
-    if (!stored) return
+    if (!stored) {
+      completionError.value = '单据校验未通过'
+      return
+    }
     if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
       try {
         await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
@@ -1260,7 +1284,9 @@ async function finishDocument(): Promise<void> {
       query: route.query,
     })
   } catch (error) {
-    notify(error instanceof Error ? error.message : '保存失败', 'error')
+    const text = error instanceof Error ? error.message : '保存失败'
+    completionError.value = text
+    notify(text, 'error')
   } finally {
     finishing.value = false
   }
@@ -1570,13 +1596,22 @@ onBeforeRouteLeave((to) => {
               <div v-if="line.locationCode"><dt>货位</dt><dd>{{ locationNameFor(line.warehouseCode, line.locationCode, line.locationName) }}</dd></div>
               <div v-if="line.unitCode"><dt>单位</dt><dd>{{ line.unitName || line.unitCode }}</dd></div>
               <div><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
-              <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
+              <template v-if="selectedSourceLines.length && materialProgressFor(line)">
+                <div><dt>需拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.remainingQty ?? 0) }}</dd></div>
+                <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.scannedQty ?? 0) }}</dd></div>
+              </template>
+              <div v-else class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
             </dl>
+            <span v-if="materialPickingComplete(line)" class="picking-complete-stamp">拣货完成</span>
           </article>
         </div>
 
         <div v-else class="empty-lines">暂无明细</div>
       </section>
+
+      <div v-if="completionError" class="completion-error" role="alert">
+        {{ completionError }}
+      </div>
     </div>
 
     <footer
@@ -2066,6 +2101,7 @@ h1 {
 }
 
 .line-card {
+  position: relative;
   padding: 14px;
   border-radius: 15px;
   cursor: pointer;
@@ -2197,6 +2233,23 @@ h1 {
 .compact-line-info .picked-qty dd {
   color: #176b50;
   font-size: 14px;
+}
+
+.picking-complete-stamp {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  pointer-events: none;
+  transform: rotate(-10deg);
+  padding: 5px 8px 4px;
+  border: 2px solid rgba(190, 46, 46, .72);
+  border-radius: 5px;
+  color: rgba(190, 46, 46, .78);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  line-height: 1;
+  box-shadow: inset 0 0 0 2px rgba(190, 46, 46, .08);
 }
 
 .line-info dt {
@@ -2356,6 +2409,24 @@ h1 {
 
 .toast-message.error {
   background: #ad3d3d;
+}
+
+.completion-error {
+  position: fixed;
+  z-index: 41;
+  right: 16px;
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  left: 16px;
+  width: min(calc(100% - 32px), 728px);
+  margin-inline: auto;
+  padding: 11px 13px;
+  border: 1px solid #e8b7b7;
+  border-radius: 11px;
+  background: #fff2f2;
+  color: #a12f2f;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(95, 34, 34, .16);
 }
 
 .line-editor-page {

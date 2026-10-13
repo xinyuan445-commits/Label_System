@@ -125,6 +125,10 @@ function notifyChanged(): void {
   window.dispatchEvent(new Event(changeEventName))
 }
 
+function storageSafeValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 export function subscribeDraftChanges(listener: () => void): () => void {
   window.addEventListener(changeEventName, listener)
   return () => window.removeEventListener(changeEventName, listener)
@@ -260,12 +264,14 @@ export async function saveOutboundDocument(input: {
   await ensureMigration()
   const now = beijingTimestamp()
   const owner = currentOwner()
+  const safeSummary = storageSafeValue(input.summary)
+  const safePayload = storageSafeValue(input.payload)
   const existing = input.id ? await readDraftDocument(input.id) : null
   if (existing) {
     if (existing.ownerUserId !== owner.id) throw new Error('不能修改其他用户的草稿')
     const updated: StoredOutboundDocument = {
       ...existing, updatedAt: now, uploadStatus: 'pending', uploadedAt: null,
-      lastUploadError: '', summary: input.summary, payload: input.payload,
+      lastUploadError: '', summary: safeSummary, payload: safePayload,
       clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '',
       remoteOnly: false, deviceId: getDeviceId(), deviceName: getDeviceName(),
     }
@@ -278,7 +284,7 @@ export async function saveOutboundDocument(input: {
     id: createUniqueId('draft'), documentType: input.documentType,
     uploadStatus: 'pending', createdAt: now, updatedAt: now, uploadedAt: null,
     uploadAttempts: 0, lastUploadError: '', serverOperationId: '',
-    summary: input.summary, payload: input.payload,
+    summary: safeSummary, payload: safePayload,
     ownerUserId: owner.id, ownerName: owner.name,
     deviceId: getDeviceId(), deviceName: getDeviceName(), clientRevision: 1,
     syncStatus: 'pending', lastSyncedAt: null, syncError: '', remoteOnly: false,
