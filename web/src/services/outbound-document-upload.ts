@@ -1,6 +1,7 @@
 import { apiRequest } from '@/api/client'
 import { readStoredAuthSession } from '@/services/auth-session'
 import {
+  beginOutboundDocumentUpload,
   markOutboundDocumentSubmitted,
   markOutboundDocumentUploadFailed,
   updateOutboundDocumentGroup,
@@ -197,6 +198,7 @@ async function submitInventoryDocument(
   document: StoredOutboundDocument,
   session: NonNullable<ReturnType<typeof readStoredAuthSession>>,
   autoApprove: boolean,
+  clientRequestId: string,
 ): Promise<OperationGroupSnapshot> {
   const payload = inventoryDocumentPayload(document)
   if (payload.lines.some((line) => !line.unitCode)) {
@@ -208,9 +210,9 @@ async function submitInventoryDocument(
     {
       method: 'POST',
       timeoutMs: 120_000,
-      headers: { 'X-Client-Request-Id': document.id },
+      headers: { 'X-Client-Request-Id': clientRequestId },
       body: JSON.stringify({
-        clientRequestId: document.id,
+        clientRequestId,
         operatorId: session.user.id,
         operatorName: session.user.name,
         deviceId: null,
@@ -337,6 +339,10 @@ export async function uploadOutboundDocument(
   try {
     const session = readStoredAuthSession()
     if (!session) throw new Error('请先登录')
+    const clientRequestId = await beginOutboundDocumentUpload(
+      document.id,
+      document.serverStatus === 'FAILED',
+    )
     let result: OperationGroupSnapshot
     const candidate = document.payload as Partial<InventoryDocumentPayload> | null
     const hasSelectedSource = Array.isArray(candidate?.selectedSourceLines) &&
@@ -352,9 +358,9 @@ export async function uploadOutboundDocument(
         {
           method: 'POST',
           timeoutMs: 120_000,
-          headers: { 'X-Client-Request-Id': document.id },
+          headers: { 'X-Client-Request-Id': clientRequestId },
           body: JSON.stringify({
-            clientRequestId: document.id,
+            clientRequestId,
             operatorId: session.user.id,
             operatorName: session.user.name,
             deviceId: null,
@@ -372,7 +378,7 @@ export async function uploadOutboundDocument(
         },
       )
     } else {
-      result = await submitInventoryDocument(document, session, _autoApprove)
+      result = await submitInventoryDocument(document, session, _autoApprove, clientRequestId)
     }
     return markOutboundDocumentSubmitted(document.id, result)
   } catch (error) {

@@ -1,5 +1,9 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-13 17:16 已完成 `0.8.2` 端到端验证，17:26 发布 `0.8.3` 到 `D:\LabelSystem\Api\releases\20261013_172624`，补齐全组 `FAILED` 草稿仍映射“未提交”的漫游语义，并要求失败组不存在 U8 单据 ID、单号和库存流水后才能改绑。明确失败草稿允许改绑新重试组，结果未知仍禁止重试。Gateway 更新为 `0.5.2`，H5 更新为 `0.2.0-dev.42`。使用用户原提交的生产订单与三张标签完成真实验证：U8 生成未审核单 `CLCKD20263349`、`CLCKD20263350`；业务操作 30、31 和三条明细均为 `SUCCESS`，3 条库存流水已提交，标签余额变为 0、11、127，标签锁为 0。两个服务健康检查为 `ready/running`。
+
+发布后使用临时草稿验证：关联全失败组时服务端返回 `DRAFT`，随后可改绑到已成功组并返回 `COMPLETED`；临时草稿及事件已精确删除，不保留测试数据。
+
 2026-10-13 16:21 已发布 Business API `0.8.1` 到 `D:\LabelSystem\Api\releases\20261013_162138`，Gateway 已部署 `0.4.3`，H5 更新为 `0.2.0-dev.41`。库存 `Insert` 参数绑定失败现在按明确未写入失败处理，同一请求号可安全重试；只有保存已发生但回查不能确认时才进入 `NEEDS_RECONCILIATION`。H5 单据管理增加独立“待核对”页签，非终态异常不再归入“已结束”。两个服务健康检查分别为 `ready/running`，Business API 数据库就绪且 888 测试写入继续开启；部署回收后需重新登录。
 
 2026-10-13 16:18 经用户确认不保留首次材料出库异常组：精确删除 2 个业务操作、3 条明细、6 条操作事件、1 份漫游草稿及 1 条草稿事件，释放 3 张产品标签锁；同时删除 Business API 准备凭证、Gateway 写入凭证和对应幂等索引。清理前再次确认没有 U8 单号、没有 `erp_status=SUCCESS`、没有本地库存流水；清理后业务组、草稿、孤立标签锁和孤立托盘锁均为 0。标签基础数据与数量未删除。
@@ -14,13 +18,13 @@
 Site: LabelSystemApi
 Application pool: LabelSystemApiPool
 URL: http://172.16.1.159:9890
-Release: D:\LabelSystem\Api\releases\20261013_162138
+Release: D:\LabelSystem\Api\releases\20261013_172624
 External config: D:\LabelSystem\Config\label-api.json
 Operation archive: D:\LabelSystem\OperationArchive
 Environment: development
 Database: LabelSystem_Dev
 U8 account: 888
-Service version: 0.8.1
+Service version: 0.8.3
 U8 writes: enabled for development / account 888
 ```
 

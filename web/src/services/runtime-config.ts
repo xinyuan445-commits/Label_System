@@ -18,7 +18,7 @@ const fallbackConfig: RuntimeConfig = {
   environment: 'development',
   apiBaseUrl: 'http://172.16.1.159:9890',
   sourceDocumentApiBaseUrl: 'http://172.16.1.159:9890',
-  h5Version: '0.2.0-dev.41',
+  h5Version: '0.2.0-dev.42',
   bridgeProtocol: 'pda-bridge-v1',
   enableMockLogin: false,
   enableMockBusinessUploads: false,

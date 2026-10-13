@@ -13,6 +13,7 @@ using U8Gateway.Core.Documents;
 using U8Gateway.Core.Operations;
 using U8Gateway.Persistence.Archive;
 using U8Gateway.Persistence.Configuration;
+using U8Gateway.U8;
 
 namespace U8Gateway.Api.Controllers
 {
@@ -424,6 +425,33 @@ namespace U8Gateway.Api.Controllers
                     "请求已取消，禁止直接重试",
                     null);
                 throw;
+            }
+            catch (U8LoginException exception)
+            {
+                var failure = new DocumentOperationResult
+                {
+                    Confirmed = false,
+                    OutcomeKnown = true,
+                    Code = exception.Code,
+                    Message = exception.Message
+                };
+                TryAppend(
+                    journal,
+                    handle,
+                    OperationStages.Failed,
+                    failure.Code,
+                    "U8 登录失败，未执行写入");
+                TryUpdate(
+                    registry,
+                    request.ClientRequestId,
+                    OperationStages.Failed,
+                    failure.Code,
+                    failure.Message,
+                    failure);
+                return Error(
+                    HttpStatusCode.Conflict,
+                    failure.Code,
+                    failure.Message);
             }
             catch (Exception exception)
             {

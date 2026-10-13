@@ -10,7 +10,7 @@
 
 库存类单据自动取号先尝试组件单据类型，再尝试合同登记的 `numberType`。888 当前映射为采购入库 `24`、销售出库 `0303`、材料出库 `0412`、调拨 `0304`、货位调整 `0313`、盘点 `0307`。每次取号使用新的表头 DOM；取得单号后重新生成表头并写入 `ccode` 再调用 `Insert`。取号失败发生在 `Insert` 前，必须返回明确失败，不得误记为结果未知。
 
-`0.4.3` 将库存类 `USERPCO.VoucherCO.Insert` 固定为已验证的 7 参数签名：单据类型、表头、表体、货位、错误信息、数据库连接和凭证内部 ID。动态绑定失败发生在 COM 写入调用前，返回 `422 U8_CALL_BINDING_FAILED`，幂等记录标记为已知失败并允许同一请求号再次提交；已经进入保存调用但新增后无法回查确认时返回 `U8_WRITE_NOT_CONFIRMED`，保留核对状态且禁止直接重放。
+`0.4.3` 曾按旧组件示例尝试 7 参数签名；真实 U8 16.0 USERPCO 类型库要求 13 参数。`0.5.2` 已由独立桥接程序集使用系统 ADODB 7.0 和完整 13 参数签名调用。调用前的参数或依赖错误返回明确失败并允许安全重试；已经进入保存调用但新增后无法回查确认时返回 `U8_WRITE_NOT_CONFIRMED`，保留核对状态且禁止直接重放。
 
 ## 审核单据只读接口（0.3.7）
 
@@ -160,3 +160,11 @@ GET  /api/v1/reference-data/document-master-data
 `GET /reference-data/document-master-data` 使用固定 SQL 读取 `PurchaseType`、`SaleType`、`foreigncurrency` 和 `exch`，返回采购类型、销售类型、币种及各币种最新可用汇率。接口不接受任意 SQL，不写 U8；888 已验证返回 16、11、4 条。
 
 写接口合同中的 `operatorName` 映射到 U8 `cmaker`。Gateway 不访问标签系统用户表，因此 Business API 在调用写接口前必须用当前应用用户的 ERP 制单人映射覆盖该字段；不得透传 H5 姓名或使用 Gateway 默认制单人替代。ERP 映射缺失时请求应在 Business API 层拒绝。
+
+## 8. USERPCO 写入兼容边界
+
+库存 USERPCO 与采购、销售 CO 使用的 ADODB 互操作版本不同。`U8Gateway.UserpcoBridge` 单独引用服务器系统 ADODB 7.0 和 `Interop.USERPCO`，其余适配器继续使用原 ADODB 2.6，禁止在同一程序集内强制统一版本。
+
+`VoucherCO.Insert` 按 U8 16.0 的 13 参数签名调用，消息文档以空输出参数传入，两个校验标志初始为 `true`，货位文档使用空 DOM，具体货位由表体 `cposition` 交给 U8 生成。新增返回后先按 USERPCO 返回的单据 ID 查询主表，再回退按预取单号查询；只有数据库确认存在才返回成功。
+
+U8 登录许可饱和返回 `U8_LICENSE_UNAVAILABLE`；反射或参数绑定发生在保存前时返回明确失败。COM 调用抛错后仍按预取单号和返回 ID 进行短时回查，查到单据按成功处理，无法判断是否写入才进入 `RECONCILIATION_REQUIRED`。

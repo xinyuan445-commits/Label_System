@@ -80,6 +80,7 @@ export interface StoredOutboundDocument {
   updatedAt: string
   uploadedAt: string | null
   uploadAttempts: number
+  uploadRequestId?: string
   lastUploadError: string
   serverOperationId: string
   serverStatus?: string
@@ -186,6 +187,7 @@ function normalizedDocument(document: Partial<StoredOutboundDocument>): StoredOu
     updatedAt: document.updatedAt ?? document.createdAt ?? beijingTimestamp(),
     uploadedAt: document.uploadedAt ?? null,
     uploadAttempts: document.uploadAttempts ?? 0,
+    uploadRequestId: document.uploadRequestId ?? '',
     lastUploadError: document.lastUploadError ?? '',
     serverOperationId: document.serverOperationId ?? '',
     serverStatus: document.serverStatus,
@@ -248,6 +250,7 @@ function beijingTimestamp(): string {
 
 function localStatusForServer(status: string, isTerminal = false): OutboundDocumentUploadStatus {
   if (status === 'CANCELLED') return 'cancelled'
+  if (status === 'FAILED') return 'pending'
   return isTerminal ? 'completed' : 'attention'
 }
 
@@ -301,7 +304,9 @@ export async function saveOutboundDocument(input: {
     if (existing.ownerUserId !== owner.id) throw new Error('不能修改其他用户的草稿')
     const updated: StoredOutboundDocument = {
       ...existing, updatedAt: now, uploadStatus: 'pending', uploadedAt: null,
-      lastUploadError: '', summary: safeSummary, payload: safePayload,
+      uploadRequestId: '', lastUploadError: '', serverOperationId: '',
+      serverStatus: undefined, serverErrorCode: undefined, serverErrorMessage: undefined,
+      summary: safeSummary, payload: safePayload,
       clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '',
       remoteOnly: false, deviceId: getDeviceId(), deviceName: getDeviceName(),
     }
@@ -313,7 +318,7 @@ export async function saveOutboundDocument(input: {
   const created: StoredOutboundDocument = {
     id: createUniqueId('draft'), documentType: input.documentType,
     uploadStatus: 'pending', createdAt: now, updatedAt: now, uploadedAt: null,
-    uploadAttempts: 0, lastUploadError: '', serverOperationId: '',
+    uploadAttempts: 0, uploadRequestId: '', lastUploadError: '', serverOperationId: '',
     summary: safeSummary, payload: safePayload,
     ownerUserId: owner.id, ownerName: owner.name,
     deviceId: getDeviceId(), deviceName: getDeviceName(), clientRevision: 1,
@@ -341,7 +346,8 @@ export async function markOutboundDocumentSubmitted(
   return updateDocument(id, (existing) => {
     const now = beijingTimestamp()
     return { ...existing, uploadStatus: localStatusForServer(result.status, result.isTerminal), uploadedAt: now,
-      updatedAt: now, uploadAttempts: existing.uploadAttempts + 1, lastUploadError: '',
+      updatedAt: now, uploadAttempts: existing.uploadAttempts + 1, uploadRequestId: '',
+      lastUploadError: result.status === 'FAILED' ? result.errorMessage || '上传失败' : '',
       serverOperationId: result.submissionGroupId, serverStatus: result.status,
       lockExpiresAt: result.lockExpiresAt, serverCheckedAt: now,
       serverErrorCode: result.errorCode, serverErrorMessage: result.errorMessage,
@@ -350,13 +356,26 @@ export async function markOutboundDocumentSubmitted(
   })
 }
 
+export async function beginOutboundDocumentUpload(id: string, retryFailed = false): Promise<string> {
+  let requestId = ''
+  await updateDocument(id, (existing) => {
+    requestId = existing.uploadRequestId || (retryFailed || existing.serverStatus === 'FAILED'
+      ? createUniqueId('retry')
+      : existing.id)
+    return { ...existing, uploadRequestId: requestId }
+  })
+  return requestId
+}
+
 export async function updateOutboundDocumentGroup(
   id: string, result: OperationGroupSnapshot,
 ): Promise<StoredOutboundDocument> {
   return updateDocument(id, (existing) => {
     const now = beijingTimestamp()
     return { ...existing, uploadStatus: localStatusForServer(result.status, result.isTerminal), updatedAt: now,
-      lastUploadError: '', serverOperationId: result.submissionGroupId,
+      uploadRequestId: '',
+      lastUploadError: result.status === 'FAILED' ? result.errorMessage || '上传失败' : '',
+      serverOperationId: result.submissionGroupId,
       serverStatus: result.status, lockExpiresAt: result.lockExpiresAt,
       serverErrorCode: result.errorCode, serverErrorMessage: result.errorMessage,
       serverCheckedAt: now, preparedOperations: result.operations,

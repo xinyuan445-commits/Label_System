@@ -50,8 +50,14 @@ public sealed class DocumentDraftRepository(SqlConnectionFactory connections)
         if (!string.IsNullOrWhiteSpace(existing?.OperationGroupId) &&
             !string.IsNullOrWhiteSpace(request.OperationGroupId) &&
             !string.Equals(existing.OperationGroupId, request.OperationGroupId.Trim(), StringComparison.OrdinalIgnoreCase))
-            throw new ApiException(StatusCodes.Status409Conflict,
-                "OPERATION_GROUP_CONFLICT", "单据已关联其他业务组。");
+        {
+            if (!await IsReplaceableFailedGroupAsync(
+                    connection, transaction, existing.OperationGroupId,
+                    user.Id, cancellationToken))
+                throw new ApiException(StatusCodes.Status409Conflict,
+                    "OPERATION_GROUP_CONFLICT", "单据已关联其他业务组。");
+            operationGroupId = request.OperationGroupId.Trim();
+        }
         if (!string.IsNullOrWhiteSpace(operationGroupId))
             status = await ReadOperationGroupDraftStatusAsync(
                 connection, transaction, operationGroupId, user.Id, cancellationToken);
@@ -371,10 +377,41 @@ public sealed class DocumentDraftRepository(SqlConnectionFactory connections)
         if (statuses.Count == 0)
             throw new ApiException(StatusCodes.Status409Conflict,
                 "OPERATION_GROUP_INVALID", "业务组不存在或不属于当前用户。");
+        if (statuses.All(status => status == "FAILED")) return "DRAFT";
         if (statuses.All(status => status == "CANCELLED")) return "CANCELLED";
         if (statuses.All(status => status is "SUCCESS" or "FAILED" or "CANCELLED" or "REVERSED"))
             return "COMPLETED";
         return "PREPARED";
+    }
+
+    private static async Task<bool> IsReplaceableFailedGroupAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string groupId,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("""
+            SELECT COUNT_BIG(1),
+                   SUM(CASE WHEN operator_id<>@user_id OR status<>'FAILED'
+                                  OR erp_status<>'FAILED' OR erp_document_id IS NOT NULL
+                                  OR erp_document_no IS NOT NULL
+                            THEN 1 ELSE 0 END),
+                   (SELECT COUNT_BIG(1)
+                    FROM dbo.inventory_flow AS flow
+                    INNER JOIN dbo.business_operation AS linked ON linked.id=flow.operation_id
+                    WHERE linked.submission_group_id=@group_id)
+            FROM dbo.business_operation
+            WHERE submission_group_id=@group_id;
+            """, connection, transaction);
+        command.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = groupId;
+        command.Parameters.Add("@user_id", SqlDbType.NVarChar, 100).Value = userId;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return false;
+        var count = reader.GetInt64(0);
+        var invalid = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+        var flows = reader.GetInt64(2);
+        return count > 0 && invalid == 0 && flows == 0;
     }
 
     private static void AddDraftParameters(

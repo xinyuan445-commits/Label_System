@@ -18,6 +18,7 @@ using VoucherCO_PU;
 using VoucherCO_SA;
 using VoucherVerify;
 using U8Gateway.Contracts;
+using U8Gateway.UserpcoBridge;
 
 namespace U8Gateway.U8.Documents
 {
@@ -133,7 +134,6 @@ namespace U8Gateway.U8.Documents
             IXMLDOMDocument2 head = null;
             IXMLDOMDocument2 body = null;
             IXMLDOMDocument2 position = null;
-            Connection connection = null;
             string voucherCode = null;
             string voucherId = string.Empty;
             try
@@ -204,20 +204,23 @@ namespace U8Gateway.U8.Documents
                     SetFirstRowAttribute(packet.HeaderXml, "ccode", voucherCode.Trim()),
                     "表头");
                 body = ParseXml(packet.BodyXml, "表体");
-                position = ParseXml(packet.PositionXml, "货位");
+                position = new DOMDocument26Class();
                 error = string.Empty;
 
                 bool inserted;
                 try
                 {
-                    inserted = native.Insert(
+                    bool redVoucher = OptionBoolean(execution.Request.Options, "redVoucher");
+                    UserpcoInsertResult insert = UserpcoWriter.Insert(
+                        voucher,
                         execution.Profile.ComponentDocumentType,
                         head,
                         body,
                         position,
-                        ref error,
-                        ref connection,
-                        ref voucherId);
+                        redVoucher);
+                    inserted = insert.Succeeded;
+                    error = insert.Error;
+                    voucherId = insert.VoucherId;
                 }
                 catch (RuntimeBinderException exception)
                 {
@@ -226,9 +229,34 @@ namespace U8Gateway.U8.Documents
                         exception.Message,
                         voucherCode);
                 }
+                catch (ArgumentException exception)
+                {
+                    return Failure(
+                        "U8_CALL_BINDING_FAILED",
+                        exception.Message,
+                        voucherCode);
+                }
+                catch (System.Reflection.TargetInvocationException exception)
+                {
+                    inserted = false;
+                    error = exception.InnerException?.Message ?? exception.Message;
+                }
+                catch (COMException exception)
+                {
+                    inserted = false;
+                    error = exception.Message;
+                }
 
-                long? confirmedId = WaitForVoucherId(
-                    options, execution.Profile, voucherCode);
+                long returnedId;
+                long? confirmedId = long.TryParse(voucherId, out returnedId) &&
+                                    ReadVoucherState(options, execution.Profile, returnedId).Exists
+                    ? returnedId
+                    : (long?)null;
+                if (!confirmedId.HasValue)
+                {
+                    confirmedId = WaitForVoucherId(
+                        options, execution.Profile, voucherCode);
+                }
                 if (!inserted && !confirmedId.HasValue)
                 {
                     return Failure(
@@ -239,7 +267,9 @@ namespace U8Gateway.U8.Documents
                 if (!confirmedId.HasValue)
                 {
                     throw new InvalidOperationException(
-                        Empty(error, "U8 返回新增成功，但回查不到单据。"));
+                        Empty(error, "U8 返回新增成功，但回查不到单据。") +
+                        " 返回ID=" + Empty(voucherId, "空") +
+                        "，预取单号=" + Empty(voucherCode, "空") + "。");
                 }
 
                 VoucherState state = ReadVoucherState(
@@ -261,7 +291,6 @@ namespace U8Gateway.U8.Documents
             finally
             {
                 Shutdown(login);
-                Release(connection);
                 Release(position);
                 Release(body);
                 Release(head);
@@ -1290,7 +1319,7 @@ namespace U8Gateway.U8.Documents
                 string error = Convert.ToString(login.ShareString);
                 Shutdown(login);
                 Release(login);
-                throw new InvalidOperationException(Empty(error, "U8 登录失败。"));
+                throw U8LoginException.FromMessage(error);
             }
             return login;
         }

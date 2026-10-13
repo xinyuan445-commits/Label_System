@@ -25,6 +25,29 @@ namespace U8Gateway.U8
         public string LoginDate { get; set; }
     }
 
+    public sealed class U8LoginException : InvalidOperationException
+    {
+        public U8LoginException(string code, string message)
+            : base(message)
+        {
+            Code = code;
+        }
+
+        public string Code { get; }
+
+        public static U8LoginException FromMessage(string message)
+        {
+            string value = string.IsNullOrWhiteSpace(message)
+                ? "U8 登录失败。"
+                : message.Trim();
+            string code = value.IndexOf("许可", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                          value.IndexOf("饱和", StringComparison.OrdinalIgnoreCase) >= 0
+                ? "U8_LICENSE_UNAVAILABLE"
+                : "U8_LOGIN_FAILED";
+            return new U8LoginException(code, value);
+        }
+    }
+
     public static class U8ConnectionTester
     {
         public static U8ConnectionTestResult Test(U8ConnectionOptions options)
@@ -53,8 +76,8 @@ namespace U8Gateway.U8
                     options.Serial ?? string.Empty);
                 if (!connected)
                 {
-                    throw new InvalidOperationException(
-                        "U8 login failed: " + (login.ShareString ?? string.Empty));
+                    throw U8LoginException.FromMessage(
+                        Convert.ToString(login.ShareString));
                 }
 
                 return new U8ConnectionTestResult

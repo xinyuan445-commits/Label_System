@@ -84,10 +84,15 @@ async function refresh(): Promise<void> {
   for (const group of groups) {
     if (isLocalOperationGroupHidden(group.submissionGroupId)) continue
     const existing = [...merged.values()].find((document) =>
-      document.id === group.submissionGroupId || document.serverOperationId === group.submissionGroupId,
+      document.serverOperationId === group.submissionGroupId,
+    ) ?? [...merged.values()].find((document) =>
+      !document.serverOperationId && document.id === group.submissionGroupId,
     )
+    const retryableFailure = group.status === 'FAILED' && existing &&
+      existing.ownerUserId === currentUserId.value && canUpload(existing)
     const uploadStatus = group.status === 'CANCELLED'
       ? 'cancelled'
+      : retryableFailure ? 'pending'
       : group.isTerminal ? 'completed' : 'attention'
     if (existing) {
       merged.set(existing.id, {
@@ -218,8 +223,10 @@ async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
     const policy = ensureDocumentPolicy(settings, documentType.value)
     const uploaded = await uploadOutboundDocument(document, policy.autoApproveAfterUpload)
     message.value = uploaded.serverStatus === 'SUCCESS' ? '上传完成'
-      : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? '需要核对' : '上传失败'
-    activeStatus.value = 'completed'
+      : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? '需要核对'
+        : uploaded.serverErrorMessage || '上传失败'
+    activeStatus.value = uploaded.serverStatus === 'FAILED' ? 'pending'
+      : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? 'attention' : 'completed'
     await refresh()
   } catch (error) {
     message.value = error instanceof Error ? error.message : '上传失败'
