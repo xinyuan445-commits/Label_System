@@ -42,8 +42,11 @@ public sealed record MaterialOutboundExecutionOperation(
     string SubmissionGroupId,
     string ClientRequestId,
     string OperatorId,
+    string OperationType,
+    string ErpDocumentType,
     string Status,
     string ErpStatus,
+    string SourceDocumentType,
     string SourceDocumentId,
     string SourceDocumentNo,
     string WarehouseCode,
@@ -67,9 +70,12 @@ public sealed record MaterialOutboundExecutionLine(
     string MaterialCode,
     string? BatchNo,
     string UnitCode,
+    decimal InventoryQtySnapshot,
     decimal RequestedQty,
     string WarehouseCode,
     string? LocationCode,
+    string? TargetWarehouseCode,
+    string? TargetLocationCode,
     string? Remark);
 
 public sealed class GatewayWriteException(

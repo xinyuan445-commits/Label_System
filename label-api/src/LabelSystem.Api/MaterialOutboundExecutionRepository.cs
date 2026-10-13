@@ -12,8 +12,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
     {
         const string sql = """
             SELECT op.id, roots.root_id, op.submission_group_id, op.client_request_id,
-                   op.operator_id, op.status, op.erp_status,
-                   ISNULL(op.source_document_id,N''), ISNULL(op.source_document_no,N''),
+                   op.operator_id, op.operation_type, op.erp_document_type, op.status, op.erp_status,
+                   ISNULL(op.source_document_type,N''), ISNULL(op.source_document_id,N''), ISNULL(op.source_document_no,N''),
                    ISNULL(lines.warehouse_code,N''), op.device_id, op.device_model, op.reason,
                    op.archive_relative_path, op.archive_sha256,
                    line.id, line.line_no,
@@ -21,8 +21,10 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                    line.label_id, line.pallet_id, line.source_pallet_id,
                    COALESCE(label.label_code,pallet.pallet_code,N''),
                    TRY_CONVERT(int,line.source_line_id), TRY_CONVERT(int,line.source_line_no),
-                   line.material_code, line.batch_no, line.unit_code, line.requested_qty,
-                   ISNULL(line.from_warehouse_code,N''), line.from_location_code, line.remark
+                   line.material_code, line.batch_no, line.unit_code,
+                   ISNULL(line.inventory_qty_snapshot,0), line.requested_qty,
+                   ISNULL(line.from_warehouse_code,N''), line.from_location_code,
+                   line.to_warehouse_code, line.to_location_code, line.remark
             FROM dbo.business_operation op
             CROSS APPLY
             (
@@ -41,7 +43,6 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             LEFT JOIN dbo.product_label label ON label.id=line.label_id
             LEFT JOIN dbo.pallet pallet ON pallet.id=line.pallet_id
             WHERE op.submission_group_id=@group_id
-              AND op.operation_type='MATERIAL_OUTBOUND'
             ORDER BY op.id,line.line_no;
             """;
         await using var connection = connections.Create();
@@ -62,26 +63,29 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                 builder = new OperationBuilder(
                     operationId, reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
                     operatorId, reader.GetString(5), reader.GetString(6), reader.GetString(7),
-                    reader.GetString(8), reader.GetString(9),
-                    reader.IsDBNull(10) ? null : reader.GetString(10),
-                    reader.IsDBNull(11) ? null : reader.GetString(11),
-                    reader.IsDBNull(12) ? null : reader.GetString(12),
-                    reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
-                    reader.IsDBNull(14) ? string.Empty : reader.GetString(14));
+                    reader.GetString(8), reader.GetString(9), reader.GetString(10),
+                    reader.GetString(11), reader.GetString(12),
+                    reader.IsDBNull(13) ? null : reader.GetString(13),
+                    reader.IsDBNull(14) ? null : reader.GetString(14),
+                    reader.IsDBNull(15) ? null : reader.GetString(15),
+                    reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
+                    reader.IsDBNull(17) ? string.Empty : reader.GetString(17));
                 builders.Add(operationId, builder);
             }
-            if (reader.IsDBNull(15)) continue;
+            if (reader.IsDBNull(18)) continue;
             builder.Lines.Add(new MaterialOutboundExecutionLine(
-                reader.GetInt64(15), reader.GetInt32(16), reader.GetString(17),
-                reader.IsDBNull(18) ? null : reader.GetInt64(18),
-                reader.IsDBNull(19) ? null : reader.GetInt64(19),
-                reader.IsDBNull(20) ? null : reader.GetInt64(20), reader.GetString(21),
-                reader.IsDBNull(22) ? null : reader.GetInt32(22),
-                reader.IsDBNull(23) ? null : reader.GetInt32(23), reader.GetString(24),
-                reader.IsDBNull(25) ? null : reader.GetString(25), reader.GetString(26),
-                reader.GetDecimal(27), reader.GetString(28),
-                reader.IsDBNull(29) ? null : reader.GetString(29),
-                reader.IsDBNull(30) ? null : reader.GetString(30)));
+                reader.GetInt64(18), reader.GetInt32(19), reader.GetString(20),
+                reader.IsDBNull(21) ? null : reader.GetInt64(21),
+                reader.IsDBNull(22) ? null : reader.GetInt64(22),
+                reader.IsDBNull(23) ? null : reader.GetInt64(23), reader.GetString(24),
+                reader.IsDBNull(25) ? null : reader.GetInt32(25),
+                reader.IsDBNull(26) ? null : reader.GetInt32(26), reader.GetString(27),
+                reader.IsDBNull(28) ? null : reader.GetString(28), reader.GetString(29),
+                reader.GetDecimal(30), reader.GetDecimal(31), reader.GetString(32),
+                reader.IsDBNull(33) ? null : reader.GetString(33),
+                reader.IsDBNull(34) ? null : reader.GetString(34),
+                reader.IsDBNull(35) ? null : reader.GetString(35),
+                reader.IsDBNull(36) ? null : reader.GetString(36)));
         }
         if (builders.Count == 0)
             throw new ApiException(StatusCodes.Status404NotFound,
@@ -157,12 +161,30 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             var erp = erpRows.TryGetValue(line.LineNo, out var row)
                 ? row
                 : ((string? LineId, string? PositionId))(null, null);
-            if (line.ObjectType == "PRODUCT_LABEL")
-                await CompleteLabelAsync(connection, transaction, operation, line, erp,
-                    redVoucher, cancellationToken);
+            if (operation.ErpDocumentType is "material-outbound" or "sales-outbound")
+            {
+                if (line.ObjectType == "PRODUCT_LABEL")
+                    await CompleteLabelAsync(connection, transaction, operation, line, erp,
+                        redVoucher, cancellationToken);
+                else
+                    await CompletePalletAsync(connection, transaction, operation, line, erp,
+                        redVoucher, cancellationToken);
+            }
+            else if (operation.ErpDocumentType is "transfer" or "location-adjustment")
+            {
+                await CompleteMoveAsync(connection, transaction, operation, line, erp,
+                    cancellationToken);
+            }
+            else if (operation.ErpDocumentType == "inventory-count")
+            {
+                await CompleteCountAsync(connection, transaction, operation, line, erp,
+                    cancellationToken);
+            }
             else
-                await CompletePalletAsync(connection, transaction, operation, line, erp,
-                    redVoucher, cancellationToken);
+            {
+                await ReleaseObjectAsync(connection, transaction, operation, line, cancellationToken);
+                await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+            }
         }
 
         await using (var update = new SqlCommand("""
@@ -186,6 +208,9 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         }
         await InsertEventAsync(connection, transaction, operation.Id, "U8_CONFIRMED", "SUCCESS",
             requestId, $"U8 单据已确认：{result.VoucherCode}", cancellationToken);
+        await ReleaseGroupLocksWhenSuccessfulAsync(
+            connection, transaction, operation.SubmissionGroupId, operation.RootOperationId,
+            cancellationToken);
         await SetDraftCompletedWhenTerminalAsync(
             connection, transaction, operation.SubmissionGroupId, operation.OperatorId,
             requestId, cancellationToken);
@@ -227,27 +252,30 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         }
         if (!resultUnknown)
         {
-            foreach (var line in operation.Lines)
-            {
-                var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
-                var id = line.LabelId ?? line.PalletId ?? 0;
-                await using var release = new SqlCommand(
-                    $"UPDATE dbo.{table} SET locked_operation_id=NULL,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;",
-                    connection, transaction);
-                release.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
-                release.Parameters.Add("@root_id", SqlDbType.BigInt).Value = operation.RootOperationId;
-                await release.ExecuteNonQueryAsync(cancellationToken);
-            }
+            await ReleaseRootLocksAsync(connection, transaction, operation.RootOperationId, cancellationToken);
             await using var failLines = new SqlCommand("""
                 UPDATE dbo.business_operation_line
                 SET line_status='FAILED',error_code=@code,error_message=@message,
                     updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
-                WHERE operation_id=@id AND line_status='PENDING';
+                WHERE operation_id IN
+                    (SELECT id FROM dbo.business_operation WHERE submission_group_id=@group_id)
+                  AND line_status='PENDING';
                 """, connection, transaction);
             failLines.Parameters.Add("@code", SqlDbType.VarChar, 100).Value = Limit(code, 100);
             failLines.Parameters.Add("@message", SqlDbType.NVarChar, 2000).Value = Limit(message, 2000);
-            failLines.Parameters.Add("@id", SqlDbType.BigInt).Value = operation.Id;
+            failLines.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = operation.SubmissionGroupId;
             await failLines.ExecuteNonQueryAsync(cancellationToken);
+            await using var abortRemaining = new SqlCommand("""
+                UPDATE dbo.business_operation
+                SET status='FAILED',erp_status='FAILED',error_code='GROUP_ABORTED',
+                    error_message=N'同组单据上传失败，后续拆组未执行。',
+                    lock_acquired_at=NULL,heartbeat_at=NULL,lock_expires_at=NULL,
+                    updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()),
+                    completed_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+                WHERE submission_group_id=@group_id AND status='PENDING' AND erp_status='PENDING';
+                """, connection, transaction);
+            abortRemaining.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = operation.SubmissionGroupId;
+            await abortRemaining.ExecuteNonQueryAsync(cancellationToken);
         }
         await InsertEventAsync(connection, transaction, operation.Id,
             resultUnknown ? "RECONCILIATION_REQUIRED" : "U8_FAILED",
@@ -286,7 +314,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         await using (var update = new SqlCommand("""
             UPDATE dbo.product_label
             SET current_qty=@qty,status=@status,last_flow_id=@flow_id,
-                locked_operation_id=NULL,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
             WHERE id=@id AND locked_operation_id=@root_id;
             """, connection, transaction))
         {
@@ -330,7 +358,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             SET current_qty=@qty,status=@status,last_flow_id=@flow_id,last_operation_id=@operation_id,
                 current_warehouse_code=CASE WHEN @qty=0 THEN NULL ELSE @warehouse END,
                 current_location_code=CASE WHEN @qty=0 THEN NULL ELSE @location END,
-                locked_operation_id=NULL,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
             WHERE id=@id AND locked_operation_id=@root_id;
             """, connection, transaction))
         {
@@ -370,7 +398,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                     FROM dbo.inventory_flow sequence_flow WITH (UPDLOCK,HOLDLOCK)
                     WHERE (@label_id IS NOT NULL AND sequence_flow.label_id=@label_id)
                        OR (@pallet_id IS NOT NULL AND sequence_flow.pallet_id=@pallet_id)),
-                   'NORMAL','MATERIAL_OUTBOUND',@unit_code,@before,@change,@after,
+                   'NORMAL',@operation_type,@unit_code,@before,@change,@after,
                    @material_code,@batch_no,previous.manufacture_date,previous.expiry_date,
                    previous.serial_no,previous.inventory_attributes_json,
                    ISNULL(previous.attribute_schema_version,1),previous.inventory_identity_hash,
@@ -389,6 +417,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = palletId.HasValue ? palletId.Value : DBNull.Value;
         command.Parameters.Add("@previous_flow_id", SqlDbType.BigInt).Value =
             previousFlowId.HasValue ? previousFlowId.Value : DBNull.Value;
+        command.Parameters.Add("@operation_type", SqlDbType.VarChar, 50).Value = operation.OperationType;
         command.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.UnitCode;
         command.Parameters.Add("@before", SqlDbType.Decimal).ConfigureDecimal(before);
         command.Parameters.Add("@change", SqlDbType.Decimal).ConfigureDecimal(change);
@@ -400,6 +429,188 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         command.Parameters.Add("@remark", SqlDbType.NVarChar, 500).Value = DbValue(line.Remark, 500);
         command.Parameters.Add("@red", SqlDbType.Bit).Value = redVoucher;
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static async Task CompleteMoveAsync(
+        SqlConnection connection, SqlTransaction transaction,
+        MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
+        (string? LineId, string? PositionId) erp,
+        CancellationToken cancellationToken)
+    {
+        var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
+        var id = line.LabelId ?? line.PalletId ?? throw new InvalidOperationException("库存对象不存在。");
+        await using var read = new SqlCommand(
+            $"SELECT current_qty,locked_operation_id,last_flow_id FROM dbo.{table} WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;",
+            connection, transaction);
+        read.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+        await using var reader = await read.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("库存对象不存在。");
+        var quantity = reader.GetDecimal(0);
+        var lockedBy = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
+        var previousFlowId = reader.IsDBNull(2) ? (long?)null : reader.GetInt64(2);
+        await reader.CloseAsync();
+        if (lockedBy != operation.RootOperationId) throw new InvalidOperationException("库存对象锁已变化。");
+
+        var targetWarehouse = line.TargetWarehouseCode ?? line.WarehouseCode;
+        var targetLocation = line.TargetLocationCode;
+        var flowId = await InsertStateFlowAsync(
+            connection, transaction, operation, line, quantity, 0m, quantity,
+            line.WarehouseCode, line.LocationCode, targetWarehouse, targetLocation,
+            previousFlowId, cancellationToken);
+        var updateSql = line.ObjectType == "PRODUCT_LABEL"
+            ? "UPDATE dbo.product_label SET last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;"
+            : "UPDATE dbo.pallet SET last_flow_id=@flow_id,last_operation_id=@operation_id,current_warehouse_code=@warehouse,current_location_code=@location,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;";
+        await using var update = new SqlCommand(updateSql, connection, transaction);
+        update.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = flowId;
+        update.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
+        update.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value = targetWarehouse;
+        update.Parameters.Add("@location", SqlDbType.NVarChar, 100).Value = DbValue(targetLocation, 100);
+        update.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+        update.Parameters.Add("@root_id", SqlDbType.BigInt).Value = operation.RootOperationId;
+        if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new InvalidOperationException("库存对象更新冲突。");
+        await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+    }
+
+    private static async Task CompleteCountAsync(
+        SqlConnection connection, SqlTransaction transaction,
+        MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
+        (string? LineId, string? PositionId) erp,
+        CancellationToken cancellationToken)
+    {
+        var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
+        var id = line.LabelId ?? line.PalletId ?? throw new InvalidOperationException("库存对象不存在。");
+        await using var read = new SqlCommand(
+            $"SELECT current_qty,locked_operation_id,last_flow_id FROM dbo.{table} WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;",
+            connection, transaction);
+        read.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+        await using var reader = await read.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("库存对象不存在。");
+        var before = reader.GetDecimal(0);
+        var lockedBy = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
+        var previousFlowId = reader.IsDBNull(2) ? (long?)null : reader.GetInt64(2);
+        await reader.CloseAsync();
+        if (lockedBy != operation.RootOperationId) throw new InvalidOperationException("库存对象锁已变化。");
+        var after = line.RequestedQty;
+        if (line.ObjectType == "PALLET" && after is not (0m or 1m))
+            throw new InvalidOperationException("托盘盘点数量无效。");
+        var flowId = await InsertStateFlowAsync(
+            connection, transaction, operation, line, before, after - before, after,
+            line.WarehouseCode, line.LocationCode, line.WarehouseCode, line.LocationCode,
+            previousFlowId, cancellationToken);
+        var status = line.ObjectType == "PRODUCT_LABEL"
+            ? (after == 0 ? "USED" : "ACTIVE")
+            : (after == 0 ? "OUT_OF_STOCK" : "ACTIVE");
+        var updateSql = line.ObjectType == "PRODUCT_LABEL"
+            ? "UPDATE dbo.product_label SET current_qty=@qty,status=@status,last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;"
+            : "UPDATE dbo.pallet SET current_qty=@qty,status=@status,last_flow_id=@flow_id,last_operation_id=@operation_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;";
+        await using var update = new SqlCommand(updateSql, connection, transaction);
+        update.Parameters.Add("@qty", SqlDbType.Decimal).ConfigureDecimal(after);
+        update.Parameters.Add("@status", SqlDbType.VarChar, 30).Value = status;
+        update.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = flowId;
+        update.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
+        update.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+        update.Parameters.Add("@root_id", SqlDbType.BigInt).Value = operation.RootOperationId;
+        if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new InvalidOperationException("库存对象更新冲突。");
+        await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+    }
+
+    private static async Task<long> InsertStateFlowAsync(
+        SqlConnection connection, SqlTransaction transaction,
+        MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
+        decimal before, decimal change, decimal after,
+        string? fromWarehouse, string? fromLocation,
+        string? toWarehouse, string? toLocation,
+        long? previousFlowId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            INSERT INTO dbo.inventory_flow
+                (operation_id,operation_line_id,object_type,label_id,pallet_id,object_sequence_no,
+                 flow_role,operation_type,unit_code,qty_before,change_qty,qty_after,
+                 material_code,batch_no,manufacture_date,expiry_date,serial_no,
+                 inventory_attributes_json,attribute_schema_version,inventory_identity_hash,
+                 from_warehouse_code,from_location_code,to_warehouse_code,to_location_code,remark)
+            OUTPUT inserted.id
+            SELECT @operation_id,@line_id,@object_type,@label_id,@pallet_id,
+                   (SELECT ISNULL(MAX(sequence_flow.object_sequence_no),0)+1
+                    FROM dbo.inventory_flow sequence_flow WITH (UPDLOCK,HOLDLOCK)
+                    WHERE (@label_id IS NOT NULL AND sequence_flow.label_id=@label_id)
+                       OR (@pallet_id IS NOT NULL AND sequence_flow.pallet_id=@pallet_id)),
+                   'NORMAL',@operation_type,@unit_code,@before,@change,@after,
+                   @material_code,@batch_no,previous.manufacture_date,previous.expiry_date,
+                   previous.serial_no,previous.inventory_attributes_json,
+                   ISNULL(previous.attribute_schema_version,1),previous.inventory_identity_hash,
+                   @from_warehouse,@from_location,@to_warehouse,@to_location,@remark
+            FROM (SELECT 1 AS marker) seed
+            LEFT JOIN dbo.inventory_flow previous ON previous.id=@previous_flow_id;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
+        command.Parameters.Add("@line_id", SqlDbType.BigInt).Value = line.Id;
+        command.Parameters.Add("@object_type", SqlDbType.VarChar, 20).Value = line.ObjectType;
+        command.Parameters.Add("@label_id", SqlDbType.BigInt).Value = line.LabelId.HasValue ? line.LabelId.Value : DBNull.Value;
+        command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = line.PalletId.HasValue ? line.PalletId.Value : DBNull.Value;
+        command.Parameters.Add("@previous_flow_id", SqlDbType.BigInt).Value = previousFlowId.HasValue ? previousFlowId.Value : DBNull.Value;
+        command.Parameters.Add("@operation_type", SqlDbType.VarChar, 50).Value = operation.OperationType;
+        command.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.UnitCode;
+        command.Parameters.Add("@before", SqlDbType.Decimal).ConfigureDecimal(before);
+        command.Parameters.Add("@change", SqlDbType.Decimal).ConfigureDecimal(change);
+        command.Parameters.Add("@after", SqlDbType.Decimal).ConfigureDecimal(after);
+        command.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = line.MaterialCode;
+        command.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(line.BatchNo, 100);
+        command.Parameters.Add("@from_warehouse", SqlDbType.NVarChar, 100).Value = DbValue(fromWarehouse, 100);
+        command.Parameters.Add("@from_location", SqlDbType.NVarChar, 100).Value = DbValue(fromLocation, 100);
+        command.Parameters.Add("@to_warehouse", SqlDbType.NVarChar, 100).Value = DbValue(toWarehouse, 100);
+        command.Parameters.Add("@to_location", SqlDbType.NVarChar, 100).Value = DbValue(toLocation, 100);
+        command.Parameters.Add("@remark", SqlDbType.NVarChar, 500).Value = DbValue(line.Remark, 500);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static async Task ReleaseObjectAsync(
+        SqlConnection connection, SqlTransaction transaction,
+        MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
+        CancellationToken cancellationToken)
+    {
+        var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
+        var id = line.LabelId ?? line.PalletId ?? throw new InvalidOperationException("库存对象不存在。");
+        await using var release = new SqlCommand(
+            $"UPDATE dbo.{table} SET updated_at=updated_at WHERE id=@id AND locked_operation_id=@root_id;",
+            connection, transaction);
+        release.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+        release.Parameters.Add("@root_id", SqlDbType.BigInt).Value = operation.RootOperationId;
+        if (await release.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new InvalidOperationException("库存对象锁已变化。");
+    }
+
+    private static async Task ReleaseGroupLocksWhenSuccessfulAsync(
+        SqlConnection connection, SqlTransaction transaction,
+        string groupId, long rootOperationId,
+        CancellationToken cancellationToken)
+    {
+        await using var pending = new SqlCommand("""
+            SELECT COUNT(*) FROM dbo.business_operation
+            WHERE submission_group_id=@group_id AND status<>'SUCCESS';
+            """, connection, transaction);
+        pending.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = groupId;
+        if (Convert.ToInt32(await pending.ExecuteScalarAsync(cancellationToken)) != 0) return;
+        await ReleaseRootLocksAsync(connection, transaction, rootOperationId, cancellationToken);
+    }
+
+    private static async Task ReleaseRootLocksAsync(
+        SqlConnection connection, SqlTransaction transaction,
+        long rootOperationId,
+        CancellationToken cancellationToken)
+    {
+        foreach (var table in new[] { "product_label", "pallet" })
+        {
+            await using var release = new SqlCommand(
+                $"UPDATE dbo.{table} SET locked_operation_id=NULL,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE locked_operation_id=@root_id;",
+                connection, transaction);
+            release.Parameters.Add("@root_id", SqlDbType.BigInt).Value = rootOperationId;
+            await release.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     private static async Task UpdateLineAsync(
@@ -467,14 +678,16 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
 
     private sealed class OperationBuilder(
         long id, long rootOperationId, string groupId, string clientRequestId,
-        string operatorId, string status, string erpStatus, string sourceDocumentId,
-        string sourceDocumentNo, string warehouseCode, string? deviceId, string? deviceModel,
+        string operatorId, string operationType, string erpDocumentType, string status, string erpStatus,
+        string sourceDocumentType, string sourceDocumentId, string sourceDocumentNo,
+        string warehouseCode, string? deviceId, string? deviceModel,
         string? reason, string archiveRelativePath, string archiveSha256)
     {
         public List<MaterialOutboundExecutionLine> Lines { get; } = [];
 
         public MaterialOutboundExecutionOperation Build() => new(
-            id, rootOperationId, groupId, clientRequestId, operatorId, status, erpStatus,
+            id, rootOperationId, groupId, clientRequestId, operatorId, operationType,
+            erpDocumentType, status, erpStatus, sourceDocumentType,
             sourceDocumentId, sourceDocumentNo, warehouseCode, deviceId, deviceModel,
             reason, archiveRelativePath, archiveSha256, Lines);
     }

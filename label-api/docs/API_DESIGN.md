@@ -74,7 +74,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | POST | `/source-documents/lines` | 代理 U8 整单明细 |
 | POST | `/source-documents/material-requirements` | 代理 U8 领料需求 |
 | POST | `/operations/material-outbound/submit?autoApprove=false` | 有生产订单的材料出库直接上传 ERP |
-| POST | `/operations/documents/{documentType}/submit?autoApprove=false` | 无源单材料出库直接上传 ERP；其他单据暂未开放执行 |
+| POST | `/operations/documents/{documentType}/submit?autoApprove=false` | 通用单据直接上传 ERP |
 | GET | `/operations/groups?documentType=...&status=...&operatorId=...&startDate=...&endDate=...&skip=...&take=...` | 分页查询业务组；管理员可加 `allUsers=true` |
 | GET | `/operations/groups/{groupId}` | 查询拆单组 |
 | POST | `/operations/groups/{groupId}/validate` | 材料出库写入前校验；不调用 U8 写接口 |
@@ -88,9 +88,9 @@ H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API �
 
 `/source-documents*` 和 `/inventory-objects/lookup` 要求 H5 通过 `X-Function-Code` 传入当前单据或 `label-query` 功能编码，Business API 按当前账号有效功能复核后才读取数据。待处理组只有创建人可以续期或取消；管理员角色可以跨用户查询，短时管理会话不扩大业务组范围。
 
-材料出库执行前重新读取不可变操作归档并校验 SHA-256，重新读取 U8 生产订单领料需求，按当前用户 ERP 制单人生成每个拆组请求。执行状态从 `PENDING` 进入 `WRITING_ERP`；只有 Gateway 返回已回查确认的 U8 单据后，才在一个本地事务中写入标签余额、库存流水、ERP 行号并释放对应锁。明确失败记为 `FAILED` 并释放该拆组锁；超时、连接中断或本地提交不明确记为 `NEEDS_RECONCILIATION` 并保留锁，同时停止本组后续拆组，禁止直接重试。当前不支持托盘材料出库和自动审核。
+九类单据执行前均重新读取不可变操作归档并校验 SHA-256，按当前用户 ERP 制单人生成每个拆组请求；材料出库另重新读取 U8 生产订单领料需求。执行状态从 `PENDING` 进入 `WRITING_ERP`；只有 Gateway 返回已回查确认的 U8 单据后，才在一个本地事务中保存 ERP 单号和行号、完成对应库存动作并释放组锁。明确失败把同组未执行拆组一并结束为失败并释放锁；超时、连接中断或本地提交不明确记为 `NEEDS_RECONCILIATION` 并保留锁，同时停止本组后续拆组，禁止直接重试。当前不支持材料/销售数量单据的托盘上传和自动审核。
 
-`POST /operations/material-outbound/submit` 首先检查 Business API 的 `U8WritesEnabled`。当前 development 为 `false`；Gateway 的材料出库 `create` 能力及 Gateway 写入总开关也保持关闭，因此请求会在建档和锁定前返回 `U8_WRITE_DISABLED`，不会自行写入 888。单独的 `execute`、`heartbeat` 和 `cancel` 仅保留给旧组恢复和运维核对，不再作为 H5 正常业务步骤。
+所有 `submit` 入口通过会话、功能权限、ERP 制单人和类别门禁后，会在建档和锁定前检查 Business API 的 `U8WritesEnabled`。当前 development 为 `false`；Gateway 的九类 `create` 能力及 Gateway 写入总开关也保持关闭，因此合法业务请求返回 `U8_WRITE_DISABLED`，不会自行写入 888。单独的 `execute`、`heartbeat` 和 `cancel` 仅保留给旧组恢复和运维核对，不再作为 H5 正常业务步骤。
 
 ## 标签 Code 规则
 
@@ -165,13 +165,13 @@ development 管理员密码校验仍受环境开关保护；`LOCAL` 用户使用
 
 通过后按“生产订单内部 ID + 标签当前仓库”拆成多个 `business_operation`，单号只用于展示和一致性复核；各操作共同使用请求的 `clientRequestId` 作为 `submission_group_id`。标签和相关托盘统一锁到组内第一条操作，避免一个标签跨拆单组被并发使用。
 
-当前只创建 `PENDING` 记录，不调用 U8 写接口、不扣减标签数量、不生成库存流水。取消成功后释放锁；进入 U8 写流程后将禁止直接取消。心跳只能在原锁尚未过期时续期，过期后不能通过心跳重新取得锁。
+旧准备接口曾只创建 `PENDING` 记录；当前正常 H5 只使用单次提交，写入开关关闭时在建档前拒绝。旧组的取消和心跳仅用于兼容恢复；进入 U8 写流程后禁止直接取消，结果不明确时保留锁等待核对。
 
 有生产订单来源的材料出库请求必须提交 `categoryCode=202`。H5 在选单后自动固定该值，Business API 在预提交时拒绝其他类别；无源单材料出库仍按用户选择的有效出库类别处理。
 
 ## 通用单据预提交
 
-通用预提交的 `header` 保存日期、`documentDirection=BLUE|RED`、仓库、目标仓库、来源/目标货位、部门、业务类别和可选源单类型；`lines` 保存对象类型、标签或托盘码、来源托盘、料号、单位、本次数量及可选来源单据行。服务端重新读取最新库存并校验对象状态、业务锁、料号、单位、仓库和货位。所有单据都允许不传来源字段；只要请求携带任一来源字段，就必须提交完整来源关系并启用来源校验。`documentDirection` 当前只进入请求归档，U8 红字数量、退料、退货和红冲映射尚未开放。
+通用提交的 `header` 保存日期、`documentDirection=BLUE|RED`、仓库、目标仓库、来源/目标货位、部门、业务类别和可选源单类型；`lines` 保存对象类型、标签或托盘码、来源托盘、料号、单位、本次数量及可选来源单据行。服务端重新读取最新库存并校验对象状态、业务锁、料号、单位、仓库和货位。所有单据都允许不传来源字段；只要请求携带任一来源字段，就必须提交完整来源关系并启用来源校验。红字请求已映射 U8 红字标识和相反数量，但 Gateway 写入能力仍关闭，必须在 888 分单据验收后逐项开放。
 
 单据字段开关使用现有设置接口保存。DOCUMENT 范围键 `field_input_rules` 的值为字段键到 `{ "visible": boolean, "required": boolean }` 的 JSON 对象；字段定义由 H5 当前版本提供。H5 按设置控制九类制单的字段显示、输入和完整必填校验，Business API 同时按当前单据设置复核仓库、目标仓库、目标货位、部门和业务类别等可配置表头必填项。
 
@@ -179,7 +179,7 @@ DOCUMENT 范围布尔键 `auto_add_scanned_detail` 控制 H5 扫码结果是否�
 
 `field_input_rules` 是影响全部用户的公共单据规则。读取随登录设置接口开放，写入必须由真实管理员账号执行；临时管理密码授权不能修改该键。
 
-通用预提交的 `header.additionalFields`、`lines[].additionalFields`，以及有源材料出库请求的同名字段保存当前启用的扩展字段。值使用扁平 JSON 对象，仅允许字符串、数字、布尔值或空值；每个对象最多 128 项、64 KiB，字段名最多 100 字符，单个字符串最多 4000 字符。扩展字段随原请求写入操作前 TXT 归档，当前不据此调用 U8 写接口。
+通用提交的 `header.additionalFields`、`lines[].additionalFields`，以及有源材料出库请求的同名字段保存当前启用的扩展字段。值使用扁平 JSON 对象，仅允许字符串、数字、布尔值或空值；每个对象最多 128 项、64 KiB，字段名最多 100 字符，单个字符串最多 4000 字符。扩展字段随原请求写入操作前 TXT 归档；受支持的采购、销售、调拨、盘点专用字段及 U8 自定义项在执行时映射到对应单据合同。
 
 - 采购到货、委外到货、采购入库、发货单和销售出库选择源单后，在预提交时重新读取 U8 当前源单行，校验来源单号、行、料号和可用数量；按来源单据拆成独立业务操作。未选源单时不执行来源复核和占用。
 - 材料出库未选生产订单时走通用预提交并按标签实际仓库拆组；选择生产订单时使用专用材料出库预提交合同。
@@ -190,7 +190,7 @@ DOCUMENT 范围布尔键 `auto_add_scanned_detail` 控制 H5 扫码结果是否�
 - 货位调整要求目标货位与当前位置不同，且每个对象按当前完整数量处理。
 - 调拨和货位调整涉及托盘时，必须同时提交托盘自身及全部当前在托有效产品标签。
 - 盘点允许产品标签实盘数量为零或高于当前账面数量；托盘自身数量固定为 1。
-- 通过后只创建一条 `PENDING` 业务操作并锁定相关标签和托盘，不写 U8、不修改库存。
+- 总开关开放后，通过校验的请求只在单次提交内部短暂进入 `PENDING/WRITING_ERP`，不向用户暴露待处理阶段。采购到货、委外到货、采购入库和发货单只保存 ERP 关联，不重复改变已有标签余额；销售出库按方向改变余额；调拨和货位调整写 `change_qty=0` 的位置流水；盘点按实盘数写差异流水。
 
 ## 并发和版本
 
@@ -205,7 +205,7 @@ DOCUMENT 范围布尔键 `auto_add_scanned_detail` 控制 H5 扫码结果是否�
 
 ## 尚未开放
 
-- U8 新增、修改、审核、弃审和红冲写入。
+- U8 新增真实开关、修改、审核、弃审和红冲写入；新增执行代码已具备，但九类 Gateway `create` 能力必须在 888 分别验收后逐项开放。
 - 生产用户数据库、角色及数据权限。
 - 标签正式发码、流水分配、统一登记、打印和首次库存流水。
 - H5 使用缓存规则执行离线解析及联网后的登记校验。

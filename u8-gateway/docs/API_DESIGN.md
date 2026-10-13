@@ -1,8 +1,8 @@
 # U8 Gateway API 设计
 
-## 材料出库新增运行时（0.3.8）
+## 九类新增候选运行时（0.3.9）
 
-库存单据适配器已为 `material-outbound` 实现 `USERPCO.VoucherCO.GetNewVouchCode + Insert`，保存后按单号解析 ID，再使用既有只读加载器回查表头、明细、货位和版本；未回查确认不得返回成功。请求继续经过字段白名单、操作凭证、幂等记录和四重写入门禁。当前 `capabilities.create=false` 且服务器 `EnableWrites=false`，因此该代码路径尚不可从接口触发真实写入。
+库存单据适配器已为六类库存单据实现 `USERPCO.VoucherCO.GetNewVouchCode + Insert`；采购适配器为采购到货和委外到货实现 `VoucherCO_PU.GetVoucherNO + VoucherSave`；销售适配器为发货单实现 `VoucherCO_SA.GetVoucherNO + Save`。保存后均按单号解析 ID，再使用既有只读加载器回查表头、明细、货位和版本；未回查确认不得返回成功。请求继续经过字段白名单、操作凭证、幂等记录和四重写入门禁。当前九类 `capabilities.create=false` 且服务器 `EnableWrites=false`，因此这些代码路径尚不可从接口触发真实写入。
 
 ## 审核单据只读接口（0.3.7）
 

@@ -38,9 +38,6 @@ public sealed class MaterialOutboundSubmissionService(
         bool autoApprove,
         CancellationToken cancellationToken)
     {
-        if (!string.Equals(documentType, "material-outbound", StringComparison.OrdinalIgnoreCase))
-            throw new ApiException(StatusCodes.Status409Conflict,
-                "DOCUMENT_EXECUTION_NOT_READY", "该单据暂未开放 ERP 上传。");
         EnsureSubmissionAllowed(autoApprove);
         MaterialOutboundPrepareResult? prepared = null;
         try

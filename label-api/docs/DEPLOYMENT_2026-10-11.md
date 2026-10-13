@@ -6,15 +6,17 @@
 Site: LabelSystemApi
 Application pool: LabelSystemApiPool
 URL: http://172.16.1.159:9890
-Release: D:\LabelSystem\Api\releases\20261013_141821
+Release: D:\LabelSystem\Api\releases\20261013_144858
 External config: D:\LabelSystem\Config\label-api.json
 Operation archive: D:\LabelSystem\OperationArchive
 Environment: development
 Database: LabelSystem_Dev
 U8 account: 888
-Service version: 0.6.1
+Service version: 0.7.0
 U8 writes: disabled
 ```
+
+2026-10-13 14:48 已发布 Business API `0.7.0` 到 `D:\LabelSystem\Api\releases\20261013_144858`，并部署 U8 Gateway `0.3.9`。九类制单统一完成“归档复核、按单据映射、Gateway 校验与新增、按单号回查、本地事务收口”执行链；采购、销售和库存三组 CO 候选新增路径均已编码。发布后健康检查 `ready`、数据库就绪，IIS 两个站点和应用池均为 `Started`。Business API 合法提交探针返回 `409 U8_WRITE_DISABLED` 且业务组总数未增加；Gateway 九类新增、修改、审核、弃审、删除能力全部为 `false`，新增探针返回 `409 DOCUMENT_OPERATION_DISABLED`。两层总开关保持关闭，未调用 U8 保存、未产生 888 单据、未修改标签余额；无数据库迁移，H5 和 APK 未更新。应用池回收后原登录会话失效，需要重新登录。
 
 2026-10-13 14:18 已发布 Business API `0.6.1` 到 `D:\LabelSystem\Api\releases\20261013_141821`，H5 更新为 `0.2.0-dev.38`。材料出库改为一次“上传 ERP”直接完成服务器准备与执行，旧准备路由不再建组；写入总开关关闭时在建档和锁定前返回 `U8_WRITE_DISABLED`。H5 删除“待处理”页签和续期/二次上传操作，服务端删除标记会先清除本人 PDA 本机草稿。用户本日测试组已取消后清理：2 个拆分操作、3 条明细和 1 份凭证已删除，漫游草稿正文已清空并保留删除标记；开发库业务组为 0、标签锁为 0，3 张联调标签数量仍为 14、7、130。健康检查 `ready`、数据库就绪，安全提交返回 `409 U8_WRITE_DISABLED` 且业务组仍为 0，旧准备路由返回 `DIRECT_SUBMIT_REQUIRED`；未写 U8、未改 Gateway、无数据库迁移。
 

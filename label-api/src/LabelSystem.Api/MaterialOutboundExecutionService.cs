@@ -24,7 +24,7 @@ public sealed class MaterialOutboundExecutionService(
     {
         var prepared = await PrepareGatewayRequestsAsync(groupId, user, cancellationToken);
         foreach (var item in prepared)
-            await ValidateGatewayAsync(item.Request, cancellationToken);
+            await ValidateGatewayAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
         return new OperationGroupValidationResult(
             groupId, prepared.Count, prepared.Sum(item => item.Operation.Lines.Count), true);
     }
@@ -45,7 +45,7 @@ public sealed class MaterialOutboundExecutionService(
 
         var prepared = await PrepareGatewayRequestsAsync(groupId, user, cancellationToken);
         foreach (var item in prepared)
-            await ValidateGatewayAsync(item.Request, cancellationToken);
+            await ValidateGatewayAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
 
         foreach (var item in prepared)
         {
@@ -58,8 +58,8 @@ public sealed class MaterialOutboundExecutionService(
             try
             {
                 var result = await gateway.CreateDocumentAsync(
-                    "material-outbound", item.Request, cancellationToken);
-                var rows = ReadErpRows(result.Document);
+                    item.Operation.ErpDocumentType, item.Request, cancellationToken);
+                var rows = ReadErpRows(item.Operation.ErpDocumentType, result.Document);
                 EnsureErpRows(item.Operation, rows);
                 await executionRepository.CompleteAsync(
                     item.Operation, result, item.RedVoucher, rows, requestId, cancellationToken);
@@ -69,7 +69,7 @@ public sealed class MaterialOutboundExecutionService(
                 await executionRepository.MarkFailureAsync(
                     item.Operation, error.Code, error.Message, error.ResultUnknown,
                     requestId, cancellationToken);
-                if (error.ResultUnknown) break;
+                break;
             }
             catch (Exception error)
             {
@@ -89,34 +89,48 @@ public sealed class MaterialOutboundExecutionService(
     {
         var plan = await executionRepository.GetPlanAsync(groupId, user.Id, cancellationToken);
         var erp = await users.GetErpOperatorAsync(user.Id, cancellationToken);
-        var payloadCache = new Dictionary<string, NormalizedRequest>(StringComparer.OrdinalIgnoreCase);
+        var payloadCache = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
         var result = new List<PreparedGatewayOperation>(plan.Count);
         foreach (var operation in plan)
         {
-            if (operation.Lines.Any(line => line.ObjectType == "PALLET" || line.SourcePalletId.HasValue))
+            if (operation.ErpDocumentType is not ("transfer" or "location-adjustment" or "inventory-count") &&
+                operation.Lines.Any(line => line.ObjectType == "PALLET" || line.SourcePalletId.HasValue))
                 throw new ApiException(StatusCodes.Status409Conflict,
-                    "PALLET_EXECUTION_NOT_READY", "托盘出库执行尚未开放，请使用产品标签。");
+                    "PALLET_EXECUTION_NOT_READY", "该单据暂不支持托盘上传，请使用产品标签。");
             if (string.IsNullOrWhiteSpace(operation.ArchiveRelativePath) ||
                 string.IsNullOrWhiteSpace(operation.ArchiveSha256))
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "ARCHIVE_MISSING", "操作凭证不完整，需要核对。");
-            if (!payloadCache.TryGetValue(operation.ArchiveRelativePath, out var normalized))
+            if (!payloadCache.TryGetValue(operation.ArchiveRelativePath, out var payload))
             {
-                var payload = await archive.ReadPayloadAsync(
+                payload = await archive.ReadPayloadAsync(
                     operation.ArchiveRelativePath, operation.ArchiveSha256, cancellationToken);
-                normalized = Normalize(payload);
-                payloadCache.Add(operation.ArchiveRelativePath, normalized);
+                payloadCache.Add(operation.ArchiveRelativePath, payload);
             }
-            var requirements = normalized.HasProductionSource
-                ? await gateway.GetMaterialRequirementsAsync(
-                    operation.Lines.Where(line => line.SourceLineId.HasValue)
-                        .Select(line => line.SourceLineId!.Value).Distinct().ToArray(),
-                    cancellationToken)
-                : [];
-            result.Add(new PreparedGatewayOperation(
-                operation,
-                BuildGatewayRequest(operation, normalized, requirements, erp),
-                normalized.Direction == "RED"));
+            if (operation.ErpDocumentType == "material-outbound")
+            {
+                var normalized = Normalize(payload);
+                var requirements = normalized.HasProductionSource
+                    ? await gateway.GetMaterialRequirementsAsync(
+                        operation.Lines.Where(line => line.SourceLineId.HasValue)
+                            .Select(line => line.SourceLineId!.Value).Distinct().ToArray(),
+                        cancellationToken)
+                    : [];
+                result.Add(new PreparedGatewayOperation(
+                    operation,
+                    BuildGatewayRequest(operation, normalized, requirements, erp),
+                    normalized.Direction == "RED"));
+            }
+            else
+            {
+                var document = payload.Deserialize<DocumentPrepareRequest>(JsonOptions)
+                    ?? throw InvalidArchive();
+                if (document.Header.DocumentDirection is not ("BLUE" or "RED")) throw InvalidArchive();
+                result.Add(new PreparedGatewayOperation(
+                    operation,
+                    DocumentGatewayRequestBuilder.Build(operation, document, erp),
+                    document.Header.DocumentDirection == "RED"));
+            }
         }
         return result;
     }
@@ -272,6 +286,7 @@ public sealed class MaterialOutboundExecutionService(
     }
 
     private static IReadOnlyDictionary<int, (string? LineId, string? PositionId)> ReadErpRows(
+        string documentType,
         JsonElement? document)
     {
         var result = new Dictionary<int, (string? LineId, string? PositionId)>();
@@ -281,7 +296,9 @@ public sealed class MaterialOutboundExecutionService(
         var lineIdToNo = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in lines.EnumerateArray())
         {
-            if (!TryInt(line, "irowno", out var lineNo)) continue;
+            var rowName = documentType is "purchase-arrival" or "subcontract-arrival"
+                ? "ivouchrowno" : "irowno";
+            if (!TryInt(line, rowName, out var lineNo)) continue;
             var lineId = Text(line, "autoid");
             result[lineNo] = (lineId, null);
             if (!string.IsNullOrWhiteSpace(lineId)) lineIdToNo[lineId] = lineNo;
@@ -306,19 +323,21 @@ public sealed class MaterialOutboundExecutionService(
         {
             if (!rows.TryGetValue(line.LineNo, out var row) ||
                 string.IsNullOrWhiteSpace(row.LineId) ||
-                (!string.IsNullOrWhiteSpace(line.LocationCode) &&
+                (operation.ErpDocumentType is "material-outbound" or "purchase-receipt" or "sales-outbound" &&
+                 !string.IsNullOrWhiteSpace(line.LocationCode) &&
                  string.IsNullOrWhiteSpace(row.PositionId)))
                 throw new InvalidOperationException("U8 单据已生成，但明细回查不完整。");
         }
     }
 
     private async Task ValidateGatewayAsync(
+        string documentType,
         GatewayDocumentRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
-            await gateway.ValidateDocumentAsync("material-outbound", request, cancellationToken);
+            await gateway.ValidateDocumentAsync(documentType, request, cancellationToken);
         }
         catch (GatewayWriteException error)
         {

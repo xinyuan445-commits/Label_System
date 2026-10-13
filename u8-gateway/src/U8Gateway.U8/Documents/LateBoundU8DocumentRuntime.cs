@@ -69,6 +69,20 @@ namespace U8Gateway.U8.Documents
             {
                 return CreateInventory(options, execution);
             }
+            if (string.Equals(execution.Operation, DocumentOperationCodes.Add,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(execution.Profile.Component, "VoucherCO_PU",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return CreatePurchase(options, execution);
+            }
+            if (string.Equals(execution.Operation, DocumentOperationCodes.Add,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(execution.Profile.Component, "VoucherCO_SA",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return CreateSales(options, execution);
+            }
             if (string.Equals(execution.Operation, DocumentOperationCodes.Validate,
                     StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(execution.Operation, DocumentOperationCodes.Edit,
@@ -207,6 +221,210 @@ namespace U8Gateway.U8.Documents
                 Release(body);
                 Release(head);
                 Release(voucher);
+                Release(login);
+            }
+        }
+
+        private DocumentOperationResult CreatePurchase(
+            U8GatewayRuntimeOptions options,
+            U8DocumentExecution execution)
+        {
+            DocumentDefinition definition = _definitions.Get(execution.Profile.DocumentType);
+            if (definition == null) return Failure("DOCUMENT_TYPE_NOT_FOUND", "单据类型不存在。", null);
+            if (execution.Request == null) return Failure("REQUEST_REQUIRED", "请求体不能为空。", null);
+
+            U8XmlPacket packet = _codec.Encode(definition, new DocumentPayload
+            {
+                Header = execution.Request.Header,
+                Lines = execution.Request.Lines,
+                Positions = execution.Request.Positions,
+                Auxiliary = execution.Request.Auxiliary
+            });
+            U8Login.clsLogin login = null;
+            object common = null;
+            Connection connection = null;
+            clsVoucherCO_PU voucher = null;
+            IXMLDOMDocument2 head = null;
+            IXMLDOMDocument2 body = null;
+            IXMLDOMDocument2 format = null;
+            IXMLDOMDocument2 current = null;
+            IXMLDOMDocument2 message = null;
+            string voucherCode = string.Empty;
+            string saveMessage = string.Empty;
+            try
+            {
+                head = ParseXml(packet.HeaderXml, "采购单表头");
+                body = ParseXml(packet.BodyXml, "采购单表体");
+                login = Login(options.U8);
+                common = Create("USCOMMON.Login");
+                dynamic commonLogin = common;
+                U8Login.clsLogin source = login;
+                commonLogin.Load(ref source);
+                connection = ConvertConnection(commonLogin.AccountConnection);
+
+                voucher = new clsVoucherCO_PUClass();
+                ClsS_Infor information = null;
+                bool positive = !OptionBoolean(execution.Request.Options, "redVoucher");
+                string billType = string.Empty;
+                string businessType = execution.Profile.BusinessType ?? string.Empty;
+                UseMode useMode = UseMode.CS;
+                voucher.Init(
+                    (vouchertype)2,
+                    ref login,
+                    ref connection,
+                    ref information,
+                    ref positive,
+                    ref billType,
+                    ref businessType,
+                    ref useMode,
+                    businessType,
+                    execution.Request.Header != null &&
+                    execution.Request.Header.TryGetValue("cptcode", out object purchaseType)
+                        ? Convert.ToString(purchaseType)
+                        : string.Empty);
+
+                string voucherType = execution.Profile.ComponentDocumentType;
+                string error = string.Empty;
+                bool getFormatOnly = false;
+                bool selfFormat = false;
+                bool getRealNo = true;
+                bool synchronization = false;
+                bool numbered = voucher.GetVoucherNO(
+                    ref head,
+                    ref voucherType,
+                    ref error,
+                    ref voucherCode,
+                    ref format,
+                    ref getFormatOnly,
+                    ref selfFormat,
+                    ref getRealNo,
+                    ref synchronization);
+                if (!numbered || string.IsNullOrWhiteSpace(voucherCode))
+                    return Failure("U8_CREATE_REJECTED", Empty(error, "U8 未生成单据号。"), voucherCode);
+
+                object currentId = null;
+                string overDetails = string.Empty;
+                message = new DOMDocument26Class();
+                saveMessage = voucher.VoucherSave(
+                    head, body, 0, ref currentId, ref current, UseMode.CS,
+                    ref overDetails, ref message);
+
+                long? confirmedId = WaitForVoucherId(options, execution.Profile, voucherCode);
+                if (!confirmedId.HasValue)
+                    return Failure("U8_CREATE_REJECTED",
+                        Empty(saveMessage, MessageText(message, "U8 新增失败。")), voucherCode);
+                VoucherState state = ReadVoucherState(options, execution.Profile, confirmedId.Value);
+                U8XmlPacket saved = QueryPurchase(options.U8, execution.Profile, confirmedId.Value);
+                return new DocumentOperationResult
+                {
+                    Confirmed = state.Exists,
+                    Code = state.Exists ? "OK" : "U8_WRITE_NOT_CONFIRMED",
+                    Message = state.Exists ? Empty(saveMessage, "成功") : "U8 新增后回查未确认。",
+                    VoucherId = confirmedId.Value.ToString(),
+                    VoucherCode = voucherCode,
+                    Version = state.Version,
+                    Document = _codec.Decode(definition, saved)
+                };
+            }
+            finally
+            {
+                Shutdown(login);
+                Release(message);
+                Release(current);
+                Release(format);
+                Release(body);
+                Release(head);
+                Release(voucher);
+                Release(connection);
+                Release(common);
+                Release(login);
+            }
+        }
+
+        private DocumentOperationResult CreateSales(
+            U8GatewayRuntimeOptions options,
+            U8DocumentExecution execution)
+        {
+            DocumentDefinition definition = _definitions.Get(execution.Profile.DocumentType);
+            if (definition == null) return Failure("DOCUMENT_TYPE_NOT_FOUND", "单据类型不存在。", null);
+            if (execution.Request == null) return Failure("REQUEST_REQUIRED", "请求体不能为空。", null);
+
+            U8XmlPacket packet = _codec.Encode(definition, new DocumentPayload
+            {
+                Header = execution.Request.Header,
+                Lines = execution.Request.Lines,
+                Positions = execution.Request.Positions,
+                Auxiliary = execution.Request.Auxiliary
+            });
+            U8Login.clsLogin login = null;
+            object common = null;
+            Connection connection = null;
+            ClsVoucherCO_SA voucher = null;
+            IXMLDOMDocument2 head = null;
+            IXMLDOMDocument2 body = null;
+            IXMLDOMDocument2 format = null;
+            IXMLDOMDocument2 config = null;
+            object system = null;
+            string voucherCode = string.Empty;
+            string saveMessage = string.Empty;
+            try
+            {
+                head = ParseXml(packet.HeaderXml, "销售单表头");
+                body = ParseXml(packet.BodyXml, "销售单表体");
+                login = Login(options.U8);
+                common = Create("USCOMMON.Login");
+                dynamic commonLogin = common;
+                U8Login.clsLogin source = login;
+                commonLogin.Load(ref source);
+                connection = ConvertConnection(commonLogin.AccountConnection);
+
+                bool red = OptionBoolean(execution.Request.Options, "redVoucher");
+                VoucherTypeSA voucherType = red ? VoucherTypeSA.DispatchRed : VoucherTypeSA.DispatchBlue;
+                voucher = new ClsVoucherCO_SAClass();
+                if (!voucher.InitSys(ref login, voucherType, ref system))
+                    throw new InvalidOperationException("销售 CO 初始化失败。");
+                string userMode = "CS";
+                voucher.Init(voucherType, ref login, ref connection, ref userMode, ref system);
+
+                string error = string.Empty;
+                bool getFormatOnly = false;
+                bool selfFormat = false;
+                bool numbered = voucher.GetVoucherNO(
+                    ref head, ref voucherCode, ref error, ref format,
+                    ref getFormatOnly, ref selfFormat);
+                if (!numbered || string.IsNullOrWhiteSpace(voucherCode))
+                    return Failure("U8_CREATE_REJECTED", Empty(error, "U8 未生成单据号。"), voucherCode);
+
+                object currentId = null;
+                config = new DOMDocument26Class();
+                saveMessage = voucher.Save(head, body, 0, ref currentId, ref config);
+                long? confirmedId = WaitForVoucherId(options, execution.Profile, voucherCode);
+                if (!confirmedId.HasValue)
+                    return Failure("U8_CREATE_REJECTED", Empty(saveMessage, "U8 新增失败。"), voucherCode);
+                VoucherState state = ReadVoucherState(options, execution.Profile, confirmedId.Value);
+                U8XmlPacket saved = QuerySales(options.U8, confirmedId.Value);
+                return new DocumentOperationResult
+                {
+                    Confirmed = state.Exists,
+                    Code = state.Exists ? "OK" : "U8_WRITE_NOT_CONFIRMED",
+                    Message = state.Exists ? Empty(saveMessage, "成功") : "U8 新增后回查未确认。",
+                    VoucherId = confirmedId.Value.ToString(),
+                    VoucherCode = voucherCode,
+                    Version = state.Version,
+                    Document = _codec.Decode(definition, saved)
+                };
+            }
+            finally
+            {
+                Shutdown(login);
+                Release(config);
+                Release(format);
+                Release(system);
+                Release(body);
+                Release(head);
+                Release(voucher);
+                Release(connection);
+                Release(common);
                 Release(login);
             }
         }
