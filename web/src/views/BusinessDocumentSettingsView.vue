@@ -126,6 +126,13 @@ onMounted(async () => {
           </div>
         </div>
         <div class="setting-row">
+          <span>扫码后自动添加到明细</span>
+          <div class="setting-actions">
+            <label class="toggle"><input v-model="documentPolicy.autoAddScannedDetail" type="checkbox" /><i aria-hidden="true"></i></label>
+            <button type="button" @click="syncToGlobal('autoAddScannedDetail')">全局</button>
+          </div>
+        </div>
+        <div class="setting-row">
           <span>完成自动上传</span>
           <div class="setting-actions">
             <label class="toggle"><input v-model="documentPolicy.autoUploadOnComplete" type="checkbox" /><i aria-hidden="true"></i></label>

@@ -154,6 +154,10 @@ const materialRequirements = ref<MaterialRequirementLine[]>([])
 const overIssueTargets = ref<Record<string, number>>({})
 const scanCode = ref('')
 const lines = ref<OutboundLine[]>([])
+const pendingScanLines = ref<OutboundLine[]>([])
+const confirmedScanLines = ref<OutboundLine[]>([])
+const editingLine = ref<OutboundLine | null>(null)
+const pendingScanTotal = ref(0)
 const message = ref('')
 const messageTone = ref<'success' | 'error' | 'info'>('info')
 const showLeaveConfirm = ref(false)
@@ -214,6 +218,14 @@ const headerExtraFields = computed(() => documentFields.value.filter(
 ))
 const bodyInputFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) && !derivedBodyFieldKeys.has(field.key),
+))
+const editableBodyFields = computed(() => documentFields.value.filter(
+  (field) => field.area === 'body' && fieldVisible(field.key) &&
+    !['body.labelCode', 'body.objectType', 'body.availableQty'].includes(field.key),
+))
+const readonlyEditorFields = computed(() => documentFields.value.filter(
+  (field) => field.area === 'body' && fieldVisible(field.key) &&
+    ['body.labelCode', 'body.objectType', 'body.availableQty'].includes(field.key),
 ))
 const visibleBodyInfoFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) && bodyInfoFieldKeys.has(field.key),
@@ -291,6 +303,20 @@ const sourceLocationSelectOptions = computed<SearchSelectOption[]>(() =>
 const targetLocationSelectOptions = computed<SearchSelectOption[]>(() =>
   targetLocationOptions.value.map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
 )
+const editorLocationSelectOptions = computed<SearchSelectOption[]>(() =>
+  warehousePositionOptions.value.filter((item) =>
+    item.positionCode && (!editingLine.value?.warehouseCode ||
+      item.warehouseCode === editingLine.value.warehouseCode),
+  ).map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
+)
+const editorTargetLocationSelectOptions = computed<SearchSelectOption[]>(() => {
+  const selectedWarehouse = String(
+    editingLine.value?.fieldValues['body.targetWarehouseCode'] ?? targetWarehouseCode.value,
+  )
+  return warehousePositionOptions.value.filter((item) =>
+    item.positionCode && (!selectedWarehouse || item.warehouseCode === selectedWarehouse),
+  ).map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' }))
+})
 const departmentSelectOptions = computed<SearchSelectOption[]>(() =>
   departmentOptions.value.map((item) => ({ value: item.code, label: item.name })),
 )
@@ -352,8 +378,8 @@ function bodyValue(line: OutboundLine, key: string): unknown {
     'body.unitCode': line.unitCode,
     'body.warehouseCode': line.warehouseCode,
     'body.locationCode': line.locationCode,
-    'body.targetWarehouseCode': targetWarehouseCode.value,
-    'body.targetLocationCode': targetLocationCode.value,
+    'body.targetWarehouseCode': line.fieldValues['body.targetWarehouseCode'] ?? targetWarehouseCode.value,
+    'body.targetLocationCode': line.fieldValues['body.targetLocationCode'] ?? targetLocationCode.value,
     'body.availableQty': line.availableQty,
     'body.quantity': line.requestedQty,
   }
@@ -385,8 +411,146 @@ function bodyArchiveValues(line: OutboundLine): Record<string, string | number> 
     'body.batchNo': line.batchNo,
     'body.warehouseCode': line.warehouseCode,
     'body.locationCode': line.locationCode,
+    ...(!isBlank(bodyValue(line, 'body.targetWarehouseCode'))
+      ? { 'body.targetWarehouseCode': String(bodyValue(line, 'body.targetWarehouseCode')) }
+      : {}),
+    ...(!isBlank(bodyValue(line, 'body.targetLocationCode'))
+      ? { 'body.targetLocationCode': String(bodyValue(line, 'body.targetLocationCode')) }
+      : {}),
     ...(!isBlank(line.availableQty) ? { 'body.availableQty': Number(line.availableQty) } : {}),
   })
+}
+
+function editorFieldValue(line: OutboundLine, key: string): string | number {
+  const value = bodyValue(line, key)
+  return isBlank(value) ? '' : value as string | number
+}
+
+function updateEditorField(key: string, value: string | number): void {
+  const line = editingLine.value
+  if (!line) return
+  switch (key) {
+    case 'body.materialCode': line.materialCode = String(value); break
+    case 'body.materialName': line.materialName = String(value); break
+    case 'body.batchNo': line.batchNo = String(value); break
+    case 'body.unitCode': line.unitCode = String(value); break
+    case 'body.warehouseCode': line.warehouseCode = String(value); break
+    case 'body.locationCode': line.locationCode = String(value); break
+    case 'body.quantity': line.requestedQty = Number(value); break
+    default: line.fieldValues[key] = value
+  }
+}
+
+function updateEditorInput(field: DocumentFieldDefinition, event: Event): void {
+  const raw = (event.target as HTMLInputElement).value
+  updateEditorField(field.key, field.valueType === 'number' && raw !== '' ? Number(raw) : raw)
+}
+
+function updateEditorWarehouse(value: string): void {
+  updateEditorField('body.warehouseCode', value)
+  const valid = new Set(editorLocationSelectOptions.value.map((item) => item.value))
+  if (editingLine.value?.locationCode && !valid.has(editingLine.value.locationCode)) {
+    editingLine.value.locationCode = ''
+  }
+}
+
+function updateEditorTargetWarehouse(value: string): void {
+  updateEditorField('body.targetWarehouseCode', value)
+  const valid = new Set(editorTargetLocationSelectOptions.value.map((item) => item.value))
+  const current = String(editingLine.value?.fieldValues['body.targetLocationCode'] ?? '')
+  if (current && !valid.has(current) && editingLine.value) {
+    editingLine.value.fieldValues['body.targetLocationCode'] = ''
+  }
+}
+
+function missingRequiredBodyField(line: OutboundLine): DocumentFieldDefinition | undefined {
+  return documentFields.value.find(
+    (field) => field.area === 'body' && fieldRequired(field.key) && isBlank(bodyValue(line, field.key)),
+  )
+}
+
+function lineEditError(line: OutboundLine): string {
+  const missing = missingRequiredBodyField(line)
+  if (missing) return `请填写${missing.label}`
+  const quantity = Number(line.requestedQty)
+  if (!Number.isFinite(quantity) ||
+      (props.documentType === 'inventory-count' ? quantity < 0 : quantity <= 0)) {
+    return props.documentType === 'inventory-count'
+      ? `${pageConfig.value.quantityLabel}不能小于0`
+      : `${pageConfig.value.quantityLabel}必须大于0`
+  }
+  if (line.availableQty !== null && props.documentType !== 'inventory-count' && quantity > line.availableQty) {
+    return '本次处理数量不能超过标签当前数量'
+  }
+  if (
+    ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
+    quantity !== line.availableQty
+  ) return '调拨和货位调整必须整件处理'
+  if (
+    line.locationCode && line.warehouseCode &&
+    !warehousePositionOptions.value.some((item) =>
+      item.warehouseCode === line.warehouseCode && item.positionCode === line.locationCode,
+    )
+  ) return '货位不属于所选仓库'
+  if (
+    props.documentType === 'material-outbound' && selectedSourceLines.value.length > 0 &&
+    !materialRequirements.value.some((item) =>
+      item.materialCode.localeCompare(line.materialCode, undefined, { sensitivity: 'accent' }) === 0,
+    )
+  ) return '该物料不在领料范围'
+  if (
+    props.documentType !== 'material-outbound' && selectedSourceLines.value.length > 0 &&
+    !selectedSourceLines.value.some((item) =>
+      item.productCode.localeCompare(line.materialCode, undefined, { sensitivity: 'accent' }) === 0,
+    )
+  ) return '该物料不在所选源单中'
+  return ''
+}
+
+function openLineConfirmation(additions: OutboundLine[]): void {
+  pendingScanTotal.value = additions.length
+  confirmedScanLines.value = []
+  pendingScanLines.value = additions.slice(1)
+  editingLine.value = { ...additions[0], fieldValues: { ...additions[0].fieldValues } }
+}
+
+function confirmEditingLine(): void {
+  const current = editingLine.value
+  if (!current) return
+  const error = lineEditError(current)
+  if (error) {
+    notify(error, 'error')
+    return
+  }
+  confirmedScanLines.value.push({
+    ...current,
+    materialCode: current.materialCode.trim(),
+    materialName: current.materialName.trim(),
+    batchNo: current.batchNo.trim(),
+    unitCode: current.unitCode.trim(),
+    warehouseCode: current.warehouseCode.trim(),
+    locationCode: current.locationCode.trim(),
+    fieldValues: { ...current.fieldValues },
+  })
+  const next = pendingScanLines.value.shift()
+  if (next) {
+    editingLine.value = { ...next, fieldValues: { ...next.fieldValues } }
+    return
+  }
+  lines.value = [...lines.value, ...confirmedScanLines.value]
+  const count = confirmedScanLines.value.length
+  editingLine.value = null
+  confirmedScanLines.value = []
+  pendingScanLines.value = []
+  pendingScanTotal.value = 0
+  notify(count > 1 ? `已添加${count}项` : '已添加', 'success')
+}
+
+function cancelLineConfirmation(): void {
+  editingLine.value = null
+  confirmedScanLines.value = []
+  pendingScanLines.value = []
+  pendingScanTotal.value = 0
 }
 
 function fieldInputType(field: DocumentFieldDefinition): 'text' | 'number' | 'date' {
@@ -518,11 +682,25 @@ async function addBarcode(rawCode: string): Promise<void> {
       locationCode: item.locationCode,
       availableQty: item.availableQty,
       requestedQty: item.availableQty,
-      fieldValues: {},
+      fieldValues: {
+        ...(targetWarehouseCode.value
+          ? { 'body.targetWarehouseCode': targetWarehouseCode.value }
+          : {}),
+        ...(targetLocationCode.value
+          ? { 'body.targetLocationCode': targetLocationCode.value }
+          : {}),
+      },
       sourcePalletCode: item.objectType === 'PRODUCT_LABEL' ? item.palletCode : undefined,
     }))
-    lines.value = [...lines.value, ...additions]
-    notify('已添加', 'success')
+    if (
+      documentPolicy.value.autoAddScannedDetail &&
+      !additions.some((line) => missingRequiredBodyField(line))
+    ) {
+      lines.value = [...lines.value, ...additions]
+      notify(additions.length > 1 ? `已添加${additions.length}项` : '已添加', 'success')
+    } else {
+      openLineConfirmation(additions)
+    }
   } catch (error) {
     notify(error instanceof Error ? error.message : '标签查询失败', 'error')
   } finally {
@@ -532,7 +710,7 @@ async function addBarcode(rawCode: string): Promise<void> {
 }
 
 function handleScan(event: PdaScanEvent): void {
-  if (currentStep.value !== 2) return
+  if (currentStep.value !== 2 || editingLine.value) return
   void addBarcode(event.barcode)
 }
 
@@ -1347,6 +1525,82 @@ onBeforeRouteLeave((to) => {
       </button>
     </footer>
 
+    <div v-if="editingLine" class="line-editor-page" role="dialog" aria-modal="true" aria-label="明细确认">
+      <header class="line-editor-header">
+        <button type="button" aria-label="取消" @click="cancelLineConfirmation">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <div>
+          <h2>明细确认</h2>
+          <span v-if="pendingScanTotal > 1">{{ confirmedScanLines.length + 1 }}/{{ pendingScanTotal }}</span>
+        </div>
+        <strong>{{ editingLine.labelCode }}</strong>
+      </header>
+
+      <div class="line-editor-content">
+        <dl v-if="readonlyEditorFields.length" class="editor-readonly-grid">
+          <div v-for="field in readonlyEditorFields" :key="field.key">
+            <dt>{{ field.label }}</dt>
+            <dd>{{ bodyDisplayValue(editingLine, field.key) }}</dd>
+          </div>
+        </dl>
+
+        <div class="editor-form-grid">
+          <label v-for="field in editableBodyFields" :key="field.key" class="field">
+            <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
+            <SearchSelect
+              v-if="field.key === 'body.warehouseCode'"
+              :model-value="editingLine.warehouseCode"
+              :options="warehouseSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="updateEditorWarehouse"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'body.locationCode'"
+              :model-value="editingLine.locationCode"
+              :options="editorLocationSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="updateEditorField(field.key, $event)"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'body.targetWarehouseCode'"
+              :model-value="String(editorFieldValue(editingLine, field.key))"
+              :options="warehouseSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="updateEditorTargetWarehouse"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'body.targetLocationCode'"
+              :model-value="String(editorFieldValue(editingLine, field.key))"
+              :options="editorTargetLocationSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="updateEditorField(field.key, $event)"
+            />
+            <input
+              v-else
+              :value="editorFieldValue(editingLine, field.key)"
+              :type="fieldInputType(field)"
+              :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
+              :readonly="field.key === 'body.quantity' && ['transfer-order', 'location-adjustment'].includes(documentType)"
+              autocomplete="off"
+              @input="updateEditorInput(field, $event)"
+            />
+          </label>
+        </div>
+      </div>
+
+      <footer class="line-editor-actions">
+        <button type="button" @click="cancelLineConfirmation">取消</button>
+        <button class="confirm" type="button" @click="confirmEditingLine">
+          {{ pendingScanLines.length ? '确认并继续' : '确认添加' }}
+        </button>
+      </footer>
+    </div>
+
     <div v-if="showLeaveConfirm" class="confirm-mask">
       <section class="confirm-dialog" role="dialog" aria-modal="true" aria-label="完成做单">
         <h2>是否完成做单？</h2>
@@ -1935,6 +2189,177 @@ h1 {
 
 .toast-message.error {
   background: #ad3d3d;
+}
+
+.line-editor-page {
+  position: fixed;
+  z-index: 55;
+  inset: 0;
+  overflow-y: auto;
+  padding: var(--app-header-height) 0 86px;
+  background: #f3f6fa;
+}
+
+.line-editor-header {
+  position: fixed;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  left: 0;
+  width: min(100%, 760px);
+  height: var(--app-header-height);
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: 11px;
+  margin-inline: auto;
+  padding: var(--app-safe-top) 16px 0;
+  border-bottom: 1px solid #e4ebf3;
+  background: #fff;
+}
+
+.line-editor-header::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--app-header-height);
+  background: #fff;
+}
+
+.line-editor-header > button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: #f3f6fa;
+  color: #365678;
+}
+
+.line-editor-header svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.line-editor-header > div {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.line-editor-header h2 {
+  color: #17365d;
+  font-size: 20px;
+}
+
+.line-editor-header span {
+  color: #7b899b;
+  font-size: 12px;
+}
+
+.line-editor-header > strong {
+  max-width: 38vw;
+  overflow: hidden;
+  color: #607086;
+  font: 650 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-editor-content {
+  width: min(100%, 760px);
+  display: grid;
+  gap: 14px;
+  margin-inline: auto;
+  padding: 16px;
+}
+
+.editor-readonly-grid,
+.editor-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px 12px;
+  padding: 15px;
+  border: 1px solid #dfe7f0;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(23, 54, 93, 0.055);
+}
+
+.editor-readonly-grid div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.editor-readonly-grid dt,
+.editor-readonly-grid dd {
+  margin: 0;
+}
+
+.editor-readonly-grid dt {
+  color: #8290a2;
+  font-size: 12px;
+}
+
+.editor-readonly-grid dd {
+  overflow-wrap: anywhere;
+  color: #344760;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.line-editor-actions {
+  position: fixed;
+  z-index: 3;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: min(100%, 760px);
+  display: grid;
+  grid-template-columns: minmax(96px, .7fr) minmax(150px, 1.3fr);
+  gap: 10px;
+  margin-inline: auto;
+  padding: 10px 16px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid #e1e8f0;
+  background: rgba(255, 255, 255, .98);
+}
+
+.line-editor-actions::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 76px;
+  background: rgba(255, 255, 255, .98);
+}
+
+.line-editor-actions button {
+  height: 46px;
+  border: 1px solid #c8d4e2;
+  border-radius: 11px;
+  background: #fff;
+  color: #52677f;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.line-editor-actions button.confirm {
+  border-color: #2368c4;
+  background: #2368c4;
+  color: #fff;
 }
 
 .confirm-mask {

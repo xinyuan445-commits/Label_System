@@ -165,6 +165,8 @@ development 管理员密码校验仍受环境开关保护；`LOCAL` 用户使用
 
 单据字段开关使用现有设置接口保存。DOCUMENT 范围键 `field_input_rules` 的值为字段键到 `{ "visible": boolean, "required": boolean }` 的 JSON 对象；字段定义由 H5 当前版本提供。H5 按设置控制九类制单的字段显示、输入和完整必填校验，Business API 同时按当前单据设置复核仓库、目标仓库、目标货位、部门和业务类别等可配置表头必填项。
 
+DOCUMENT 范围布尔键 `auto_add_scanned_detail` 控制 H5 扫码结果是否直接加入明细，默认 `true`。值为 `false` 或存在无法自动取得的必填表体字段时，H5 先打开明细确认页；该键只控制录入交互，不降低 Business API 对标签身份、库存位置、余额、来源关系和必填字段的复核。
+
 `field_input_rules` 是影响全部用户的公共单据规则。读取随登录设置接口开放，写入必须由真实管理员账号执行；临时管理密码授权不能修改该键。
 
 通用预提交的 `header.additionalFields`、`lines[].additionalFields`，以及有源材料出库请求的同名字段保存当前启用的扩展字段。值使用扁平 JSON 对象，仅允许字符串、数字、布尔值或空值；每个对象最多 128 项、64 KiB，字段名最多 100 字符，单个字符串最多 4000 字符。扩展字段随原请求写入操作前 TXT 归档，当前不据此调用 U8 写接口。

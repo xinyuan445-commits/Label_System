@@ -10,6 +10,7 @@ import {
 
 export interface DocumentPolicySettings {
   includePalletByDefault: boolean
+  autoAddScannedDetail: boolean
   autoUploadOnComplete: boolean
   autoApproveAfterUpload: boolean
   allowOverIssue: boolean
@@ -57,6 +58,7 @@ const rows = new Map<string, SettingItem>()
 
 const documentDefinitions: Record<keyof DocumentPolicySettings, SettingDefinition> = {
   includePalletByDefault: { key: 'include_pallet_in_document_by_default', name: '扫托包含托盘' },
+  autoAddScannedDetail: { key: 'auto_add_scanned_detail', name: '扫码后自动添加到明细' },
   autoUploadOnComplete: { key: 'auto_upload_on_complete', name: '完成自动上传' },
   autoApproveAfterUpload: { key: 'auto_approve_after_upload', name: '上传自动审核' },
   allowOverIssue: { key: 'allow_over_issue', name: '允许超领' },
@@ -83,6 +85,7 @@ const globalDefinitions: Array<{
 
 const defaultPolicy: DocumentPolicySettings = {
   includePalletByDefault: true,
+  autoAddScannedDetail: true,
   autoUploadOnComplete: false,
   autoApproveAfterUpload: false,
   allowOverIssue: false,
@@ -101,6 +104,7 @@ const defaultGlobalPallet: GlobalPalletSettings = {
 function copyPolicy(value?: Partial<DocumentPolicySettings>): DocumentPolicySettings {
   return {
     includePalletByDefault: value?.includePalletByDefault ?? defaultPolicy.includePalletByDefault,
+    autoAddScannedDetail: value?.autoAddScannedDetail ?? defaultPolicy.autoAddScannedDetail,
     autoUploadOnComplete: value?.autoUploadOnComplete ?? defaultPolicy.autoUploadOnComplete,
     autoApproveAfterUpload: value?.autoApproveAfterUpload ?? defaultPolicy.autoApproveAfterUpload,
     allowOverIssue: value?.allowOverIssue ?? defaultPolicy.allowOverIssue,
