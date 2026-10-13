@@ -1596,11 +1596,11 @@ onBeforeRouteLeave((to) => {
               <div v-if="line.locationCode"><dt>货位</dt><dd>{{ locationNameFor(line.warehouseCode, line.locationCode, line.locationName) }}</dd></div>
               <div v-if="line.unitCode"><dt>单位</dt><dd>{{ line.unitName || line.unitCode }}</dd></div>
               <div><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
+              <div class="line-used-qty"><dt>本标签使用</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
               <template v-if="selectedSourceLines.length && materialProgressFor(line)">
                 <div><dt>需拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.remainingQty ?? 0) }}</dd></div>
                 <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.scannedQty ?? 0) }}</dd></div>
               </template>
-              <div v-else class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
             </dl>
             <span v-if="materialPickingComplete(line)" class="picking-complete-stamp">拣货完成</span>
           </article>
@@ -2232,6 +2232,11 @@ h1 {
 
 .compact-line-info .picked-qty dd {
   color: #176b50;
+  font-size: 14px;
+}
+
+.compact-line-info .line-used-qty dd {
+  color: #2368c4;
   font-size: 14px;
 }
 
