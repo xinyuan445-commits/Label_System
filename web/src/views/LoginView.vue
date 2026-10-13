@@ -3,12 +3,13 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import { readLastLoginUsername } from '@/services/auth-session'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const username = ref('admin')
-const password = ref('admin')
+const username = ref(readLastLoginUsername())
+const password = ref('')
 const errorMessage = ref('')
 const submitting = ref(false)
 

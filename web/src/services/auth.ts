@@ -2,6 +2,7 @@ import { ApiError, apiRequest } from '@/api/client'
 import {
   clearStoredAuthSession,
   isAuthUser,
+  writeLastLoginUsername,
   readStoredAuthSession,
   writeStoredAuthSession,
   type AuthSession,
@@ -74,6 +75,7 @@ export async function signIn(username: string, password: string): Promise<SignIn
         message: error instanceof ApiError ? error.message : '读取功能权限失败。',
       }
     }
+    writeLastLoginUsername(username)
     return { success: true, session }
   } catch (error) {
     return {

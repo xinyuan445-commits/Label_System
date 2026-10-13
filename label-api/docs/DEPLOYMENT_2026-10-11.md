@@ -58,6 +58,8 @@ U8 writes: disabled
 
 2026-10-13 12:51 Business API `0.5.8` 已发布到 `D:\LabelSystem\Api\releases\20261013_125054`，H5 更新为 `0.2.0-dev.35`：单据管理将用户操作由“预提交”改为“上传 ERP”；九类制单在建立待处理记录、来源占用和标签锁之前强制检查当前用户 U8 制单人映射。发布后健康检查 `ready`、数据库就绪、`U8WritesEnabled=false`，站点和应用池均为 Started。空明细安全请求在已配置 ERP 映射的账号下返回 `LINES_INVALID`，未创建测试业务；用户刚建立的材料出库业务组仍为 `PENDING`，包含 2 个按仓库拆分的操作，未被修改或取消。未操作 9880 Gateway，未写 U8。
 
+2026-10-13 应用户要求取消上述材料出库联调业务组：2 个操作均由 `PENDING` 转为 `CANCELLED`，3 张标签锁全部释放，关联漫游草稿转为 `CANCELLED`；未生成 U8 单号，未写 U8，业务操作和事件审计保留。H5 同时更新为 `0.2.0-dev.36`，登录页改为按环境记住最后一次成功登录的账号且不缓存密码；Business API、数据库结构和 APK 不变。
+
 2026-10-13 材料出库联调数据：先从 U8 测试账套 `888` 复核 `CurrentStock` 和 `InvPositionSum`，再只向 `LabelSystem_Dev` 登记 3 张 `INV008_STANDARD` V2 产品标签。其中 `11103-FOSB-ENF-4918-CKB2330` 的批号 `20260227QF`/`20260402MY` 分别登记 14/7，仓库 `KML_KSW`、货位编码 `486`（名称 `1216`）；`3401-49-CKB903-BH2` 批号 `20260202` 登记 130，仓库 `KML_ZK`、货位编码 `655`（名称 `Z001`），该货位 U8 现存量为 198。产品标签、初始流水、Code 登记和操作审计在同一事务内完成；未修改 `LabelSystem_Test`/`LabelSystem_Prod`，未写 U8，`U8WritesEnabled=false`。
 
 2026-10-11 21:49 已发布 `0.1.1` 到 `D:\LabelSystem\Api\releases\20261011_214916`，补充库存对象 `unitCode` 返回、材料出库服务端单位复核，并禁止已过期锁通过心跳复活。外置配置修改前已备份；站点、应用池、数据库健康检查正常，材料出库设置、U8 生产订单只读代理和 CT58C 来源 CORS 复核通过，U8 写入仍为 `false`。

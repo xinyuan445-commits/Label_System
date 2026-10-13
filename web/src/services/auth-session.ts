@@ -1,7 +1,9 @@
 import { getRuntimeConfig } from '@/services/runtime-config'
 
 const SESSION_KEY_PREFIX = 'label-system.session'
+const LAST_LOGIN_KEY_PREFIX = 'label-system.last-login'
 let volatileSession: AuthSession | null = null
+let volatileLastLogin = ''
 
 export interface AuthUser {
   id: string
@@ -18,6 +20,29 @@ export interface AuthSession {
 
 function getSessionKey(): string {
   return `${SESSION_KEY_PREFIX}.${getRuntimeConfig().environment}`
+}
+
+function getLastLoginKey(): string {
+  return `${LAST_LOGIN_KEY_PREFIX}.${getRuntimeConfig().environment}`
+}
+
+export function readLastLoginUsername(): string {
+  try {
+    return window.localStorage.getItem(getLastLoginKey())?.trim() || volatileLastLogin
+  } catch {
+    return volatileLastLogin
+  }
+}
+
+export function writeLastLoginUsername(username: string): void {
+  const normalized = username.trim()
+  if (!normalized) return
+  volatileLastLogin = normalized
+  try {
+    window.localStorage.setItem(getLastLoginKey(), normalized)
+  } catch {
+    // 部分 PDA WebView 会限制持久存储；当前进程仍记住最后登录账号。
+  }
 }
 
 export function isAuthUser(value: unknown): value is AuthUser {
