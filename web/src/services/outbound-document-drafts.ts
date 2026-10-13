@@ -4,6 +4,7 @@ import {
   readDraftDocument,
   readDraftDocuments,
   removeDraftDocument,
+  removeDraftDocuments,
   writeDraftDocument,
   writeDraftDocuments,
 } from '@/services/draft-database'
@@ -119,10 +120,39 @@ const migrationMarkerKey = 'label-system:outbound-documents:indexeddb-v1'
 const editRequestKey = 'label-system:outbound-document-edit'
 const workingStateKey = 'label-system:outbound-document-working'
 const changeEventName = 'label-system:draft-changed'
+const hiddenDocumentRecordsKey = 'label-system:hidden-document-records:v1'
 let migrationPromise: Promise<void> | null = null
 
 function notifyChanged(): void {
   window.dispatchEvent(new Event(changeEventName))
+}
+
+function readHiddenDocumentRecordIds(): Set<string> {
+  try {
+    const value = JSON.parse(localStorage.getItem(hiddenDocumentRecordsKey) ?? '[]') as unknown
+    return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeHiddenDocumentRecordIds(ids: Set<string>): void {
+  localStorage.setItem(hiddenDocumentRecordsKey, JSON.stringify([...ids].slice(-1000)))
+}
+
+function documentRecordIds(document: Pick<StoredOutboundDocument, 'id' | 'serverOperationId'>): string[] {
+  return [document.id, document.serverOperationId].filter((id) => Boolean(id))
+}
+
+export function isLocalDocumentRecordHidden(
+  document: Pick<StoredOutboundDocument, 'id' | 'serverOperationId'>,
+): boolean {
+  const hidden = readHiddenDocumentRecordIds()
+  return documentRecordIds(document).some((id) => hidden.has(id))
+}
+
+export function isLocalOperationGroupHidden(groupId: string): boolean {
+  return readHiddenDocumentRecordIds().has(groupId)
 }
 
 function storageSafeValue<T>(value: T): T {
@@ -369,12 +399,28 @@ export async function deleteOutboundDocument(id: string): Promise<void> {
   notifyChanged()
 }
 
+export async function deleteLocalDocumentRecords(
+  documents: Array<Pick<StoredOutboundDocument, 'id' | 'serverOperationId'>>,
+): Promise<void> {
+  if (!documents.length) return
+  const hidden = readHiddenDocumentRecordIds()
+  for (const document of documents) {
+    for (const id of documentRecordIds(document)) hidden.add(id)
+  }
+  writeHiddenDocumentRecordIds(hidden)
+  await removeDraftDocuments(documents.map((document) => document.id))
+  notifyChanged()
+}
+
 export async function confirmLocalDraftDeletion(id: string): Promise<void> {
   await removeDraftDocument(id)
   notifyChanged()
 }
 
 export async function importRemoteDocument(document: StoredOutboundDocument): Promise<void> {
+  const hidden = readHiddenDocumentRecordIds()
+  for (const id of documentRecordIds(document)) hidden.delete(id)
+  writeHiddenDocumentRecordIds(hidden)
   await writeDraftDocument({ ...document, remoteOnly: false, syncStatus: 'synced' })
   notifyChanged()
 }

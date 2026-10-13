@@ -72,3 +72,12 @@ export async function removeDraftDocument(id: string): Promise<void> {
   transaction.objectStore(storeName).delete(id)
   await transactionDone(transaction)
 }
+
+export async function removeDraftDocuments(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  const database = await openDatabase()
+  const transaction = database.transaction(storeName, 'readwrite')
+  const store = transaction.objectStore(storeName)
+  for (const id of ids) store.delete(id)
+  await transactionDone(transaction)
+}
