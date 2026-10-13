@@ -192,6 +192,15 @@ function canUpload(document: StoredOutboundDocument): boolean {
   return Array.isArray(payload.lines) && payload.lines.length > 0
 }
 
+function uploadError(document: StoredOutboundDocument): string {
+  return document.lastUploadError?.trim() || document.serverErrorMessage?.trim() ||
+    document.preparedOperations?.find((operation) => operation.errorMessage?.trim())?.errorMessage?.trim() || ''
+}
+
+function isRetryableFailure(document: StoredOutboundDocument): boolean {
+  return document.serverStatus === 'FAILED' || Boolean(uploadError(document))
+}
+
 async function continueDocument(document: StoredOutboundDocument): Promise<void> {
   if (document.ownerUserId !== currentUserId.value) {
     selectedDocument.value = document
@@ -405,11 +414,10 @@ onBeforeRouteLeave((to) => {
             <div><dt>数量</dt><dd>{{ document.summary.totalQty }}</dd></div>
           </dl>
 
-          <p v-if="document.lastUploadError" class="upload-error">
-            {{ document.lastUploadError }}
-          </p>
-          <p v-else-if="document.serverErrorMessage" class="upload-error">
-            {{ document.serverErrorMessage }}
+          <p v-if="uploadError(document)" class="upload-error">
+            <strong>上传失败</strong>
+            <span v-if="document.serverErrorCode">{{ document.serverErrorCode }}</span>
+            <em>{{ uploadError(document) }}</em>
           </p>
           <p v-else-if="document.syncStatus === 'failed'" class="upload-error">
             {{ document.syncError || '草稿同步失败' }}
@@ -429,7 +437,7 @@ onBeforeRouteLeave((to) => {
               :disabled="uploadingId === document.id || !canUpload(document)"
               @click.stop="uploadDocument(document)"
             >
-              {{ uploadingId === document.id ? '上传中' : '上传 ERP' }}
+              {{ uploadingId === document.id ? '上传中' : isRetryableFailure(document) ? '重新上传' : '上传 ERP' }}
             </button>
           </div>
           <div v-else-if="!selectionMode && activeStatus === 'pending'" class="card-actions">
@@ -463,7 +471,7 @@ onBeforeRouteLeave((to) => {
           <div><dt>制单人</dt><dd>{{ selectedDocument.ownerName }}</dd></div>
           <div><dt>同步</dt><dd>{{ selectedDocument.lastSyncedAt ? formatTime(selectedDocument.lastSyncedAt) : '未同步' }}</dd></div>
           <div><dt>业务组</dt><dd>{{ selectedDocument.serverOperationId || '--' }}</dd></div>
-          <div v-if="selectedDocument.serverErrorMessage"><dt>异常</dt><dd>{{ selectedDocument.serverErrorMessage }}</dd></div>
+          <div v-if="uploadError(selectedDocument)"><dt>异常</dt><dd>{{ uploadError(selectedDocument) }}</dd></div>
         </dl>
         <div v-if="selectedDocument.preparedOperations?.length" class="operation-list">
           <div v-for="operation in selectedDocument.preparedOperations" :key="operation.id">
@@ -481,7 +489,7 @@ onBeforeRouteLeave((to) => {
 
 <style scoped>
 .manager-page{min-height:100dvh;padding-top:72px;background:#f3f6fa;color:#21324a}.topbar-shell{position:fixed;z-index:20;top:0;right:0;left:0;height:72px;border-bottom:1px solid #e4ebf3;background:#fff;box-shadow:0 3px 12px rgba(23,54,93,.05)}.topbar,.page-content{width:min(100%,760px);margin-inline:auto}.topbar{height:100%;display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:12px;padding:0 18px}.back-button{width:42px;height:42px;display:grid;place-items:center;border:0;border-radius:12px;background:#f3f6fa;color:#365678}.back-button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2}.header-delete{height:38px;padding:0 12px;border:0;border-radius:10px;background:#fbecec;color:#b64141;font-size:13px;font-weight:750}h1{overflow:hidden;color:#17365d;font-size:21px;text-overflow:ellipsis;white-space:nowrap}.page-content{display:grid;gap:14px;padding:16px}.status-tabs{display:grid;grid-template-columns:repeat(3,1fr);padding:4px;border:1px solid #dce5ef;border-radius:13px;background:#e9eff6}.status-tabs button{height:40px;border:0;border-radius:9px;background:transparent;color:#6c7b8e;font-size:14px;font-weight:750}.status-tabs button.active{background:#fff;color:#2368c4;box-shadow:0 2px 8px rgba(23,54,93,.1)}.selection-bar{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#fff}.selection-bar span{text-align:center;color:#60758e;font-size:13px}.selection-bar button{height:36px;padding:0 12px;border:0;border-radius:9px;background:#e9f2fd;color:#2368c4;font-weight:750}.selection-bar .confirm-delete{background:#c94a4a;color:#fff}.selection-bar button:disabled{opacity:.45}.document-list{display:grid;gap:11px}.document-card{position:relative;padding:15px;border:1px solid rgba(23,54,93,.08);border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(23,54,93,.055);cursor:pointer}.document-card.selected{border-color:#4a89d8;background:#f7fbff}.selection-check{position:absolute;top:12px;right:12px;width:24px;height:24px;display:grid;place-items:center;border:2px solid #9bb2ca;border-radius:50%;background:#fff;color:#fff;font-size:14px;font-weight:800}.document-card.selected .selection-check{border-color:#2368c4;background:#2368c4}.document-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.document-card.selected .document-heading{padding-right:34px}.document-heading>div{min-width:0;display:grid;gap:4px}.document-heading strong{overflow-wrap:anywhere;color:#203552;font:700 15px ui-monospace,SFMono-Regular,Consolas,monospace}.document-heading span,.document-heading time{color:#7b899b;font-size:12px}.document-card dl,.detail-sheet dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0;padding:12px;border-radius:11px;background:#f7f9fc}.document-card dl div,.detail-sheet dl div{min-width:0;display:grid;gap:4px}.document-card dt,.document-card dd,.detail-sheet dt,.detail-sheet dd{margin:0;font-size:12px}.document-card dt,.detail-sheet dt{color:#8491a2}.document-card dd,.detail-sheet dd{overflow:hidden;color:#33465e;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.card-actions{display:flex;justify-content:flex-end;gap:8px}.card-actions button{min-width:72px;height:38px;border:0;border-radius:9px;background:#e9f2fd;color:#2368c4;font-size:13px;font-weight:750}.card-actions button:nth-child(2){background:#2368c4;color:#fff}.empty-state{min-height:180px;display:grid;place-items:center;border:1px dashed #cbd7e4;border-radius:16px;background:rgba(255,255,255,.62);color:#8b98a8;font-size:14px}.toast-message{position:fixed;z-index:50;right:18px;bottom:28px;left:18px;width:fit-content;margin-inline:auto;padding:10px 15px;border-radius:10px;background:#31445e;color:#fff;font-size:13px;font-weight:650;box-shadow:0 8px 22px rgba(23,54,93,.2)}.detail-mask{position:fixed;z-index:40;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:18px;background:rgba(20,32,48,.38)}.detail-sheet{width:min(100%,560px);padding:18px;border-radius:18px;background:#fff;box-shadow:0 16px 40px rgba(23,54,93,.2)}.detail-sheet header{display:flex;align-items:center;justify-content:space-between}.detail-sheet h2{color:#24344d;font-size:17px}.detail-sheet header button{width:36px;height:36px;border:0;border-radius:9px;background:#f1f4f8;color:#718096;font-size:22px}.detail-sheet dl{grid-template-columns:1fr 1fr;margin-bottom:0}@media(max-width:560px){.topbar{padding:0 14px}.page-content{padding:14px 12px}.document-card dl{grid-template-columns:repeat(3,minmax(0,1fr))}.pending-actions{display:grid;grid-template-columns:1fr}.card-actions button{min-width:0}}
-.upload-error{margin:-4px 0 12px;padding:9px 10px;border-radius:9px;background:#fff2f2;color:#ae4141;font-size:12px}.card-actions button:disabled{opacity:.55}
+.upload-error{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 8px;margin:-4px 0 12px;padding:9px 10px;border-radius:9px;background:#fff2f2;color:#ae4141;font-size:12px}.upload-error strong{font-size:12px}.upload-error span{overflow:hidden;color:#c15a5a;font:600 11px ui-monospace,SFMono-Regular,Consolas,monospace;text-align:right;text-overflow:ellipsis;white-space:nowrap}.upload-error em{grid-column:1/-1;overflow-wrap:anywhere;color:#8e3636;font-style:normal;line-height:1.45}.card-actions button:disabled{opacity:.55}
 .draft-sync-status{display:flex;justify-content:space-between;gap:10px;margin:-4px 0 12px;color:#60758e;font-size:12px}.draft-sync-status span{color:#8b98a8}
 .server-status{display:flex;justify-content:space-between;gap:10px;margin:-4px 0 12px;color:#2867ad;font-size:12px;font-weight:700}.server-status span{color:#8491a2;font-weight:500}.operation-list{display:grid;gap:8px;margin-top:12px}.operation-list>div{display:grid;gap:3px;padding:10px;border-radius:9px;background:#f7f9fc}.operation-list strong{color:#33465e;font-size:12px}.operation-list span{color:#7b899b;font-size:11px}.operation-list .operation-error{color:#ae4141}
 .manager-page {
