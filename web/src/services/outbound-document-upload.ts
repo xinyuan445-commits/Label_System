@@ -1,11 +1,10 @@
 import { apiRequest } from '@/api/client'
 import { readStoredAuthSession } from '@/services/auth-session'
 import {
-  markOutboundDocumentPrepared,
+  markOutboundDocumentSubmitted,
   markOutboundDocumentUploadFailed,
   updateOutboundDocumentGroup,
   type OperationGroupSnapshot,
-  type PreparedOperation,
   type StoredOutboundDocument,
 } from '@/services/outbound-document-drafts'
 
@@ -77,13 +76,6 @@ interface InventoryDocumentPayload {
     orderQuantity: number
   }>
   lines: InventoryDocumentLine[]
-}
-
-interface PrepareResult {
-  submissionGroupId: string
-  status: string
-  u8WriteEnabled: boolean
-  operations: PreparedOperation[]
 }
 
 interface OperationGroupListResult {
@@ -201,17 +193,18 @@ function createInventoryPrepareLines(payload: InventoryDocumentPayload) {
   return result
 }
 
-async function prepareInventoryDocument(
+async function submitInventoryDocument(
   document: StoredOutboundDocument,
   session: NonNullable<ReturnType<typeof readStoredAuthSession>>,
-): Promise<PrepareResult> {
+  autoApprove: boolean,
+): Promise<OperationGroupSnapshot> {
   const payload = inventoryDocumentPayload(document)
   if (payload.lines.some((line) => !line.unitCode)) {
     throw new Error('单据明细不完整，请重新扫描')
   }
   const lines = createInventoryPrepareLines(payload)
-  return apiRequest<PrepareResult>(
-    `/api/v1/operations/documents/${encodeURIComponent(document.documentType)}/prepare`,
+  return apiRequest<OperationGroupSnapshot>(
+    `/api/v1/operations/documents/${encodeURIComponent(document.documentType)}/submit?autoApprove=${autoApprove}`,
     {
       method: 'POST',
       timeoutMs: 120_000,
@@ -344,7 +337,7 @@ export async function uploadOutboundDocument(
   try {
     const session = readStoredAuthSession()
     if (!session) throw new Error('请先登录')
-    let result: PrepareResult
+    let result: OperationGroupSnapshot
     const candidate = document.payload as Partial<InventoryDocumentPayload> | null
     const hasSelectedSource = Array.isArray(candidate?.selectedSourceLines) &&
       candidate.selectedSourceLines.length > 0
@@ -354,37 +347,34 @@ export async function uploadOutboundDocument(
       if (!lines.length || lines.some((line) => !line.unitCode)) {
         throw new Error('材料出库明细不完整，请重新扫描')
       }
-      result = await apiRequest<PrepareResult>('/api/v1/operations/material-outbound/prepare', {
-        method: 'POST',
-        timeoutMs: 120_000,
-        headers: { 'X-Client-Request-Id': document.id },
-        body: JSON.stringify({
-          clientRequestId: document.id,
-          operatorId: session.user.id,
-          operatorName: session.user.name,
-          deviceId: null,
-          deviceCode: null,
-          deviceModel: navigator.userAgent.slice(0, 100),
-          reason: payload.remark || null,
-          documentDate: payload.documentDate,
-          documentDirection: payload.documentDirection || 'BLUE',
-          departmentCode: payload.departmentCode || null,
-          categoryCode: payload.outboundCategoryCode || null,
-          productionBatch: payload.productionBatch || null,
-          additionalFields: payload.headerFieldValues ?? {},
-          lines,
-        }),
-      })
+      result = await apiRequest<OperationGroupSnapshot>(
+        `/api/v1/operations/material-outbound/submit?autoApprove=${_autoApprove}`,
+        {
+          method: 'POST',
+          timeoutMs: 120_000,
+          headers: { 'X-Client-Request-Id': document.id },
+          body: JSON.stringify({
+            clientRequestId: document.id,
+            operatorId: session.user.id,
+            operatorName: session.user.name,
+            deviceId: null,
+            deviceCode: null,
+            deviceModel: navigator.userAgent.slice(0, 100),
+            reason: payload.remark || null,
+            documentDate: payload.documentDate,
+            documentDirection: payload.documentDirection || 'BLUE',
+            departmentCode: payload.departmentCode || null,
+            categoryCode: payload.outboundCategoryCode || null,
+            productionBatch: payload.productionBatch || null,
+            additionalFields: payload.headerFieldValues ?? {},
+            lines,
+          }),
+        },
+      )
     } else {
-      result = await prepareInventoryDocument(document, session)
+      result = await submitInventoryDocument(document, session, _autoApprove)
     }
-    const group = result.u8WriteEnabled
-      ? await executeOutboundOperationGroup(result.submissionGroupId, _autoApprove)
-      : await getOutboundOperationGroup(result.submissionGroupId)
-    return markOutboundDocumentPrepared(document.id, {
-      ...group,
-      u8WriteEnabled: result.u8WriteEnabled,
-    })
+    return markOutboundDocumentSubmitted(document.id, result)
   } catch (error) {
     const message = error instanceof Error ? error.message : '上传失败'
     await markOutboundDocumentUploadFailed(document.id, message)

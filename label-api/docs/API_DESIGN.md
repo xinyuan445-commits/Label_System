@@ -73,8 +73,8 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | GET | `/source-documents` | 代理 U8 源单查询 |
 | POST | `/source-documents/lines` | 代理 U8 整单明细 |
 | POST | `/source-documents/material-requirements` | 代理 U8 领料需求 |
-| POST | `/operations/material-outbound/prepare` | 材料出库预提交 |
-| POST | `/operations/documents/{documentType}/prepare` | 九类单据通用预提交；材料出库无源单时使用 |
+| POST | `/operations/material-outbound/submit?autoApprove=false` | 有生产订单的材料出库直接上传 ERP |
+| POST | `/operations/documents/{documentType}/submit?autoApprove=false` | 无源单材料出库直接上传 ERP；其他单据暂未开放执行 |
 | GET | `/operations/groups?documentType=...&status=...&operatorId=...&startDate=...&endDate=...&skip=...&take=...` | 分页查询业务组；管理员可加 `allUsers=true` |
 | GET | `/operations/groups/{groupId}` | 查询拆单组 |
 | POST | `/operations/groups/{groupId}/validate` | 材料出库写入前校验；不调用 U8 写接口 |
@@ -82,7 +82,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | POST | `/operations/groups/{groupId}/heartbeat` | 续期业务锁 |
 | POST | `/operations/groups/{groupId}/cancel` | 取消未写 U8 的待处理组 |
 
-`prepare` 是 Business API 内部的安全阶段，H5 不把“预提交”作为用户操作名称。用户界面统一显示“上传 ERP”；服务端必须先确认当前应用用户已配置 U8 制单人，再创建 `PENDING` 操作和库存锁。缺少映射返回 `409 ERP_OPERATOR_NOT_CONFIGURED`，且不得留下业务操作、来源占用或标签锁。
+H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API 在同一请求内完成校验、幂等建档、拆组、锁定和执行，不向用户保留普通 `PENDING` 步骤。写入总开关关闭、ERP 制单人缺失或建档前校验失败时直接返回错误，不创建业务操作、来源占用或标签锁；建档后的写入前校验失败会立即取消临时操作并释放锁。只有已经调用 U8 且结果不明确时保留 `NEEDS_RECONCILIATION` 审计和锁。旧 `/prepare` 路由只返回 `409 DIRECT_SUBMIT_REQUIRED`，不得再建立待处理组。
 
 普通用户调用 `POST /auth/management-access` 验证管理密码后，当前会话获得 10 分钟管理权限，可访问 `/admin/*`；该权限不改变用户角色，也不增加 `/functions` 返回的业务功能。管理密码仅在服务器外置配置保存哈希，客户端不保存。管理员角色不需要再次验证。
 
@@ -90,7 +90,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 
 材料出库执行前重新读取不可变操作归档并校验 SHA-256，重新读取 U8 生产订单领料需求，按当前用户 ERP 制单人生成每个拆组请求。执行状态从 `PENDING` 进入 `WRITING_ERP`；只有 Gateway 返回已回查确认的 U8 单据后，才在一个本地事务中写入标签余额、库存流水、ERP 行号并释放对应锁。明确失败记为 `FAILED` 并释放该拆组锁；超时、连接中断或本地提交不明确记为 `NEEDS_RECONCILIATION` 并保留锁，同时停止本组后续拆组，禁止直接重试。当前不支持托盘材料出库和自动审核。
 
-`POST /operations/groups/{groupId}/execute` 首先检查 Business API 的 `U8WritesEnabled`。当前 development 为 `false`；Gateway 的材料出库 `create` 能力及 Gateway 写入总开关也保持关闭，因此部署执行代码不会自行写入 888。
+`POST /operations/material-outbound/submit` 首先检查 Business API 的 `U8WritesEnabled`。当前 development 为 `false`；Gateway 的材料出库 `create` 能力及 Gateway 写入总开关也保持关闭，因此请求会在建档和锁定前返回 `U8_WRITE_DISABLED`，不会自行写入 888。单独的 `execute`、`heartbeat` 和 `cancel` 仅保留给旧组恢复和运维核对，不再作为 H5 正常业务步骤。
 
 ## 标签 Code 规则
 

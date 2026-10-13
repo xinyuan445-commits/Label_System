@@ -22,6 +22,7 @@ builder.Services.AddScoped<MaterialOutboundRepository>();
 builder.Services.AddScoped<MaterialOutboundService>();
 builder.Services.AddScoped<MaterialOutboundExecutionRepository>();
 builder.Services.AddScoped<MaterialOutboundExecutionService>();
+builder.Services.AddScoped<MaterialOutboundSubmissionService>();
 builder.Services.AddScoped<DocumentPrepareRepository>();
 builder.Services.AddScoped<DocumentPrepareService>();
 builder.Services.AddScoped<ReferenceDataRepository>();
@@ -786,10 +787,11 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
     return Results.Content(proxy.Content, proxy.ContentType, Encoding.UTF8, proxy.StatusCode);
 });
 
-app.MapPost("/api/v1/operations/material-outbound/prepare", async (
+app.MapPost("/api/v1/operations/material-outbound/submit", async (
     HttpContext context,
     MaterialOutboundPrepareRequest request,
-    MaterialOutboundService service,
+    [Microsoft.AspNetCore.Mvc.FromQuery] bool autoApprove,
+    MaterialOutboundSubmissionService service,
     UserRepository users,
     UserDataScopeService dataScopes,
     LabelSystemRepository settings,
@@ -809,15 +811,17 @@ app.MapPost("/api/v1/operations/material-outbound/prepare", async (
         !materialRequiredFields.TryGetValue("header.categoryCode", out var materialCategoryRequired) ||
         materialCategoryRequired,
         cancellationToken);
-    var result = await service.PrepareAsync(request, RequestContext.Id(context), cancellationToken);
+    var result = await service.SubmitAsync(
+        request, session, RequestContext.Id(context), autoApprove, cancellationToken);
     return ApiResults.Ok(context, result);
 });
 
-app.MapPost("/api/v1/operations/documents/{documentType}/prepare", async (
+app.MapPost("/api/v1/operations/documents/{documentType}/submit", async (
     HttpContext context,
     string documentType,
     DocumentPrepareRequest request,
-    DocumentPrepareService service,
+    [Microsoft.AspNetCore.Mvc.FromQuery] bool autoApprove,
+    MaterialOutboundSubmissionService service,
     UserRepository users,
     UserDataScopeService dataScopes,
     LabelSystemRepository settings,
@@ -839,10 +843,16 @@ app.MapPost("/api/v1/operations/documents/{documentType}/prepare", async (
             !requiredFields.TryGetValue("header.categoryCode", out var categoryRequired) || categoryRequired,
             cancellationToken);
     }
-    var result = await service.PrepareAsync(
-        documentType, request, RequestContext.Id(context), cancellationToken);
+    var result = await service.SubmitAsync(
+        documentType, request, session, RequestContext.Id(context), autoApprove, cancellationToken);
     return ApiResults.Ok(context, result);
 });
+
+app.MapPost("/api/v1/operations/material-outbound/prepare", (HttpContext _) =>
+    RejectPrepareOnly());
+
+app.MapPost("/api/v1/operations/documents/{documentType}/prepare", (HttpContext _) =>
+    RejectPrepareOnly());
 
 app.MapGet("/api/v1/operations/groups", async (
     HttpContext context,
@@ -924,6 +934,9 @@ app.MapPost("/api/v1/operations/groups/{groupId}/cancel", async (
         false, cancellationToken)));
 
 app.Run();
+
+static IResult RejectPrepareOnly() => throw new ApiException(
+    StatusCodes.Status409Conflict, "DIRECT_SUBMIT_REQUIRED", "请刷新后直接上传 ERP。");
 
 static void RequireAdmin(HttpContext context)
 {

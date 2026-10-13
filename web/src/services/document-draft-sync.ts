@@ -128,12 +128,27 @@ async function sendHeartbeat(documents: StoredOutboundDocument[], synced: boolea
   })
 }
 
+async function pullDeletedDrafts(): Promise<number> {
+  const session = readSession()
+  if (!session) return 0
+  const deleted = await apiRequest<ServerDraftItem[]>('/api/v1/drafts?status=DELETED&take=200')
+  const localIds = new Set((await listAllLocalDocuments()).map((item) => item.id))
+  let removed = 0
+  for (const item of deleted) {
+    if (item.ownerUserId !== session.user.id || !localIds.has(item.id)) continue
+    await confirmLocalDraftDeletion(item.id)
+    removed++
+  }
+  return removed
+}
+
 export async function syncPendingDocumentDrafts(includeFailed = false): Promise<void> {
   const session = readSession()
   if (!session || !navigator.onLine || running) return
   running = true
   let synced = false
   try {
+    try { synced = await pullDeletedDrafts() > 0 } catch { /* 下次同步重试。 */ }
     const documents = await listAllLocalDocuments()
     const pending = documents.filter((document) =>
       document.ownerUserId === session.user.id &&
@@ -224,7 +239,15 @@ export async function listServerDocumentDrafts(
   const query = new URLSearchParams({ documentType, take: '200' })
   if (status) query.set('status', status)
   if (allUsers) query.set('allUsers', 'true')
-  return (await apiRequest<ServerDraftItem[]>(`/api/v1/drafts?${query.toString()}`)).map(toStored)
+  const items = await apiRequest<ServerDraftItem[]>(`/api/v1/drafts?${query.toString()}`)
+  const localIds = new Set((await listAllLocalDocuments()).map((item) => item.id))
+  for (const item of items) {
+    if (item.businessStatus === 'DELETED' && item.ownerUserId === readSession()?.user.id &&
+      localIds.has(item.id)) {
+      await confirmLocalDraftDeletion(item.id)
+    }
+  }
+  return items.filter((item) => item.businessStatus !== 'DELETED').map(toStored)
 }
 
 export async function downloadServerDocumentDraft(id: string): Promise<StoredOutboundDocument> {

@@ -12,10 +12,10 @@ import { createUniqueId } from '@/utils/unique-id'
 
 export type OutboundDocumentUploadStatus =
   | 'pending'
-  | 'prepared'
   | 'completed'
   | 'cancelled'
   | 'uploaded'
+  | 'prepared'
 
 export type DraftSyncStatus =
   | 'local'
@@ -215,10 +215,9 @@ function beijingTimestamp(): string {
   return `${value.year}-${value.month}-${value.day}T${value.hour}:${value.minute}:${value.second}+08:00`
 }
 
-function localStatusForServer(status: string, isTerminal = false): OutboundDocumentUploadStatus {
+function localStatusForServer(status: string, _isTerminal = false): OutboundDocumentUploadStatus {
   if (status === 'CANCELLED') return 'cancelled'
-  if (isTerminal || ['SUCCESS', 'FAILED', 'REVERSED'].includes(status)) return 'completed'
-  return 'prepared'
+  return 'completed'
 }
 
 async function updateDocument(
@@ -305,8 +304,8 @@ export async function markOutboundDocumentUploaded(
   })
 }
 
-export async function markOutboundDocumentPrepared(
-  id: string, result: OperationGroupSnapshot & { u8WriteEnabled: boolean },
+export async function markOutboundDocumentSubmitted(
+  id: string, result: OperationGroupSnapshot,
 ): Promise<StoredOutboundDocument> {
   return updateDocument(id, (existing) => {
     const now = beijingTimestamp()
@@ -315,7 +314,7 @@ export async function markOutboundDocumentPrepared(
       serverOperationId: result.submissionGroupId, serverStatus: result.status,
       lockExpiresAt: result.lockExpiresAt, serverCheckedAt: now,
       serverErrorCode: result.errorCode, serverErrorMessage: result.errorMessage,
-      u8WriteEnabled: result.u8WriteEnabled, preparedOperations: result.operations,
+      u8WriteEnabled: true, preparedOperations: result.operations,
       clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '' }
   })
 }
@@ -424,7 +423,7 @@ export async function findPendingSourceLineConflicts(
   const session = readSession()
   for (const document of await readAll()) {
     if (document.ownerUserId !== session?.user.id || document.documentType !== documentType ||
-      !['pending', 'prepared'].includes(document.uploadStatus) ||
+      document.uploadStatus !== 'pending' ||
       document.syncStatus === 'deleted-pending' || document.id === excludeDocumentId) continue
     const payload = document.payload && typeof document.payload === 'object'
       ? document.payload as { selectedSourceLines?: Array<{ sourceLineId?: number }> } : {}

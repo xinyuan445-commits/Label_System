@@ -22,13 +22,7 @@ import {
 } from '@/services/document-draft-sync'
 import { readSession } from '@/services/auth'
 import {
-  cancelOutboundDocument,
-  cancelOutboundOperationGroup,
-  executeOutboundDocument,
-  executeOutboundOperationGroup,
   getOutboundOperationGroup,
-  heartbeatOutboundOperationGroup,
-  heartbeatOutboundDocument,
   listOutboundOperationGroups,
   refreshOutboundDocumentGroup,
   uploadOutboundDocument,
@@ -41,7 +35,7 @@ import type { OutboundDocumentType } from '@/services/source-document-selection'
 
 const route = useRoute()
 const router = useRouter()
-type ManagerStatus = 'pending' | 'prepared' | 'completed'
+type ManagerStatus = 'pending' | 'completed'
 
 const activeStatus = ref<ManagerStatus>('pending')
 const documents = ref<StoredOutboundDocument[]>([])
@@ -50,7 +44,6 @@ const message = ref('')
 const uploadingId = ref('')
 const processingId = ref('')
 let allowDocumentReturn = false
-let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let unsubscribeDraftChanges: (() => void) | null = null
 
 const documentType = computed<OutboundDocumentType>(() => {
@@ -88,8 +81,7 @@ async function refresh(): Promise<void> {
     const existing = [...merged.values()].find((document) =>
       document.id === group.submissionGroupId || document.serverOperationId === group.submissionGroupId,
     )
-    const uploadStatus = group.status === 'CANCELLED'
-      ? 'cancelled' : group.isTerminal ? 'completed' : 'prepared'
+    const uploadStatus = group.status === 'CANCELLED' ? 'cancelled' : 'completed'
     if (existing) {
       merged.set(existing.id, {
         ...existing,
@@ -143,8 +135,7 @@ async function refresh(): Promise<void> {
   }
   documents.value = [...merged.values()].filter((document) => {
     if (activeStatus.value === 'pending') return document.uploadStatus === 'pending'
-    if (activeStatus.value === 'prepared') return document.uploadStatus === 'prepared'
-    return ['completed', 'cancelled', 'uploaded'].includes(document.uploadStatus)
+    return ['completed', 'cancelled', 'uploaded', 'prepared'].includes(document.uploadStatus)
   }).sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   )
@@ -191,9 +182,10 @@ async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
   try {
     const settings = loadBusinessDocumentSettings()
     const policy = ensureDocumentPolicy(settings, documentType.value)
-    await uploadOutboundDocument(document, policy.autoApproveAfterUpload)
-    message.value = '已提交处理'
-    activeStatus.value = 'prepared'
+    const uploaded = await uploadOutboundDocument(document, policy.autoApproveAfterUpload)
+    message.value = uploaded.serverStatus === 'SUCCESS' ? '上传完成'
+      : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? '需要核对' : '上传失败'
+    activeStatus.value = 'completed'
     await refresh()
   } catch (error) {
     message.value = error instanceof Error ? error.message : '上传失败'
@@ -214,16 +206,14 @@ function openDocument(document: StoredOutboundDocument): void {
   selectedDocument.value = document
 }
 
-async function refreshServerDocument(document: StoredOutboundDocument, heartbeat = false): Promise<void> {
+async function refreshServerDocument(document: StoredOutboundDocument): Promise<void> {
   if (processingId.value) return
   processingId.value = document.id
   try {
     if (document.operationOnly) {
-      await (heartbeat
-        ? heartbeatOutboundOperationGroup(document.serverOperationId)
-        : getOutboundOperationGroup(document.serverOperationId))
+      await getOutboundOperationGroup(document.serverOperationId)
     } else {
-      await (heartbeat ? heartbeatOutboundDocument(document) : refreshOutboundDocumentGroup(document))
+      await refreshOutboundDocumentGroup(document)
     }
     await refresh()
   } catch (error) {
@@ -231,68 +221,6 @@ async function refreshServerDocument(document: StoredOutboundDocument, heartbeat
   } finally {
     processingId.value = ''
   }
-}
-
-async function cancelDocument(document: StoredOutboundDocument): Promise<void> {
-  if (!window.confirm('取消这份待处理单据？')) return
-  if (processingId.value) return
-  processingId.value = document.id
-  try {
-    if (document.operationOnly) await cancelOutboundOperationGroup(document.serverOperationId)
-    else await cancelOutboundDocument(document)
-    message.value = '已取消'
-    await refresh()
-  } catch (error) {
-    message.value = error instanceof Error ? error.message : '取消失败'
-  } finally {
-    processingId.value = ''
-  }
-}
-
-async function executeDocument(document: StoredOutboundDocument): Promise<void> {
-  if (processingId.value) return
-  processingId.value = document.id
-  try {
-    const settings = loadBusinessDocumentSettings()
-    const policy = ensureDocumentPolicy(settings, documentType.value)
-    let status = ''
-    if (document.operationOnly) {
-      const group = await executeOutboundOperationGroup(
-        document.serverOperationId,
-        policy.autoApproveAfterUpload,
-      )
-      status = group.status
-    } else {
-      const updated = await executeOutboundDocument(document, policy.autoApproveAfterUpload)
-      status = updated.serverStatus ?? ''
-    }
-    message.value = status === 'SUCCESS' ? '上传完成'
-      : status === 'NEEDS_RECONCILIATION' ? '需要核对'
-        : status === 'FAILED' || status === 'PARTIAL' ? '上传失败' : '已提交处理'
-    await refresh()
-  } catch (error) {
-    message.value = error instanceof Error ? error.message : '上传失败'
-    await refresh()
-  } finally {
-    processingId.value = ''
-  }
-}
-
-async function heartbeatPreparedDocuments(): Promise<void> {
-  if (processingId.value) return
-  let pending: OperationGroupSnapshot[] = []
-  try {
-    pending = (await listOutboundOperationGroups(documentType.value, false))
-      .filter((group) => group.status === 'PENDING')
-  } catch { return }
-  for (const group of pending) {
-    try {
-      await heartbeatOutboundOperationGroup(group.submissionGroupId)
-    } catch {
-      try { await getOutboundOperationGroup(group.submissionGroupId) } catch { /* 下次进入时重试。 */ }
-    }
-  }
-  if (activeStatus.value !== 'pending') await refresh()
 }
 
 async function removeDocument(document: StoredOutboundDocument): Promise<void> {
@@ -315,7 +243,7 @@ function formatTime(value: string): string {
 
 function serverStatusLabel(status: string | undefined): string {
   const labels: Record<string, string> = {
-    PENDING: '待处理', WRITING_ERP: '写入中', PENDING_APPROVAL: '待审核',
+    PENDING: '未完成', WRITING_ERP: '写入中', PENDING_APPROVAL: '待审核',
     SUCCESS: '已完成', FAILED: '失败', CANCELLED: '已取消',
     NEEDS_RECONCILIATION: '待核对', REVERSED: '已红冲',
     PARTIAL: '部分完成',
@@ -332,12 +260,9 @@ function statusLabel(document: StoredOutboundDocument): string {
 onMounted(() => {
   void refresh()
   unsubscribeDraftChanges = subscribeDraftChanges(() => void refresh())
-  void heartbeatPreparedDocuments()
-  heartbeatTimer = setInterval(() => void heartbeatPreparedDocuments(), 5 * 60 * 1000)
 })
 
 onBeforeUnmount(() => {
-  if (heartbeatTimer) clearInterval(heartbeatTimer)
   unsubscribeDraftChanges?.()
 })
 
@@ -375,13 +300,6 @@ onBeforeRouteLeave((to) => {
           @click="changeStatus('pending')"
         >
           未提交
-        </button>
-        <button
-          type="button"
-          :class="{ active: activeStatus === 'prepared' }"
-          @click="changeStatus('prepared')"
-        >
-          待处理
         </button>
         <button
           type="button"
@@ -447,26 +365,13 @@ onBeforeRouteLeave((to) => {
           <div v-else-if="activeStatus === 'pending'" class="card-actions">
             <button type="button" @click.stop="selectedDocument = document">查看</button>
           </div>
-          <div v-else-if="activeStatus === 'prepared'" class="card-actions pending-actions">
+          <div v-else class="card-actions">
             <button
-              v-if="document.serverStatus === 'PENDING' && document.ownerUserId === currentUserId"
-              type="button"
-              :disabled="processingId === document.id"
-              @click.stop="executeDocument(document)"
-            >上传 ERP</button>
-            <button
+              v-if="document.serverStatus === 'WRITING_ERP' || document.serverStatus === 'NEEDS_RECONCILIATION'"
               type="button"
               :disabled="processingId === document.id"
               @click.stop="refreshServerDocument(document)"
             >刷新</button>
-            <button
-              class="danger"
-              type="button"
-              :disabled="processingId === document.id || document.serverStatus !== 'PENDING' || document.ownerUserId !== currentUserId"
-              @click.stop="cancelDocument(document)"
-            >取消</button>
-          </div>
-          <div v-else class="card-actions">
             <button type="button" @click.stop="selectedDocument = document">查看</button>
           </div>
         </article>
@@ -505,7 +410,7 @@ onBeforeRouteLeave((to) => {
 </template>
 
 <style scoped>
-.manager-page{min-height:100dvh;padding-top:72px;background:#f3f6fa;color:#21324a}.topbar-shell{position:fixed;z-index:20;top:0;right:0;left:0;height:72px;border-bottom:1px solid #e4ebf3;background:#fff;box-shadow:0 3px 12px rgba(23,54,93,.05)}.topbar,.page-content{width:min(100%,760px);margin-inline:auto}.topbar{height:100%;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:12px;padding:0 18px}.back-button{width:42px;height:42px;display:grid;place-items:center;border:0;border-radius:12px;background:#f3f6fa;color:#365678}.back-button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2}h1{overflow:hidden;color:#17365d;font-size:21px;text-overflow:ellipsis;white-space:nowrap}.page-content{display:grid;gap:14px;padding:16px}.status-tabs{display:grid;grid-template-columns:repeat(3,1fr);padding:4px;border:1px solid #dce5ef;border-radius:13px;background:#e9eff6}.status-tabs button{height:40px;border:0;border-radius:9px;background:transparent;color:#6c7b8e;font-size:14px;font-weight:750}.status-tabs button.active{background:#fff;color:#2368c4;box-shadow:0 2px 8px rgba(23,54,93,.1)}.document-list{display:grid;gap:11px}.document-card{padding:15px;border:1px solid rgba(23,54,93,.08);border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(23,54,93,.055);cursor:pointer}.document-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.document-heading>div{min-width:0;display:grid;gap:4px}.document-heading strong{overflow-wrap:anywhere;color:#203552;font:700 15px ui-monospace,SFMono-Regular,Consolas,monospace}.document-heading span,.document-heading time{color:#7b899b;font-size:12px}.document-card dl,.detail-sheet dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0;padding:12px;border-radius:11px;background:#f7f9fc}.document-card dl div,.detail-sheet dl div{min-width:0;display:grid;gap:4px}.document-card dt,.document-card dd,.detail-sheet dt,.detail-sheet dd{margin:0;font-size:12px}.document-card dt,.detail-sheet dt{color:#8491a2}.document-card dd,.detail-sheet dd{overflow:hidden;color:#33465e;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.card-actions{display:flex;justify-content:flex-end;gap:8px}.card-actions button{min-width:72px;height:38px;border:0;border-radius:9px;background:#e9f2fd;color:#2368c4;font-size:13px;font-weight:750}.card-actions button:nth-child(2){background:#2368c4;color:#fff}.card-actions button.danger{background:#fbecec;color:#b64141}.empty-state{min-height:180px;display:grid;place-items:center;border:1px dashed #cbd7e4;border-radius:16px;background:rgba(255,255,255,.62);color:#8b98a8;font-size:14px}.toast-message{position:fixed;z-index:50;right:18px;bottom:28px;left:18px;width:fit-content;margin-inline:auto;padding:10px 15px;border-radius:10px;background:#31445e;color:#fff;font-size:13px;font-weight:650;box-shadow:0 8px 22px rgba(23,54,93,.2)}.detail-mask{position:fixed;z-index:40;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:18px;background:rgba(20,32,48,.38)}.detail-sheet{width:min(100%,560px);padding:18px;border-radius:18px;background:#fff;box-shadow:0 16px 40px rgba(23,54,93,.2)}.detail-sheet header{display:flex;align-items:center;justify-content:space-between}.detail-sheet h2{color:#24344d;font-size:17px}.detail-sheet header button{width:36px;height:36px;border:0;border-radius:9px;background:#f1f4f8;color:#718096;font-size:22px}.detail-sheet dl{grid-template-columns:1fr 1fr;margin-bottom:0}@media(max-width:560px){.topbar{padding:0 14px}.page-content{padding:14px 12px}.document-card dl{grid-template-columns:repeat(3,minmax(0,1fr))}.pending-actions{display:grid;grid-template-columns:1fr 1fr}.card-actions button{min-width:0}}
+.manager-page{min-height:100dvh;padding-top:72px;background:#f3f6fa;color:#21324a}.topbar-shell{position:fixed;z-index:20;top:0;right:0;left:0;height:72px;border-bottom:1px solid #e4ebf3;background:#fff;box-shadow:0 3px 12px rgba(23,54,93,.05)}.topbar,.page-content{width:min(100%,760px);margin-inline:auto}.topbar{height:100%;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:12px;padding:0 18px}.back-button{width:42px;height:42px;display:grid;place-items:center;border:0;border-radius:12px;background:#f3f6fa;color:#365678}.back-button svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2}h1{overflow:hidden;color:#17365d;font-size:21px;text-overflow:ellipsis;white-space:nowrap}.page-content{display:grid;gap:14px;padding:16px}.status-tabs{display:grid;grid-template-columns:repeat(2,1fr);padding:4px;border:1px solid #dce5ef;border-radius:13px;background:#e9eff6}.status-tabs button{height:40px;border:0;border-radius:9px;background:transparent;color:#6c7b8e;font-size:14px;font-weight:750}.status-tabs button.active{background:#fff;color:#2368c4;box-shadow:0 2px 8px rgba(23,54,93,.1)}.document-list{display:grid;gap:11px}.document-card{padding:15px;border:1px solid rgba(23,54,93,.08);border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(23,54,93,.055);cursor:pointer}.document-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.document-heading>div{min-width:0;display:grid;gap:4px}.document-heading strong{overflow-wrap:anywhere;color:#203552;font:700 15px ui-monospace,SFMono-Regular,Consolas,monospace}.document-heading span,.document-heading time{color:#7b899b;font-size:12px}.document-card dl,.detail-sheet dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0;padding:12px;border-radius:11px;background:#f7f9fc}.document-card dl div,.detail-sheet dl div{min-width:0;display:grid;gap:4px}.document-card dt,.document-card dd,.detail-sheet dt,.detail-sheet dd{margin:0;font-size:12px}.document-card dt,.detail-sheet dt{color:#8491a2}.document-card dd,.detail-sheet dd{overflow:hidden;color:#33465e;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.card-actions{display:flex;justify-content:flex-end;gap:8px}.card-actions button{min-width:72px;height:38px;border:0;border-radius:9px;background:#e9f2fd;color:#2368c4;font-size:13px;font-weight:750}.card-actions button:nth-child(2){background:#2368c4;color:#fff}.card-actions button.danger{background:#fbecec;color:#b64141}.empty-state{min-height:180px;display:grid;place-items:center;border:1px dashed #cbd7e4;border-radius:16px;background:rgba(255,255,255,.62);color:#8b98a8;font-size:14px}.toast-message{position:fixed;z-index:50;right:18px;bottom:28px;left:18px;width:fit-content;margin-inline:auto;padding:10px 15px;border-radius:10px;background:#31445e;color:#fff;font-size:13px;font-weight:650;box-shadow:0 8px 22px rgba(23,54,93,.2)}.detail-mask{position:fixed;z-index:40;inset:0;display:flex;align-items:flex-end;justify-content:center;padding:18px;background:rgba(20,32,48,.38)}.detail-sheet{width:min(100%,560px);padding:18px;border-radius:18px;background:#fff;box-shadow:0 16px 40px rgba(23,54,93,.2)}.detail-sheet header{display:flex;align-items:center;justify-content:space-between}.detail-sheet h2{color:#24344d;font-size:17px}.detail-sheet header button{width:36px;height:36px;border:0;border-radius:9px;background:#f1f4f8;color:#718096;font-size:22px}.detail-sheet dl{grid-template-columns:1fr 1fr;margin-bottom:0}@media(max-width:560px){.topbar{padding:0 14px}.page-content{padding:14px 12px}.document-card dl{grid-template-columns:repeat(3,minmax(0,1fr))}.pending-actions{display:grid;grid-template-columns:1fr 1fr}.card-actions button{min-width:0}}
 .upload-error{margin:-4px 0 12px;padding:9px 10px;border-radius:9px;background:#fff2f2;color:#ae4141;font-size:12px}.card-actions button:disabled{opacity:.55}
 .draft-sync-status{display:flex;justify-content:space-between;gap:10px;margin:-4px 0 12px;color:#60758e;font-size:12px}.draft-sync-status span{color:#8b98a8}
 .server-status{display:flex;justify-content:space-between;gap:10px;margin:-4px 0 12px;color:#2867ad;font-size:12px;font-weight:700}.server-status span{color:#8491a2;font-weight:500}.operation-list{display:grid;gap:8px;margin-top:12px}.operation-list>div{display:grid;gap:3px;padding:10px;border-radius:9px;background:#f7f9fc}.operation-list strong{color:#33465e;font-size:12px}.operation-list span{color:#7b899b;font-size:11px}.operation-list .operation-error{color:#ae4141}

@@ -628,13 +628,13 @@ label_code_rule
 
 托盘整体调拨或货位调整时，应用必须在同一操作中为托盘自身及全部当前在托有效产品标签分别写入位置流水。只移动部分产品时必须先卸托，不能让实体托盘与其在托产品形成不同当前位置。
 
-调拨、货位调整和盘点预提交已复用现有 `business_operation`、`business_operation_line`、标签/托盘锁和事件表，无需新增迁移。预提交只保存最新库存快照、来源和目标位置并建立 `PENDING` 锁，不生成 `inventory_flow`。盘点产品标签的 `requested_qty` 可为零或高于 `inventory_qty_snapshot`；托盘自身仍受固定数量 1 的约束。
+调拨、货位调整和盘点的服务器准备阶段复用现有 `business_operation`、`business_operation_line`、标签/托盘锁和事件表，无需新增迁移。该阶段只保存最新库存快照、来源和目标位置并建立短暂 `PENDING` 锁，不生成 `inventory_flow`；H5 不再把它保存为可操作的业务阶段。盘点产品标签的 `requested_qty` 可为零或高于 `inventory_qty_snapshot`；托盘自身仍受固定数量 1 的约束。
 
 采购到货、委外到货、采购入库、发货单和销售出库预提交同样不新增表。每条扫码数量分配记录在 `business_operation_line.source_line_id`、`source_line_no` 和 `requested_qty`；跨来源单据时建立多个操作并共用 `submission_group_id`。相同标签可因同料来源行拆分出现多条操作明细，但锁只指向业务组根操作。现有来源行占用索引继续用于跨设备并发校验。
 
 材料出库表头不由用户输入仓库。提交时从标签或托盘最新流水读取实际仓库，按仓库拆成多条 `business_operation` 和多张 U8 材料出库单。拆出的操作共用 `submission_group_id`，但各自保存独立 `client_request_id`、U8 单号、状态和操作凭证；部分成功时只对成功仓库组生成库存流水。
 
-单据管理的执行状态以 `business_operation` 为准，`document_draft.business_status` 只保存草稿阶段摘要。预提交和取消会同步草稿摘要；客户端补传时服务端按关联业务组重新计算状态，不能用旧 JSON 覆盖真实业务终态。业务组列表不新增表，继续使用 `submission_group_id` 聚合，并返回组内每个操作的独立状态和异常。
+单据管理的执行状态以 `business_operation` 为准，`document_draft.business_status` 只保存草稿阶段摘要。直接上传请求内部可短暂建立 `PENDING`，但必须在同一服务调用中进入写入或被取消释放；普通写入前错误不得留下长期待处理锁。客户端补传时服务端按关联业务组重新计算状态，不能用旧 JSON 覆盖真实业务终态。只有外部写入结果不明确时保留 `NEEDS_RECONCILIATION` 供核对。
 
 库存对象查询同时返回最新 `unit_code`。材料出库预提交不接受 H5 推断或默认单位，服务端把请求单位与产品标签最新库存流水或托盘主记录再次比较；不同单位直接拒绝，不做换算。本次为 API 合同补充，不新增数据库字段或迁移。
 
