@@ -128,6 +128,9 @@ public sealed class MaterialOutboundService(
         if (IsRequired(requiredFields, "header.categoryCode", true) &&
             string.IsNullOrWhiteSpace(request.CategoryCode))
             throw new ApiException(StatusCodes.Status400BadRequest, "CATEGORY_REQUIRED", "请选择业务类别。");
+        if (!string.Equals(request.CategoryCode?.Trim(), "202", StringComparison.OrdinalIgnoreCase))
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "CATEGORY_INVALID", "生产订单领料的出库类别必须为 202。");
         if (request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > 500)
             throw new ApiException(StatusCodes.Status400BadRequest, "LINES_INVALID", "明细数量无效。");
         if (request.ProductionBatch?.Length > 100)

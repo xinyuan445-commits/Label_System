@@ -53,6 +53,7 @@ import { createUniqueId } from '@/utils/unique-id'
 import { readSession } from '@/services/auth'
 
 type LineObjectType = 'PRODUCT_LABEL' | 'PALLET'
+const materialOutboundSourceCategoryCode = '202'
 
 interface Props {
   documentType: OutboundDocumentType
@@ -202,6 +203,9 @@ const derivedBodyFieldKeys = new Set([
 ])
 
 const pageConfig = computed(() => getBusinessDocumentConfig(props.documentType))
+const hasFixedMaterialOutboundCategory = computed(() =>
+  props.documentType === 'material-outbound' && selectedSourceLines.value.length > 0,
+)
 const isAdmin = computed(() =>
   readSession()?.user.roles.some((role) => role.toLowerCase() === 'admin') ?? false,
 )
@@ -763,6 +767,10 @@ function clearSourceDocument(): void {
   selectedSourceLines.value = []
   materialRequirements.value = []
   overIssueTargets.value = {}
+  if (props.documentType === 'material-outbound' &&
+      outboundCategoryCode.value === materialOutboundSourceCategoryCode) {
+    outboundCategoryCode.value = ''
+  }
 }
 
 function buildMaterialOutboundSubmissionGroups(
@@ -888,6 +896,9 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
           : {},
       }))
     : []
+  if (props.documentType === 'material-outbound' && selectedSourceLines.value.length > 0) {
+    outboundCategoryCode.value = materialOutboundSourceCategoryCode
+  }
 }
 
 function createSummary(payload: unknown): OutboundDocumentSummary {
@@ -1193,6 +1204,9 @@ onMounted(async () => {
     selectedSourceLines.value = sourceSelection.selectedLines
     materialRequirements.value = sourceSelection.requirements
     overIssueTargets.value = {}
+    if (props.documentType === 'material-outbound') {
+      outboundCategoryCode.value = materialOutboundSourceCategoryCode
+    }
     const departments = [...new Set(
       sourceSelection.selectedLines.map((line) => line.departmentCode).filter(Boolean),
     )]
@@ -1349,7 +1363,7 @@ onBeforeRouteLeave((to) => {
             <SearchSelect
               v-model="outboundCategoryCode"
               :options="rdStyleSelectOptions"
-              :disabled="referenceDataLoading"
+              :disabled="referenceDataLoading || hasFixedMaterialOutboundCategory"
               placeholder="编号或名称"
             />
           </label>
