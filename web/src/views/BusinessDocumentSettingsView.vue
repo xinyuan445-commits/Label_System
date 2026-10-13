@@ -7,6 +7,7 @@ import {
   isBusinessDocumentType,
   type BusinessDocumentType,
 } from '@/services/business-document-config'
+import { returnToParentDocument } from '@/services/document-subpage-navigation'
 import {
   ensureDocumentPolicy,
   fetchBusinessDocumentSettings,
@@ -71,11 +72,7 @@ async function saveAndReturn(): Promise<void> {
 
 async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
-  await router.replace({
-    name: 'work-function',
-    params: { code: documentType.value },
-    query: route.query,
-  })
+  await returnToParentDocument(router, route, documentType.value)
 }
 
 onBeforeRouteLeave((to) => {

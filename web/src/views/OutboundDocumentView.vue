@@ -17,6 +17,7 @@ import {
   getBusinessDocumentFields,
   type DocumentFieldDefinition,
 } from '@/services/business-document-fields'
+import { markDocumentSubpage } from '@/services/document-subpage-navigation'
 import { lookupInventoryObject } from '@/services/inventory-object-lookup'
 import {
   fetchDepartments,
@@ -753,10 +754,10 @@ function removeLine(id: string): void {
 async function openSourceDocumentSelection(): Promise<void> {
   saveWorkingState()
   allowNavigation = true
-  await router.replace({
+  await router.push({
     name: 'source-document-select',
     params: { code: props.documentType },
-    query: route.query,
+    query: markDocumentSubpage(route.query),
   })
 }
 
@@ -988,40 +989,40 @@ function hasDraftContent(): boolean {
 async function openDocumentManager(): Promise<void> {
   saveWorkingState()
   allowNavigation = true
-  await router.replace({
+  await router.push({
     name: 'outbound-document-manager',
     params: { code: props.documentType },
-    query: route.query,
+    query: markDocumentSubpage(route.query),
   })
 }
 
 async function openSwitchSettings(): Promise<void> {
   saveWorkingState()
   allowNavigation = true
-  await router.replace({
+  await router.push({
     name: 'business-document-settings',
     params: { code: props.documentType },
-    query: route.query,
+    query: markDocumentSubpage(route.query),
   })
 }
 
 async function openDocumentFieldSettings(): Promise<void> {
   saveWorkingState()
   allowNavigation = true
-  await router.replace({
+  await router.push({
     name: 'document-field-settings',
     params: { code: props.documentType },
-    query: route.query,
+    query: markDocumentSubpage(route.query),
   })
 }
 
 async function openSourceDetails(): Promise<void> {
   saveWorkingState()
   allowNavigation = true
-  await router.replace({
+  await router.push({
     name: 'source-document-details',
     params: { code: props.documentType },
-    query: route.query,
+    query: markDocumentSubpage(route.query),
   })
 }
 

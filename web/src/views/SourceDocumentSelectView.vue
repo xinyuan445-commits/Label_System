@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import DateField from '@/components/DateField.vue'
+import { returnToParentDocument } from '@/services/document-subpage-navigation'
 import {
   getBusinessDocumentConfig,
   isBusinessDocumentType,
@@ -228,9 +229,7 @@ async function confirmSelection(): Promise<void> {
 
 async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
-  await router.replace({
-    name: 'work-function', params: { code: outboundDocumentType.value }, query: route.query,
-  })
+  await returnToParentDocument(router, route, outboundDocumentType.value)
 }
 
 onBeforeRouteLeave((to) => {

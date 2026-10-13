@@ -6,6 +6,7 @@ import {
   getBusinessDocumentConfig,
   isBusinessDocumentType,
 } from '@/services/business-document-config'
+import { returnToParentDocument } from '@/services/document-subpage-navigation'
 import {
   clearOutboundDocumentWorkingState,
   deleteOutboundDocument,
@@ -175,11 +176,7 @@ async function continueDocument(document: StoredOutboundDocument): Promise<void>
 
 async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
-  await router.replace({
-    name: 'work-function',
-    params: { code: documentType.value },
-    query: route.query,
-  })
+  await returnToParentDocument(router, route, documentType.value)
 }
 
 async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
