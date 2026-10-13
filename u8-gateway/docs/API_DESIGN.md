@@ -10,6 +10,8 @@
 
 库存类单据自动取号先尝试组件单据类型，再尝试合同登记的 `numberType`。888 当前映射为采购入库 `24`、销售出库 `0303`、材料出库 `0412`、调拨 `0304`、货位调整 `0313`、盘点 `0307`。每次取号使用新的表头 DOM；取得单号后重新生成表头并写入 `ccode` 再调用 `Insert`。取号失败发生在 `Insert` 前，必须返回明确失败，不得误记为结果未知。
 
+`0.4.3` 将库存类 `USERPCO.VoucherCO.Insert` 固定为已验证的 7 参数签名：单据类型、表头、表体、货位、错误信息、数据库连接和凭证内部 ID。动态绑定失败发生在 COM 写入调用前，返回 `422 U8_CALL_BINDING_FAILED`，幂等记录标记为已知失败并允许同一请求号再次提交；已经进入保存调用但新增后无法回查确认时返回 `U8_WRITE_NOT_CONFIRMED`，保留核对状态且禁止直接重放。
+
 ## 审核单据只读接口（0.3.7）
 
 - `GET /api/v1/approval-documents?documentType=&status=&documentNo=&startDate=&endDate=&limit=`：按 U8 当前状态返回单据摘要，`status` 为 `pending` 或 `audited`，`limit` 最大 100。

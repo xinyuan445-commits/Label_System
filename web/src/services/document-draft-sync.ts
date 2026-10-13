@@ -45,7 +45,7 @@ let running = false
 let delayTimer: ReturnType<typeof setTimeout> | null = null
 
 function businessStatus(document: StoredOutboundDocument): ServerDraftItem['businessStatus'] {
-  if (document.uploadStatus === 'prepared') return 'PREPARED'
+  if (document.uploadStatus === 'prepared' || document.uploadStatus === 'attention') return 'PREPARED'
   if (document.uploadStatus === 'cancelled') return 'CANCELLED'
   if (document.uploadStatus === 'completed' || document.uploadStatus === 'uploaded') return 'COMPLETED'
   return 'DRAFT'

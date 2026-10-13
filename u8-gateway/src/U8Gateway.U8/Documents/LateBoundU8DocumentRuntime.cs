@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Microsoft.CSharp.RuntimeBinder;
 using ADODB;
 using Info_PU;
 using MSXML2;
@@ -132,7 +133,6 @@ namespace U8Gateway.U8.Documents
             IXMLDOMDocument2 head = null;
             IXMLDOMDocument2 body = null;
             IXMLDOMDocument2 position = null;
-            IXMLDOMDocument2 messageDocument = null;
             Connection connection = null;
             string voucherCode = null;
             string voucherId = string.Empty;
@@ -205,26 +205,27 @@ namespace U8Gateway.U8.Documents
                     "表头");
                 body = ParseXml(packet.BodyXml, "表体");
                 position = ParseXml(packet.PositionXml, "货位");
-                messageDocument = new DOMDocument26Class();
                 error = string.Empty;
 
-                bool check = true;
-                bool beforeCheckStock = true;
-                bool red = OptionBoolean(execution.Request.Options, "redVoucher");
-                bool inserted = native.Insert(
-                    execution.Profile.ComponentDocumentType,
-                    head,
-                    body,
-                    position,
-                    ref error,
-                    ref connection,
-                    ref voucherId,
-                    ref messageDocument,
-                    ref check,
-                    ref beforeCheckStock,
-                    red,
-                    string.Empty,
-                    false);
+                bool inserted;
+                try
+                {
+                    inserted = native.Insert(
+                        execution.Profile.ComponentDocumentType,
+                        head,
+                        body,
+                        position,
+                        ref error,
+                        ref connection,
+                        ref voucherId);
+                }
+                catch (RuntimeBinderException exception)
+                {
+                    return Failure(
+                        "U8_CALL_BINDING_FAILED",
+                        exception.Message,
+                        voucherCode);
+                }
 
                 long? confirmedId = WaitForVoucherId(
                     options, execution.Profile, voucherCode);
@@ -232,7 +233,7 @@ namespace U8Gateway.U8.Documents
                 {
                     return Failure(
                         "U8_CREATE_REJECTED",
-                        Empty(error, MessageText(messageDocument, "U8 新增失败。")),
+                        Empty(error, "U8 新增失败。"),
                         voucherCode);
                 }
                 if (!confirmedId.HasValue)
@@ -248,6 +249,7 @@ namespace U8Gateway.U8.Documents
                 return new DocumentOperationResult
                 {
                     Confirmed = state.Exists,
+                    OutcomeKnown = state.Exists,
                     Code = state.Exists ? "OK" : "U8_WRITE_NOT_CONFIRMED",
                     Message = state.Exists ? Empty(error, "成功") : "U8 新增后回查未确认。",
                     VoucherId = confirmedId.Value.ToString(),
@@ -260,7 +262,6 @@ namespace U8Gateway.U8.Documents
             {
                 Shutdown(login);
                 Release(connection);
-                Release(messageDocument);
                 Release(position);
                 Release(body);
                 Release(head);
@@ -355,13 +356,15 @@ namespace U8Gateway.U8.Documents
 
                 long? confirmedId = WaitForVoucherId(options, execution.Profile, voucherCode);
                 if (!confirmedId.HasValue)
-                    return Failure("U8_CREATE_REJECTED",
-                        Empty(saveMessage, MessageText(message, "U8 新增失败。")), voucherCode);
+                    return Failure("U8_WRITE_NOT_CONFIRMED",
+                        Empty(saveMessage, MessageText(message, "U8 新增后回查未确认。")),
+                        voucherCode, false);
                 VoucherState state = ReadVoucherState(options, execution.Profile, confirmedId.Value);
                 U8XmlPacket saved = QueryPurchase(options.U8, execution.Profile, confirmedId.Value);
                 return new DocumentOperationResult
                 {
                     Confirmed = state.Exists,
+                    OutcomeKnown = state.Exists,
                     Code = state.Exists ? "OK" : "U8_WRITE_NOT_CONFIRMED",
                     Message = state.Exists ? Empty(saveMessage, "成功") : "U8 新增后回查未确认。",
                     VoucherId = confirmedId.Value.ToString(),
@@ -444,12 +447,14 @@ namespace U8Gateway.U8.Documents
                 saveMessage = voucher.Save(head, body, 0, ref currentId, ref config);
                 long? confirmedId = WaitForVoucherId(options, execution.Profile, voucherCode);
                 if (!confirmedId.HasValue)
-                    return Failure("U8_CREATE_REJECTED", Empty(saveMessage, "U8 新增失败。"), voucherCode);
+                    return Failure("U8_WRITE_NOT_CONFIRMED",
+                        Empty(saveMessage, "U8 新增后回查未确认。"), voucherCode, false);
                 VoucherState state = ReadVoucherState(options, execution.Profile, confirmedId.Value);
                 U8XmlPacket saved = QuerySales(options.U8, confirmedId.Value);
                 return new DocumentOperationResult
                 {
                     Confirmed = state.Exists,
+                    OutcomeKnown = state.Exists,
                     Code = state.Exists ? "OK" : "U8_WRITE_NOT_CONFIRMED",
                     Message = state.Exists ? Empty(saveMessage, "成功") : "U8 新增后回查未确认。",
                     VoucherId = confirmedId.Value.ToString(),
@@ -511,6 +516,7 @@ namespace U8Gateway.U8.Documents
             return new DocumentOperationResult
             {
                 Confirmed = true,
+                OutcomeKnown = true,
                 Code = "OK",
                 Message = "成功",
                 VoucherId = voucherId.ToString(),
@@ -649,7 +655,8 @@ namespace U8Gateway.U8.Documents
             return Failure(
                 "U8_WRITE_NOT_CONFIRMED",
                 Empty(nativeMessage, "U8 操作后回查未确认。"),
-                execution.VoucherCode);
+                execution.VoucherCode,
+                false);
         }
 
         private static string ChangeInventoryState(
@@ -1452,6 +1459,7 @@ namespace U8Gateway.U8.Documents
             return new DocumentOperationResult
             {
                 Confirmed = true,
+                OutcomeKnown = true,
                 Code = "OK",
                 Message = message,
                 VoucherId = voucherId?.ToString(),
@@ -1463,11 +1471,13 @@ namespace U8Gateway.U8.Documents
         private static DocumentOperationResult Failure(
             string code,
             string message,
-            string voucherCode)
+            string voucherCode,
+            bool outcomeKnown = true)
         {
             return new DocumentOperationResult
             {
                 Confirmed = false,
+                OutcomeKnown = outcomeKnown,
                 Code = code,
                 Message = message,
                 VoucherCode = voucherCode

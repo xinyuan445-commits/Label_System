@@ -472,7 +472,7 @@ namespace U8Gateway.Api.Controllers
                     result?.Message,
                     result,
                     AppRuntime.BusinessNow());
-                if (result == null || !result.Confirmed)
+                if (result == null || (!result.Confirmed && !result.OutcomeKnown))
                 {
                     Append(
                         journal,
@@ -494,7 +494,7 @@ namespace U8Gateway.Api.Controllers
                         result,
                         AppRuntime.BusinessNow());
                 }
-                else
+                else if (result.Confirmed)
                 {
                     Append(
                         journal,
@@ -521,6 +521,23 @@ namespace U8Gateway.Api.Controllers
                         OperationStages.Success,
                         result.Code,
                         "操作完成",
+                        result,
+                        AppRuntime.BusinessNow());
+                }
+                else
+                {
+                    Append(
+                        journal,
+                        handle,
+                        OperationStages.Failed,
+                        result.Code,
+                        result.Message,
+                        ResultData(result));
+                    registry.Update(
+                        request.ClientRequestId,
+                        OperationStages.Failed,
+                        result.Code,
+                        result.Message,
                         result,
                         AppRuntime.BusinessNow());
                 }
@@ -561,10 +578,6 @@ namespace U8Gateway.Api.Controllers
                 string.Equals(
                     status,
                     OperationStages.ReconciliationRequired,
-                    StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(
-                    status,
-                    OperationStages.Failed,
                     StringComparison.OrdinalIgnoreCase);
         }
 

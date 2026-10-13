@@ -249,6 +249,7 @@ public sealed class U8GatewayClient(
         statusCode >= 500 ||
         code.Contains("UNKNOWN", StringComparison.OrdinalIgnoreCase) ||
         code.Contains("RECONCILIATION", StringComparison.OrdinalIgnoreCase) ||
+        code.Contains("NOT_CONFIRMED", StringComparison.OrdinalIgnoreCase) ||
         code.Contains("IN_PROGRESS", StringComparison.OrdinalIgnoreCase);
 
     private static string ValidationMessage(JsonElement? data, string fallback)

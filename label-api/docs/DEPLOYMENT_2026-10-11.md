@@ -1,6 +1,8 @@
 # 2026-10-11 Business API IIS 部署记录
 
-2026-10-13 16:30 经用户确认清理首次材料出库失败组：删除 2 个业务操作、3 条明细、6 条事件、1 份漫游草稿及 2 条草稿事件，释放 3 张产品标签锁；同时删除 Business API 准备凭证、Gateway 写入凭证和对应幂等索引。清理前再次确认 U8 未生成 `RdRecord11`、本地无库存流水且标签余额未变化。H5 更新为 `0.2.0-dev.40`，单据管理增加仅本机的选择、全选和批量删除；该按钮不删除服务器业务或 ERP 单据。Business API/Gateway 版本和数据库结构不变。
+2026-10-13 16:21 已发布 Business API `0.8.1` 到 `D:\LabelSystem\Api\releases\20261013_162138`，Gateway 已部署 `0.4.3`，H5 更新为 `0.2.0-dev.41`。库存 `Insert` 参数绑定失败现在按明确未写入失败处理，同一请求号可安全重试；只有保存已发生但回查不能确认时才进入 `NEEDS_RECONCILIATION`。H5 单据管理增加独立“待核对”页签，非终态异常不再归入“已结束”。两个服务健康检查分别为 `ready/running`，Business API 数据库就绪且 888 测试写入继续开启；部署回收后需重新登录。
+
+2026-10-13 16:18 经用户确认不保留首次材料出库异常组：精确删除 2 个业务操作、3 条明细、6 条操作事件、1 份漫游草稿及 1 条草稿事件，释放 3 张产品标签锁；同时删除 Business API 准备凭证、Gateway 写入凭证和对应幂等索引。清理前再次确认没有 U8 单号、没有 `erp_status=SUCCESS`、没有本地库存流水；清理后业务组、草稿、孤立标签锁和孤立托盘锁均为 0。标签基础数据与数量未删除。
 
 2026-10-13 15:55 首次材料出库真实上传组在 Gateway 自动取号阶段失败：第一拆组被保守记为 `NEEDS_RECONCILIATION`，第二拆组停在 `PENDING`。Gateway 凭证确认失败发生在 `Insert` 前，888 的 `RdRecord11` 按生产订单、日期和仓库反查为 0；没有 U8 单号、没有扣减标签余额。Gateway `0.4.2` 已修正材料出库卡片号 `0412` 和明确失败分类；现有失败组未自动删除或重试，等待人工确认清理。
 
@@ -12,14 +14,14 @@
 Site: LabelSystemApi
 Application pool: LabelSystemApiPool
 URL: http://172.16.1.159:9890
-Release: D:\LabelSystem\Api\releases\20261013_151740
+Release: D:\LabelSystem\Api\releases\20261013_162138
 External config: D:\LabelSystem\Config\label-api.json
 Operation archive: D:\LabelSystem\OperationArchive
 Environment: development
 Database: LabelSystem_Dev
 U8 account: 888
-Service version: 0.8.0
-U8 writes: disabled
+Service version: 0.8.1
+U8 writes: enabled for development / account 888
 ```
 
 2026-10-13 15:18 已发布 Business API `0.8.0` 到 `D:\LabelSystem\Api\releases\20261013_151740`，部署 Gateway `0.4.0`，H5 更新为 `0.2.0-dev.39`。三套业务库执行迁移 `012` 并记录相同脚本哈希，新增采购类型、销售类型和币种缓存；development 从 888 首次同步 16 个采购类型、11 个销售类型和 4 个币种。H5 到货/发货改用业务类型，采购/销售出库同时选择业务类型和出入库类别，调拨与盘点分别选择两个方向类别。八类通用单据使用合法基础档案执行安全提交均返回 `409 U8_WRITE_DISABLED`，业务组数量未增加；健康检查 `ready`、数据库就绪，`U8WritesEnabled=false`。未调用 U8 保存、未产生 888 单据、未修改标签余额；APK 未更新，部署回收后需重新登录。

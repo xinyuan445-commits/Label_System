@@ -1,5 +1,7 @@
 # 2026-10-11 IIS 部署记录
 
+2026-10-13 16:21 已部署 `0.4.3`：库存类 `USERPCO.VoucherCO.Insert` 改为 U8 已验证的 7 参数签名，参数绑定失败在 COM 写入前返回 `422 U8_CALL_BINDING_FAILED`，操作凭证标记为明确失败并允许同请求号重试；保存调用后的回查未确认继续保留为结果未知。Release 构建和操作凭证烟测通过，外部健康检查为 `running`、版本 `0.4.3.0`、`configured=true`。888 测试新增、审核和弃审保持开放，修改和删除仍关闭。
+
 2026-10-13 15:55 已部署 `0.4.2`：首次材料出库联调在 `GetNewVouchCode("11")` 阶段失败，U8 返回单据号未设置；反查 `VoucherNumber` 确认材料出库卡片号为 `0412`，并补齐六类库存单据卡片号。运行时改为候选卡片号取号、取得单号后重建表头并写入 `ccode`，取号失败按明确失败返回。888 反查本次生产订单、日期和仓库对应 `RdRecord11` 为 0，确认没有执行 `Insert` 或生成 U8 单据。站点和应用池为 `Started`，健康检查版本 `0.4.2.0`，测试写入及新增、审核、弃审能力保持开启。
 
 2026-10-13 15:38 已部署 `0.4.1` 并按用户授权开放测试账套写入：九类单据 `create`、`verify`、`unverify` 全部为 `true`，`update`、`delete` 保持 `false`；服务器 `EnableTestWrites=true`。写入范围固定为 `test`、`UFDATA_888_2021` 和 888，站点与应用池均为 `Started`，健康检查版本 `0.4.1.0`。切换前已备份站点和受保护配置；本次只切换能力和门禁，没有自动创建、审核或弃审 U8 单据。
@@ -25,7 +27,7 @@ Environment: test
 Database: UFDATA_888_2021
 U8 account: (default)@888
 Test writes: enabled for UFDATA_888_2021 / 888
-Service version: 0.4.1.0
+Service version: 0.4.3.0
 ```
 
 原有 `Default Web Site`、`PDA` 和 `MaterialOutboundApi` 站点名称、目录和绑定未修改。

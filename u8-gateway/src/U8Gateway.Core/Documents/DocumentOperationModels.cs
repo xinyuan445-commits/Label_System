@@ -32,6 +32,7 @@ namespace U8Gateway.Core.Documents
     public sealed class DocumentOperationResult
     {
         public bool Confirmed { get; set; }
+        public bool OutcomeKnown { get; set; }
         public string Code { get; set; }
         public string Message { get; set; }
         public string VoucherId { get; set; }

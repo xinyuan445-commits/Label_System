@@ -13,6 +13,7 @@ namespace U8Gateway.U8.Documents
             return Task.FromResult(new DocumentOperationResult
             {
                 Confirmed = false,
+                OutcomeKnown = true,
                 Code = "U8_OPERATION_NOT_ENABLED",
                 Message = "该单据操作尚未通过测试账套验证。",
                 VoucherCode = execution?.VoucherCode

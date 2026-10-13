@@ -13,6 +13,7 @@ import { createUniqueId } from '@/utils/unique-id'
 
 export type OutboundDocumentUploadStatus =
   | 'pending'
+  | 'attention'
   | 'completed'
   | 'cancelled'
   | 'uploaded'
@@ -245,9 +246,9 @@ function beijingTimestamp(): string {
   return `${value.year}-${value.month}-${value.day}T${value.hour}:${value.minute}:${value.second}+08:00`
 }
 
-function localStatusForServer(status: string, _isTerminal = false): OutboundDocumentUploadStatus {
+function localStatusForServer(status: string, isTerminal = false): OutboundDocumentUploadStatus {
   if (status === 'CANCELLED') return 'cancelled'
-  return 'completed'
+  return isTerminal ? 'completed' : 'attention'
 }
 
 async function updateDocument(

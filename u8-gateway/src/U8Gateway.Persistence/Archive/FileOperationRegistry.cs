@@ -79,6 +79,23 @@ namespace U8Gateway.Persistence.Archive
                     };
                 }
 
+                bool knownFailure = string.Equals(
+                        existing.Status,
+                        OperationStages.Failed,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    existing.Result != null && existing.Result.OutcomeKnown;
+                if (knownFailure)
+                {
+                    record.CreatedAt = existing.CreatedAt;
+                    record.UpdatedAt = BusinessClock.Now;
+                    Persist(record);
+                    return new OperationClaimResult
+                    {
+                        Outcome = OperationClaimOutcomes.Claimed,
+                        Record = Clone(record)
+                    };
+                }
+
                 return new OperationClaimResult
                 {
                     Outcome = string.Equals(
@@ -267,6 +284,7 @@ namespace U8Gateway.Persistence.Archive
             return new DocumentOperationResult
             {
                 Confirmed = result.Confirmed,
+                OutcomeKnown = result.OutcomeKnown,
                 Code = result.Code,
                 Message = result.Message,
                 VoucherId = result.VoucherId,

@@ -188,6 +188,7 @@ namespace U8Gateway.OperationJournalSmokeTest
                 new U8Gateway.Core.Documents.DocumentOperationResult
                 {
                     Confirmed = true,
+                    OutcomeKnown = true,
                     Code = "OK",
                     Message = "成功",
                     VoucherId = "1",
@@ -205,6 +206,29 @@ namespace U8Gateway.OperationJournalSmokeTest
             Require(
                 replay.Record.Result?.VoucherCode == "TEST-001",
                 "幂等重放没有保留原结果。");
+
+            const string failedRequestId = "known-failure-retry-001";
+            Require(
+                registry.Claim(NewRecord(failedRequestId, payloadHash, "failed-1")).Outcome ==
+                OperationClaimOutcomes.Claimed,
+                "明确失败测试必须先取得执行权。");
+            registry.Update(
+                failedRequestId,
+                OperationStages.Failed,
+                "U8_CALL_BINDING_FAILED",
+                "写入前失败",
+                new U8Gateway.Core.Documents.DocumentOperationResult
+                {
+                    Confirmed = false,
+                    OutcomeKnown = true,
+                    Code = "U8_CALL_BINDING_FAILED",
+                    Message = "写入前失败"
+                },
+                BusinessClock.Now);
+            Require(
+                registry.Claim(NewRecord(failedRequestId, payloadHash, "failed-2")).Outcome ==
+                OperationClaimOutcomes.Claimed,
+                "确认未写入的失败必须允许同请求安全重试。");
 
             OperationRecord stored = registry.Get(clientRequestId);
             Require(
