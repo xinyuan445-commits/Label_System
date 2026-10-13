@@ -6,15 +6,17 @@
 Site: LabelSystemApi
 Application pool: LabelSystemApiPool
 URL: http://172.16.1.159:9890
-Release: D:\LabelSystem\Api\releases\20261013_125054
+Release: D:\LabelSystem\Api\releases\20261013_135221
 External config: D:\LabelSystem\Config\label-api.json
 Operation archive: D:\LabelSystem\OperationArchive
 Environment: development
 Database: LabelSystem_Dev
 U8 account: 888
-Service version: 0.5.8
+Service version: 0.6.0
 U8 writes: disabled
 ```
+
+2026-10-13 13:52 已发布 Business API `0.6.0` 到 `D:\LabelSystem\Api\releases\20261013_135221`，并部署 Gateway `0.3.8`、更新 H5 `0.2.0-dev.37`。材料出库增加归档复核、U8 需求重读、字段映射、拆组校验、受控执行、回查确认、本地库存事务提交和待核对处理；部分领用后剩余标签继续保留原仓库货位，结果不明确时停止本组后续拆组。H5 待处理卡片增加“上传 ERP”并按真实终态提示。现有用户测试组 `f0546e0a-cd96-402b-8177-7715d5c19051` 的 2 个拆组、3 条明细通过无写入校验；执行安全请求返回 `U8_WRITE_DISABLED`，组及 ERP 状态仍为 `PENDING`，无 U8 单号。3 张标签余额仍为 14、7、130，状态 `ACTIVE` 且锁仍归原根操作。健康检查 `ready`、数据库就绪、`U8WritesEnabled=false`；未写 U8、未新增模拟标签、无数据库迁移。
 
 2026-10-12 18:45 已发布 `0.3.2`，外置显示版本同步为 `0.3.2`：新增九类审核查询代理、审核/弃审安全入口和当前管理员自保护。九类已审核列表及详情、现有用户列表和 19 项权限读取通过；审核安全请求返回 `409/U8_WRITE_DISABLED`，未调用 Gateway 写接口。标签查询使用不存在的安全测试码返回 `404`，未创建标签数据。
 

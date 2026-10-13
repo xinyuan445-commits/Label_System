@@ -62,9 +62,14 @@ namespace U8Gateway.U8.Documents
         {
             U8GatewayRuntimeOptions options = _options();
             ValidateWriteOptions(options);
+            if (string.Equals(execution.Operation, DocumentOperationCodes.Add,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(execution.Profile.Component, "USERPCO",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return CreateInventory(options, execution);
+            }
             if (string.Equals(execution.Operation, DocumentOperationCodes.Validate,
-                    StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(execution.Operation, DocumentOperationCodes.Add,
                     StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(execution.Operation, DocumentOperationCodes.Edit,
                     StringComparison.OrdinalIgnoreCase))
@@ -84,6 +89,126 @@ namespace U8Gateway.U8.Documents
                     execution.VoucherCode);
             }
             return ChangeState(options, execution);
+        }
+
+        private DocumentOperationResult CreateInventory(
+            U8GatewayRuntimeOptions options,
+            U8DocumentExecution execution)
+        {
+            DocumentDefinition definition = _definitions.Get(execution.Profile.DocumentType);
+            if (definition == null)
+            {
+                return Failure("DOCUMENT_TYPE_NOT_FOUND", "单据类型不存在。", null);
+            }
+            if (execution.Request == null)
+            {
+                return Failure("REQUEST_REQUIRED", "请求体不能为空。", null);
+            }
+
+            var payload = new DocumentPayload
+            {
+                Header = execution.Request.Header,
+                Lines = execution.Request.Lines,
+                Positions = execution.Request.Positions,
+                Auxiliary = execution.Request.Auxiliary
+            };
+            U8XmlPacket packet = _codec.Encode(definition, payload);
+            U8Login.clsLogin login = null;
+            object voucher = null;
+            IXMLDOMDocument2 head = null;
+            IXMLDOMDocument2 body = null;
+            IXMLDOMDocument2 position = null;
+            IXMLDOMDocument2 messageDocument = null;
+            Connection connection = null;
+            string voucherCode = null;
+            string voucherId = string.Empty;
+            try
+            {
+                login = Login(options.U8);
+                voucher = Create("USERPCO.VoucherCO");
+                dynamic native = voucher;
+                string error = string.Empty;
+                if (!native.IniLogin(login, ref error))
+                {
+                    throw new InvalidOperationException(Empty(error, "USERPCO 初始化失败。"));
+                }
+
+                head = ParseXml(packet.HeaderXml, "表头");
+                body = ParseXml(packet.BodyXml, "表体");
+                position = ParseXml(packet.PositionXml, "货位");
+                messageDocument = new DOMDocument26Class();
+                bool validate = true;
+                bool phase = false;
+                voucherCode = native.GetNewVouchCode(
+                    execution.Profile.ComponentDocumentType,
+                    head,
+                    ref error,
+                    ref validate,
+                    ref phase);
+                if (string.IsNullOrWhiteSpace(voucherCode))
+                {
+                    throw new InvalidOperationException(Empty(error, "U8 未生成单据号。"));
+                }
+
+                bool check = true;
+                bool beforeCheckStock = true;
+                bool red = OptionBoolean(execution.Request.Options, "redVoucher");
+                bool inserted = native.Insert(
+                    execution.Profile.ComponentDocumentType,
+                    head,
+                    body,
+                    position,
+                    ref error,
+                    ref connection,
+                    ref voucherId,
+                    ref messageDocument,
+                    ref check,
+                    ref beforeCheckStock,
+                    red,
+                    string.Empty,
+                    false);
+
+                long? confirmedId = WaitForVoucherId(
+                    options, execution.Profile, voucherCode);
+                if (!inserted && !confirmedId.HasValue)
+                {
+                    return Failure(
+                        "U8_CREATE_REJECTED",
+                        Empty(error, MessageText(messageDocument, "U8 新增失败。")),
+                        voucherCode);
+                }
+                if (!confirmedId.HasValue)
+                {
+                    throw new InvalidOperationException(
+                        Empty(error, "U8 返回新增成功，但回查不到单据。"));
+                }
+
+                VoucherState state = ReadVoucherState(
+                    options, execution.Profile, confirmedId.Value);
+                U8XmlPacket saved = QueryInventory(
+                    options.U8, execution.Profile, confirmedId.Value);
+                return new DocumentOperationResult
+                {
+                    Confirmed = state.Exists,
+                    Code = state.Exists ? "OK" : "U8_WRITE_NOT_CONFIRMED",
+                    Message = state.Exists ? Empty(error, "成功") : "U8 新增后回查未确认。",
+                    VoucherId = confirmedId.Value.ToString(),
+                    VoucherCode = voucherCode,
+                    Version = state.Version,
+                    Document = _codec.Decode(definition, saved)
+                };
+            }
+            finally
+            {
+                Shutdown(login);
+                Release(connection);
+                Release(messageDocument);
+                Release(position);
+                Release(body);
+                Release(head);
+                Release(voucher);
+                Release(login);
+            }
         }
 
         private DocumentOperationResult Query(U8DocumentExecution execution)
@@ -739,6 +864,20 @@ namespace U8Gateway.U8.Documents
             }
         }
 
+        private static long? WaitForVoucherId(
+            U8GatewayRuntimeOptions options,
+            U8DocumentProfile profile,
+            string voucherCode)
+        {
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                long? value = TryResolveVoucherId(options, profile, voucherCode);
+                if (value.HasValue) return value;
+                if (attempt < 9) Thread.Sleep(100);
+            }
+            return null;
+        }
+
         private static VoucherState ReadVoucherState(
             U8GatewayRuntimeOptions options,
             U8DocumentProfile profile,
@@ -981,6 +1120,43 @@ namespace U8Gateway.U8.Documents
         private static string Empty(string value, string fallback)
         {
             return string.IsNullOrWhiteSpace(value) ? fallback : value;
+        }
+
+        private static bool OptionBoolean(
+            System.Collections.Generic.IDictionary<string, object> options,
+            string name)
+        {
+            if (options == null || string.IsNullOrWhiteSpace(name)) return false;
+            object value;
+            if (!options.TryGetValue(name, out value))
+            {
+                value = options.FirstOrDefault(x => string.Equals(
+                    x.Key, name, StringComparison.OrdinalIgnoreCase)).Value;
+            }
+            if (value is bool) return (bool)value;
+            bool parsed;
+            return value != null && bool.TryParse(Convert.ToString(value), out parsed) && parsed;
+        }
+
+        private static string MessageText(object document, string fallback)
+        {
+            string xml = Xml(document);
+            if (string.IsNullOrWhiteSpace(xml)) return fallback;
+            try
+            {
+                XDocument parsed = XDocument.Parse(xml);
+                string message = parsed.Descendants()
+                    .SelectMany(x => x.Attributes())
+                    .Where(x => x.Name.LocalName.IndexOf("message", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                x.Name.LocalName.IndexOf("msg", StringComparison.OrdinalIgnoreCase) >= 0)
+                    .Select(x => x.Value)
+                    .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
+                return Empty(message, fallback);
+            }
+            catch
+            {
+                return fallback;
+            }
         }
 
         private static DocumentOperationResult Disabled(string voucherCode)

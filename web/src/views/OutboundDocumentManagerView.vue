@@ -24,6 +24,8 @@ import { readSession } from '@/services/auth'
 import {
   cancelOutboundDocument,
   cancelOutboundOperationGroup,
+  executeOutboundDocument,
+  executeOutboundOperationGroup,
   getOutboundOperationGroup,
   heartbeatOutboundOperationGroup,
   heartbeatOutboundDocument,
@@ -247,6 +249,35 @@ async function cancelDocument(document: StoredOutboundDocument): Promise<void> {
   }
 }
 
+async function executeDocument(document: StoredOutboundDocument): Promise<void> {
+  if (processingId.value) return
+  processingId.value = document.id
+  try {
+    const settings = loadBusinessDocumentSettings()
+    const policy = ensureDocumentPolicy(settings, documentType.value)
+    let status = ''
+    if (document.operationOnly) {
+      const group = await executeOutboundOperationGroup(
+        document.serverOperationId,
+        policy.autoApproveAfterUpload,
+      )
+      status = group.status
+    } else {
+      const updated = await executeOutboundDocument(document, policy.autoApproveAfterUpload)
+      status = updated.serverStatus ?? ''
+    }
+    message.value = status === 'SUCCESS' ? '上传完成'
+      : status === 'NEEDS_RECONCILIATION' ? '需要核对'
+        : status === 'FAILED' || status === 'PARTIAL' ? '上传失败' : '已提交处理'
+    await refresh()
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : '上传失败'
+    await refresh()
+  } finally {
+    processingId.value = ''
+  }
+}
+
 async function heartbeatPreparedDocuments(): Promise<void> {
   if (processingId.value) return
   let pending: OperationGroupSnapshot[] = []
@@ -417,6 +448,12 @@ onBeforeRouteLeave((to) => {
             <button type="button" @click.stop="selectedDocument = document">查看</button>
           </div>
           <div v-else-if="activeStatus === 'prepared'" class="card-actions pending-actions">
+            <button
+              v-if="document.serverStatus === 'PENDING' && document.ownerUserId === currentUserId"
+              type="button"
+              :disabled="processingId === document.id"
+              @click.stop="executeDocument(document)"
+            >上传 ERP</button>
             <button
               type="button"
               :disabled="processingId === document.id"

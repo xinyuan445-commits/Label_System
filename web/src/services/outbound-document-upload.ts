@@ -290,6 +290,20 @@ export async function cancelOutboundOperationGroup(
   )
 }
 
+export async function executeOutboundOperationGroup(
+  submissionGroupId: string,
+  autoApprove: boolean,
+): Promise<OperationGroupSnapshot> {
+  return apiRequest<OperationGroupSnapshot>(
+    `/api/v1/operations/groups/${encodeURIComponent(submissionGroupId)}/execute`,
+    {
+      method: 'POST',
+      timeoutMs: 180_000,
+      body: JSON.stringify({ autoApprove }),
+    },
+  )
+}
+
 export async function refreshOutboundDocumentGroup(
   document: StoredOutboundDocument,
 ): Promise<StoredOutboundDocument> {
@@ -311,6 +325,15 @@ export async function cancelOutboundDocument(
 ): Promise<StoredOutboundDocument> {
   if (!document.serverOperationId) throw new Error('业务组编号缺失')
   const group = await cancelOutboundOperationGroup(document.serverOperationId)
+  return updateOutboundDocumentGroup(document.id, group)
+}
+
+export async function executeOutboundDocument(
+  document: StoredOutboundDocument,
+  autoApprove: boolean,
+): Promise<StoredOutboundDocument> {
+  if (!document.serverOperationId) throw new Error('业务组编号缺失')
+  const group = await executeOutboundOperationGroup(document.serverOperationId, autoApprove)
   return updateOutboundDocumentGroup(document.id, group)
 }
 
@@ -355,7 +378,9 @@ export async function uploadOutboundDocument(
     } else {
       result = await prepareInventoryDocument(document, session)
     }
-    const group = await getOutboundOperationGroup(result.submissionGroupId)
+    const group = result.u8WriteEnabled
+      ? await executeOutboundOperationGroup(result.submissionGroupId, _autoApprove)
+      : await getOutboundOperationGroup(result.submissionGroupId)
     return markOutboundDocumentPrepared(document.id, {
       ...group,
       u8WriteEnabled: result.u8WriteEnabled,

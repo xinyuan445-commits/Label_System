@@ -103,6 +103,101 @@ public sealed class U8GatewayClient(
         return envelope.Data;
     }
 
+    public async Task ValidateDocumentAsync(
+        string documentType,
+        GatewayDocumentRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var message = CreateRequest(
+                HttpMethod.Post,
+                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}/validate?operation=add");
+            message.Content = JsonContent.Create(request, options: JsonOptions);
+            using var response = await Client().SendAsync(message, cancellationToken);
+            var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<JsonElement>>(
+                JsonOptions, cancellationToken);
+            if (response.IsSuccessStatusCode && envelope?.Success == true) return;
+            throw new GatewayWriteException(
+                (int)response.StatusCode,
+                envelope?.Code ?? "U8_DOCUMENT_VALIDATION_FAILED",
+                ValidationMessage(envelope?.Data,
+                    envelope?.Message ?? "U8 单据校验失败。"));
+        }
+        catch (GatewayWriteException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status504GatewayTimeout,
+                "U8_VALIDATION_TIMEOUT",
+                "U8 校验超时，请稍后重试。");
+        }
+        catch (HttpRequestException)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status503ServiceUnavailable,
+                "U8_GATEWAY_UNAVAILABLE",
+                "U8 服务暂时不可用。");
+        }
+        catch (JsonException)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status502BadGateway,
+                "U8_GATEWAY_RESPONSE_INVALID",
+                "U8 服务返回异常。");
+        }
+    }
+
+    public async Task<GatewayDocumentResult> CreateDocumentAsync(
+        string documentType,
+        GatewayDocumentRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var message = CreateRequest(
+                HttpMethod.Post,
+                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}");
+            message.Content = JsonContent.Create(request, options: JsonOptions);
+            using var response = await Client().SendAsync(message, cancellationToken);
+            var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<GatewayDocumentResult>>(
+                JsonOptions, cancellationToken);
+            if (response.IsSuccessStatusCode && envelope?.Success == true &&
+                envelope.Data is { Confirmed: true } result)
+                return result;
+
+            var code = envelope?.Code ?? "U8_DOCUMENT_CREATE_FAILED";
+            throw new GatewayWriteException(
+                (int)response.StatusCode,
+                code,
+                envelope?.Message ?? "U8 单据新增失败。",
+                IsUnknownResult(code, (int)response.StatusCode));
+        }
+        catch (GatewayWriteException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status504GatewayTimeout,
+                "U8_RESULT_UNKNOWN",
+                "U8 请求超时，需要核对。",
+                true);
+        }
+        catch (HttpRequestException)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status503ServiceUnavailable,
+                "U8_RESULT_UNKNOWN",
+                "U8 连接中断，需要核对。",
+                true);
+        }
+    }
+
     public async Task<ProxyResponse> ForwardGetAsync(
         string relativePathAndQuery,
         CancellationToken cancellationToken)
@@ -132,6 +227,26 @@ public sealed class U8GatewayClient(
         var client = clientFactory.CreateClient(nameof(U8GatewayClient));
         client.BaseAddress = new Uri(current.BaseUrl.TrimEnd('/') + "/", UriKind.Absolute);
         return client;
+    }
+
+    private static bool IsUnknownResult(string code, int statusCode) =>
+        statusCode >= 500 ||
+        code.Contains("UNKNOWN", StringComparison.OrdinalIgnoreCase) ||
+        code.Contains("RECONCILIATION", StringComparison.OrdinalIgnoreCase) ||
+        code.Contains("IN_PROGRESS", StringComparison.OrdinalIgnoreCase);
+
+    private static string ValidationMessage(JsonElement? data, string fallback)
+    {
+        if (data is not { ValueKind: JsonValueKind.Object } root ||
+            !root.TryGetProperty("issues", out var issues) ||
+            issues.ValueKind != JsonValueKind.Array) return fallback;
+        var issue = issues.EnumerateArray().FirstOrDefault();
+        if (issue.ValueKind != JsonValueKind.Object) return fallback;
+        var path = issue.TryGetProperty("path", out var pathValue) ? pathValue.ToString() : string.Empty;
+        var message = issue.TryGetProperty("message", out var messageValue)
+            ? messageValue.ToString() : string.Empty;
+        return string.IsNullOrWhiteSpace(message) ? fallback :
+            string.IsNullOrWhiteSpace(path) ? message : $"{path}：{message}";
     }
 
     private HttpRequestMessage CreateRequest(HttpMethod method, string path)

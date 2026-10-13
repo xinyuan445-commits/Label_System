@@ -77,6 +77,8 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | POST | `/operations/documents/{documentType}/prepare` | 九类单据通用预提交；材料出库无源单时使用 |
 | GET | `/operations/groups?documentType=...&status=...&operatorId=...&startDate=...&endDate=...&skip=...&take=...` | 分页查询业务组；管理员可加 `allUsers=true` |
 | GET | `/operations/groups/{groupId}` | 查询拆单组 |
+| POST | `/operations/groups/{groupId}/validate` | 材料出库写入前校验；不调用 U8 写接口 |
+| POST | `/operations/groups/{groupId}/execute` | 创建人执行材料出库拆组；请求体可带 `autoApprove` |
 | POST | `/operations/groups/{groupId}/heartbeat` | 续期业务锁 |
 | POST | `/operations/groups/{groupId}/cancel` | 取消未写 U8 的待处理组 |
 
@@ -85,6 +87,10 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 普通用户调用 `POST /auth/management-access` 验证管理密码后，当前会话获得 10 分钟管理权限，可访问 `/admin/*`；该权限不改变用户角色，也不增加 `/functions` 返回的业务功能。管理密码仅在服务器外置配置保存哈希，客户端不保存。管理员角色不需要再次验证。
 
 `/source-documents*` 和 `/inventory-objects/lookup` 要求 H5 通过 `X-Function-Code` 传入当前单据或 `label-query` 功能编码，Business API 按当前账号有效功能复核后才读取数据。待处理组只有创建人可以续期或取消；管理员角色可以跨用户查询，短时管理会话不扩大业务组范围。
+
+材料出库执行前重新读取不可变操作归档并校验 SHA-256，重新读取 U8 生产订单领料需求，按当前用户 ERP 制单人生成每个拆组请求。执行状态从 `PENDING` 进入 `WRITING_ERP`；只有 Gateway 返回已回查确认的 U8 单据后，才在一个本地事务中写入标签余额、库存流水、ERP 行号并释放对应锁。明确失败记为 `FAILED` 并释放该拆组锁；超时、连接中断或本地提交不明确记为 `NEEDS_RECONCILIATION` 并保留锁，同时停止本组后续拆组，禁止直接重试。当前不支持托盘材料出库和自动审核。
+
+`POST /operations/groups/{groupId}/execute` 首先检查 Business API 的 `U8WritesEnabled`。当前 development 为 `false`；Gateway 的材料出库 `create` 能力及 Gateway 写入总开关也保持关闭，因此部署执行代码不会自行写入 888。
 
 ## 标签 Code 规则
 

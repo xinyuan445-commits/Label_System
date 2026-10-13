@@ -20,6 +20,8 @@ builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<LabelSystemRepository>();
 builder.Services.AddScoped<MaterialOutboundRepository>();
 builder.Services.AddScoped<MaterialOutboundService>();
+builder.Services.AddScoped<MaterialOutboundExecutionRepository>();
+builder.Services.AddScoped<MaterialOutboundExecutionService>();
 builder.Services.AddScoped<DocumentPrepareRepository>();
 builder.Services.AddScoped<DocumentPrepareService>();
 builder.Services.AddScoped<ReferenceDataRepository>();
@@ -31,7 +33,7 @@ builder.Services.AddSingleton<LabelCodeRuleEngine>();
 builder.Services.AddScoped<LabelCodeRuleRepository>();
 builder.Services.AddSingleton<OperationArchiveService>();
 builder.Services.AddHostedService<DocumentDraftCleanupService>();
-builder.Services.AddHttpClient(nameof(U8GatewayClient), client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddHttpClient(nameof(U8GatewayClient), client => client.Timeout = TimeSpan.FromSeconds(120));
 builder.Services.AddScoped<U8GatewayClient>();
 
 var cors = builder.Configuration.GetSection("Cors").Get<CorsOptions>() ?? new CorsOptions();
@@ -885,6 +887,32 @@ app.MapPost("/api/v1/operations/groups/{groupId}/heartbeat", async (
     ApiResults.Ok(context, await repository.HeartbeatAsync(
         groupId, options.CurrentValue.LockMinutes, RequestContext.User(context).Id,
         false, cancellationToken)));
+
+app.MapPost("/api/v1/operations/groups/{groupId}/validate", async (
+    HttpContext context,
+    string groupId,
+    MaterialOutboundExecutionService service,
+    UserRepository users,
+    CancellationToken cancellationToken) =>
+{
+    await RequireFunctionAsync(context, users, "material-outbound", cancellationToken);
+    return ApiResults.Ok(context, await service.ValidateAsync(
+        groupId, RequestContext.User(context), cancellationToken));
+});
+
+app.MapPost("/api/v1/operations/groups/{groupId}/execute", async (
+    HttpContext context,
+    string groupId,
+    ExecuteOperationGroupRequest request,
+    MaterialOutboundExecutionService service,
+    UserRepository users,
+    CancellationToken cancellationToken) =>
+{
+    await RequireFunctionAsync(context, users, "material-outbound", cancellationToken);
+    return ApiResults.Ok(context, await service.ExecuteAsync(
+        groupId, request, RequestContext.User(context),
+        RequestContext.Id(context), cancellationToken));
+});
 
 app.MapPost("/api/v1/operations/groups/{groupId}/cancel", async (
     HttpContext context,
