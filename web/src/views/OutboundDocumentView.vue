@@ -1100,21 +1100,13 @@ onBeforeRouteLeave((to) => {
             </div>
           </div>
 
-          <div v-if="pageConfig.supportsRedBlue" class="field full-width">
+          <label v-if="pageConfig.supportsRedBlue" class="field full-width">
             <span><i>*</i>单据类型</span>
-            <div class="document-direction" role="group" aria-label="单据类型">
-              <button
-                type="button"
-                :class="{ active: documentDirection === 'BLUE' }"
-                @click="documentDirection = 'BLUE'"
-              >蓝字</button>
-              <button
-                type="button"
-                :class="{ active: documentDirection === 'RED', red: documentDirection === 'RED' }"
-                @click="documentDirection = 'RED'"
-              >红字</button>
-            </div>
-          </div>
+            <select v-model="documentDirection" aria-label="单据类型">
+              <option value="BLUE">蓝字</option>
+              <option value="RED">红字</option>
+            </select>
+          </label>
 
           <label v-if="fieldVisible('header.documentDate')" class="field">
             <span><i v-if="fieldRequired('header.documentDate')">*</i>日期</span>
@@ -1595,34 +1587,6 @@ h1 {
   background: #f2f5f8;
   color: #77869a;
   font-size: 24px;
-}
-
-.document-direction {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.document-direction button {
-  height: 44px;
-  border: 1px solid #d4deea;
-  border-radius: 10px;
-  background: #fff;
-  color: #63748a;
-  font-size: 14px;
-  font-weight: 750;
-}
-
-.document-direction button.active {
-  border-color: #76a5dc;
-  background: #eaf3fd;
-  color: #1f63ad;
-}
-
-.document-direction button.active.red {
-  border-color: #e1a3a3;
-  background: #fff0f0;
-  color: #b23d3d;
 }
 
 .field input,
