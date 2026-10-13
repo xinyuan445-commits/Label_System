@@ -1,5 +1,7 @@
 # 2026-10-11 IIS 部署记录
 
+2026-10-13 15:38 已部署 `0.4.1` 并按用户授权开放测试账套写入：九类单据 `create`、`verify`、`unverify` 全部为 `true`，`update`、`delete` 保持 `false`；服务器 `EnableTestWrites=true`。写入范围固定为 `test`、`UFDATA_888_2021` 和 888，站点与应用池均为 `Started`，健康检查版本 `0.4.1.0`。切换前已备份站点和受保护配置；本次只切换能力和门禁，没有自动创建、审核或弃审 U8 单据。
+
 2026-10-13 15:17 已部署 `0.4.0`：新增采购类型、销售类型、币种及最新可用汇率固定只读接口，888 验证返回 16、11、4 条；Business API 首次同步成功。Release 构建通过，IIS 站点和应用池为 `Started`，外部健康检查版本为 `0.4.0.0`。九类新增、修改、审核、弃审、删除能力及服务器测试写入总开关保持关闭，未调用 U8 保存，未产生 888 单据。
 
 2026-10-13 14:47 已部署 `0.3.9`：采购/委外到货增加 `VoucherCO_PU` 候选新增路径，发货单增加 `VoucherCO_SA` 候选新增路径；连同既有 `USERPCO.VoucherCO`，九类单据均具备生成单号、保存和按单号回查的候选运行时。采购入库和销售出库补齐来源到货/发货关联字段白名单。Debug、Release 构建及编解码合同、写入安全门禁、操作凭证烟测全部通过；IIS 站点和应用池为 `Started`，外部健康检查版本为 `0.3.9.0`。九类新增、修改、审核、弃审、删除能力全部保持 `false`，安全新增探针返回 `409 DOCUMENT_OPERATION_DISABLED`；服务器测试写入总开关未开启，未调用任何 U8 保存方法，未产生 888 单据。
@@ -20,8 +22,8 @@ Operation archive: D:\U8GatewayData\operation-archive
 Environment: test
 Database: UFDATA_888_2021
 U8 account: (default)@888
-Test writes: disabled
-Service version: 0.4.0.0
+Test writes: enabled for UFDATA_888_2021 / 888
+Service version: 0.4.1.0
 ```
 
 原有 `Default Web Site`、`PDA` 和 `MaterialOutboundApi` 站点名称、目录和绑定未修改。
@@ -58,6 +60,6 @@ u8-gateway/runtime-data/deployment/U8Gateway-credentials.txt
 
 ## 尚未开放
 
-新增、修改、审核、弃审和删除仍全部关闭。当前部署可用于健康检查、schema、无写入字段校验和已经验收的只读查询。下一阶段在 888 对每种单据逐项完成 CO 保存、修改、回读和失败场景测试，再按单据、按操作开放能力。008 保持只读。
+修改和删除仍关闭。新增、审核和弃审仅对测试账套 888 开放，必须按单据逐项完成 CO 保存、回读、失败和状态恢复测试；生产账套保持禁止写入。
 
 2026-10-12 08:27 已部署 `0.3.4`。部署前把原站点完整备份到 `D:\U8Gateway\backups\20261012_082651`；站点和应用池启动正常。生产订单、采购订单、采购到货、销售订单、发货单和委外订单的搜索及整单明细读取均通过 Business API 代理验证。未调用任何写接口，测试写入配置未修改。

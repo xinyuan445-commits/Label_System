@@ -7,7 +7,7 @@
 - `POST /api/v1/approval-documents/{documentType}/{voucherCode}/audit`
 - `POST /api/v1/approval-documents/{documentType}/{voucherCode}/unaudit`
 
-操作请求携带 `clientRequestId`、`expectedVersion`、原因和设备版本信息。Business API 使用当前会话和服务端 ERP 映射重建操作人；当前写入总开关关闭，两个操作接口均在调用 Gateway 前返回 `U8_WRITE_DISABLED`。
+操作请求携带 `clientRequestId`、`expectedVersion`、原因和设备版本信息。Business API 使用当前会话和服务端 ERP 映射重建操作人；development 已对测试账套 888 开放审核和弃审，操作后必须由 Gateway 回查确认状态。
 
 用户管理接口要求管理员角色或当前会话短时管理权限；当前管理员不能停用自己或取消自己的管理员身份，系统也不允许停用或降级最后一个启用管理员。密码不进入用户列表、编辑响应或审计记录。
 Base path：`/api/v1`
@@ -94,7 +94,7 @@ H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API �
 
 九类单据执行前均重新读取不可变操作归档并校验 SHA-256，按当前用户 ERP 制单人生成每个拆组请求；材料出库另重新读取 U8 生产订单领料需求。执行状态从 `PENDING` 进入 `WRITING_ERP`；只有 Gateway 返回已回查确认的 U8 单据后，才在一个本地事务中保存 ERP 单号和行号、完成对应库存动作并释放组锁。明确失败把同组未执行拆组一并结束为失败并释放锁；超时、连接中断或本地提交不明确记为 `NEEDS_RECONCILIATION` 并保留锁，同时停止本组后续拆组，禁止直接重试。当前不支持材料/销售数量单据的托盘上传和自动审核。
 
-所有 `submit` 入口通过会话、功能权限、ERP 制单人和类别门禁后，会在建档和锁定前检查 Business API 的 `U8WritesEnabled`。当前 development 为 `false`；Gateway 的九类 `create` 能力及 Gateway 写入总开关也保持关闭，因此合法业务请求返回 `U8_WRITE_DISABLED`，不会自行写入 888。单独的 `execute`、`heartbeat` 和 `cancel` 仅保留给旧组恢复和运维核对，不再作为 H5 正常业务步骤。
+所有 `submit` 入口通过会话、功能权限、ERP 制单人和类别门禁后，会在建档和锁定前检查 Business API 的 `U8WritesEnabled`。当前 development 为 `true`；Gateway 仅允许 `test` 环境、`UFDATA_888_2021` 数据库和 888 账套，九类 `create` 已开放。单独的 `execute`、`heartbeat` 和 `cancel` 仅保留给旧组恢复和运维核对，不再作为 H5 正常业务步骤。
 
 ## 标签 Code 规则
 
@@ -152,7 +152,7 @@ development 管理员密码校验仍受环境开关保护；`LOCAL` 用户使用
 
 用户漫游接口使用稳定偏好键、JSON 值、版本和行版本。当前正式键为常用功能 `workspace.favorites` 和业务中心显示模式 `workspace.homeMode`；后者使用 `{"mode":"compact|detailed"}` 对象，现有用户缺省为 `detailed`。不存在时返回 `404 PREFERENCE_NOT_FOUND`。携带 `expectedRowVersion` 时不一致返回 `409 DATA_CHANGED`；不携带时按最后写入覆盖，首次并发创建会在唯一键竞争后自动转为更新。
 
-真实 U8 写入不得沿用请求的 `operatorName`。写入前必须按当前会话用户解析 `erp_operator_code`、`erp_operator_name`，把 ERP 姓名传给 Gateway 并写入 `cmaker`；未配置返回 `409 ERP_OPERATOR_NOT_CONFIGURED`。当前写入总开关关闭，该解析规则尚不会触发 U8 调用。
+真实 U8 写入不得沿用请求的 `operatorName`。写入前必须按当前会话用户解析 `erp_operator_code`、`erp_operator_name`，把 ERP 姓名传给 Gateway 并写入 `cmaker`；未配置返回 `409 ERP_OPERATOR_NOT_CONFIGURED`。development 已开放 888 写入，该映射现在是新增、审核和弃审的强制门禁。
 
 ## 材料出库预提交
 
@@ -171,13 +171,13 @@ development 管理员密码校验仍受环境开关保护；`LOCAL` 用户使用
 
 通过后按“生产订单内部 ID + 标签当前仓库”拆成多个 `business_operation`，单号只用于展示和一致性复核；各操作共同使用请求的 `clientRequestId` 作为 `submission_group_id`。标签和相关托盘统一锁到组内第一条操作，避免一个标签跨拆单组被并发使用。
 
-旧准备接口曾只创建 `PENDING` 记录；当前正常 H5 只使用单次提交，写入开关关闭时在建档前拒绝。旧组的取消和心跳仅用于兼容恢复；进入 U8 写流程后禁止直接取消，结果不明确时保留锁等待核对。
+旧准备接口曾只创建 `PENDING` 记录；当前正常 H5 只使用单次提交。旧组的取消和心跳仅用于兼容恢复；进入 U8 写流程后禁止直接取消，结果不明确时保留锁等待核对。
 
 有生产订单来源的材料出库请求必须提交 `categoryCode=202`。H5 在选单后自动固定该值，Business API 在预提交时拒绝其他类别；无源单材料出库仍按用户选择的有效出库类别处理。
 
 ## 通用单据预提交
 
-通用提交的 `header` 保存日期、`documentDirection=BLUE|RED`、仓库、目标仓库、来源/目标货位、部门、业务类别和可选源单类型；`lines` 保存对象类型、标签或托盘码、来源托盘、料号、单位、本次数量及可选来源单据行。服务端重新读取最新库存并校验对象状态、业务锁、料号、单位、仓库和货位。所有单据都允许不传来源字段；只要请求携带任一来源字段，就必须提交完整来源关系并启用来源校验。红字请求已映射 U8 红字标识和相反数量，但 Gateway 写入能力仍关闭，必须在 888 分单据验收后逐项开放。
+通用提交的 `header` 保存日期、`documentDirection=BLUE|RED`、仓库、目标仓库、来源/目标货位、部门、业务类别和可选源单类型；`lines` 保存对象类型、标签或托盘码、来源托盘、料号、单位、本次数量及可选来源单据行。服务端重新读取最新库存并校验对象状态、业务锁、料号、单位、仓库和货位。所有单据都允许不传来源字段；只要请求携带任一来源字段，就必须提交完整来源关系并启用来源校验。红字请求已映射 U8 红字标识和相反数量，当前只允许在 888 分单据验收。
 
 单据字段开关使用现有设置接口保存。DOCUMENT 范围键 `field_input_rules` 的值为字段键到 `{ "visible": boolean, "required": boolean }` 的 JSON 对象；字段定义由 H5 当前版本提供。H5 按设置控制九类制单的字段显示、输入和完整必填校验，Business API 同时按当前单据设置复核仓库、目标仓库、目标货位、部门和业务类别等可配置表头必填项。
 
@@ -211,7 +211,7 @@ DOCUMENT 范围布尔键 `auto_add_scanned_detail` 控制 H5 扫码结果是否�
 
 ## 尚未开放
 
-- U8 新增真实开关、修改、审核、弃审和红冲写入；新增执行代码已具备，但九类 Gateway `create` 能力必须在 888 分别验收后逐项开放。
+- U8 修改、删除和生产账套写入；九类新增、审核、弃审及红字新增当前仅供 888 联调，仍需逐类验收。
 - 生产用户数据库、角色及数据权限。
 - 标签正式发码、流水分配、统一登记、打印和首次库存流水。
 - H5 使用缓存规则执行离线解析及联网后的登记校验。

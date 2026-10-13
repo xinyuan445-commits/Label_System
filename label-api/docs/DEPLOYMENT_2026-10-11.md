@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-13 15:38 按用户授权开启测试账套 888 写入：Business API `0.8.0` 外置配置切换为 `U8WritesEnabled=true`，Gateway 更新为 `0.4.1` 并开放九类新增、审核和弃审；修改和删除继续关闭。Gateway 同时校验 `test`、`UFDATA_888_2021` 和 888，两个站点及应用池均为 `Started`，健康检查 `ready/running`。切换前已分别备份外置配置和 Gateway 站点；没有自动提交测试单据。应用池回收使原登录会话失效，PDA 需要重新登录。
+
 ## 部署结果
 
 ```text

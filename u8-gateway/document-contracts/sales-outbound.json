@@ -17,10 +17,10 @@
   "capabilities": {
     "query": true,
     "validate": false,
-    "create": false,
+    "create": true,
     "update": false,
-    "verify": false,
-    "unverify": false,
+    "verify": true,
+    "unverify": true,
     "delete": false
   },
   "fields": [
