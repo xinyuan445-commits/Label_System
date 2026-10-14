@@ -53,11 +53,12 @@ namespace U8Gateway.U8.Approvals
         {
             Profile p = RequireProfile(documentType);
             int take = Math.Max(1, Math.Min(limit, 100));
+            string auditedPredicate = AuditedPredicate(p);
             var filters = new List<string>
             {
                 status == ApprovalDocumentStatuses.Audited
-                    ? "nullif(ltrim(rtrim(convert(nvarchar(100),h." + Q(p.Verifier) + "))),N'') is not null"
-                    : "nullif(ltrim(rtrim(convert(nvarchar(100),h." + Q(p.Verifier) + "))),N'') is null",
+                    ? auditedPredicate
+                    : "not (" + auditedPredicate + ")",
                 "(@documentNo=N'' or h." + Q(p.Code) + " like N'%'+@documentNo+N'%')",
                 "(@startDate is null or cast(h." + Q(p.Date) + " as date)>=@startDate)",
                 "(@endDate is null or cast(h." + Q(p.Date) + " as date)<=@endDate)"
@@ -168,10 +169,27 @@ namespace U8Gateway.U8.Approvals
                 "N'" + p.PartnerLabel.Replace("'", "''") + "' PartnerLabel," + p.PartnerExpression + " PartnerName," +
                 Expr("h", p.Warehouse, "N''") + " WarehouseCode," +
                 Expr("h", p.Maker, "N''") + " CreatedBy," +
-                "case when nullif(ltrim(rtrim(convert(nvarchar(100),h." + Q(p.Verifier) + "))),N'') is null then N'pending' else N'audited' end Status," +
+                "case when " + AuditedPredicate(p) + " then N'audited' else N'pending' end Status," +
                 "isnull(convert(nvarchar(100),h." + Q(p.Verifier) + "),N'') AuditedBy," +
                 Expr("h", p.VerifyDate, "cast(null as datetime)") + " AuditedAt," +
                 "master.dbo.fn_varbintohexstr(h.[ufts]) Version";
+        }
+
+        private static string AuditedPredicate(Profile p)
+        {
+            string parent = "nullif(ltrim(rtrim(convert(nvarchar(100),h." +
+                Q(p.Verifier) + "))),N'') is not null";
+            if (!Eq(p.Type, DocumentTypeCodes.Transfer)) return parent;
+
+            string outboundLink = "(r9.cBusCode=h.cTVCode or r9.cSourceCodeLs=h.cTVCode)";
+            string inboundLink = "(r8.cBusCode=h.cTVCode or r8.cSourceCodeLs=h.cTVCode)";
+            return "(" + parent +
+                " and exists (select 1 from dbo.RdRecord09 r9 where " + outboundLink + ")" +
+                " and not exists (select 1 from dbo.RdRecord09 r9 where " + outboundLink +
+                " and nullif(ltrim(rtrim(isnull(r9.cHandler,N''))),N'') is null)" +
+                " and exists (select 1 from dbo.RdRecord08 r8 where " + inboundLink + ")" +
+                " and not exists (select 1 from dbo.RdRecord08 r8 where " + inboundLink +
+                " and nullif(ltrim(rtrim(isnull(r8.cHandler,N''))),N'') is null))";
         }
 
         private static ApprovalDocumentSummary ReadSummary(IDataRecord reader, string documentType)

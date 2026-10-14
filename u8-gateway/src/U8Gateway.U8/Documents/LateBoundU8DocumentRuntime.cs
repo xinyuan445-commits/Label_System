@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -605,6 +606,16 @@ namespace U8Gateway.U8.Documents
                 execution.Operation,
                 DocumentOperationCodes.Unverify,
                 StringComparison.OrdinalIgnoreCase);
+            if ((verifying || unverifying) &&
+                string.Equals(execution.Profile.DocumentType, DocumentTypeCodes.Transfer,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return ChangeTransferState(
+                    options,
+                    execution,
+                    voucherId.Value,
+                    verifying);
+            }
             if ((verifying && before.Verified) || (unverifying && !before.Verified))
             {
                 return Success(
@@ -701,6 +712,295 @@ namespace U8Gateway.U8.Documents
                 Empty(nativeMessage, "U8 操作后回查未确认。"),
                 execution.VoucherCode,
                 false);
+        }
+
+        private DocumentOperationResult ChangeTransferState(
+            U8GatewayRuntimeOptions options,
+            U8DocumentExecution execution,
+            long voucherId,
+            bool verifying)
+        {
+            string transferCode = string.IsNullOrWhiteSpace(execution.VoucherCode)
+                ? ReadVoucherCode(options, execution.Profile, voucherId)
+                : execution.VoucherCode.Trim();
+            if (string.IsNullOrWhiteSpace(transferCode))
+            {
+                return Failure(
+                    "TRANSFER_CODE_NOT_FOUND",
+                    "未能读取调拨单号。",
+                    execution.VoucherCode);
+            }
+
+            if (verifying)
+            {
+                NativeStateChangeResult parent = EnsureInventoryState(
+                    options,
+                    execution.Profile,
+                    voucherId,
+                    true,
+                    "调拨单");
+                if (!parent.Succeeded)
+                {
+                    return Failure(
+                        "U8_VERIFY_REJECTED",
+                        parent.Message,
+                        transferCode);
+                }
+
+                IReadOnlyList<TransferLinkedVoucher> linked =
+                    WaitForTransferLinkedVouchers(options, transferCode);
+                string missing = MissingTransferLinkedTypes(linked);
+                if (!string.IsNullOrWhiteSpace(missing))
+                {
+                    return Failure(
+                        "U8_TRANSFER_LINKED_NOT_READY",
+                        "调拨单已审核，但未找到关联的" + missing + "，可稍后重试审核。",
+                        transferCode);
+                }
+
+                foreach (TransferLinkedVoucher item in linked
+                    .OrderBy(x => x.AuditOrder)
+                    .ThenBy(x => x.VoucherId))
+                {
+                    NativeStateChangeResult child = EnsureInventoryState(
+                        options,
+                        item.Profile,
+                        item.VoucherId,
+                        true,
+                        item.DisplayName + " " + item.VoucherCode);
+                    if (!child.Succeeded)
+                    {
+                        return Failure(
+                            "U8_TRANSFER_LINKED_VERIFY_REJECTED",
+                            child.Message,
+                            transferCode);
+                    }
+                }
+            }
+            else
+            {
+                IReadOnlyList<TransferLinkedVoucher> linked =
+                    ReadTransferLinkedVouchers(options, transferCode);
+                string missing = MissingTransferLinkedTypes(linked);
+                if (!string.IsNullOrWhiteSpace(missing))
+                {
+                    return Failure(
+                        "U8_TRANSFER_LINKED_NOT_FOUND",
+                        "未找到关联的" + missing + "，未执行调拨单弃审。",
+                        transferCode);
+                }
+
+                foreach (TransferLinkedVoucher item in linked
+                    .OrderByDescending(x => x.AuditOrder)
+                    .ThenByDescending(x => x.VoucherId))
+                {
+                    NativeStateChangeResult child = EnsureInventoryState(
+                        options,
+                        item.Profile,
+                        item.VoucherId,
+                        false,
+                        item.DisplayName + " " + item.VoucherCode);
+                    if (!child.Succeeded)
+                    {
+                        return Failure(
+                            "U8_TRANSFER_LINKED_UNVERIFY_REJECTED",
+                            child.Message,
+                            transferCode);
+                    }
+                }
+
+                NativeStateChangeResult parent = EnsureInventoryState(
+                    options,
+                    execution.Profile,
+                    voucherId,
+                    false,
+                    "调拨单");
+                if (!parent.Succeeded)
+                {
+                    return Failure(
+                        "U8_UNVERIFY_REJECTED",
+                        parent.Message,
+                        transferCode);
+                }
+            }
+
+            VoucherState after = ReadVoucherState(
+                options,
+                execution.Profile,
+                voucherId);
+            IReadOnlyList<TransferLinkedVoucher> finalLinked =
+                ReadTransferLinkedVouchers(options, transferCode);
+            bool allLinkedAtTarget = finalLinked.Count > 0 &&
+                string.IsNullOrWhiteSpace(MissingTransferLinkedTypes(finalLinked)) &&
+                finalLinked.All(x => x.Verified == verifying);
+            if (after.Exists && after.Verified == verifying && allLinkedAtTarget)
+            {
+                return Success(
+                    execution,
+                    voucherId,
+                    after.Version,
+                    verifying
+                        ? "调拨单及关联出入库单审核成功。"
+                        : "调拨单及关联出入库单弃审成功。");
+            }
+            return Failure(
+                "U8_TRANSFER_STATE_NOT_CONFIRMED",
+                "调拨单或关联出入库单状态未全部确认，可重试该操作。",
+                transferCode,
+                false);
+        }
+
+        private static NativeStateChangeResult EnsureInventoryState(
+            U8GatewayRuntimeOptions options,
+            U8DocumentProfile profile,
+            long voucherId,
+            bool verified,
+            string displayName)
+        {
+            VoucherState before = ReadVoucherState(options, profile, voucherId);
+            if (!before.Exists)
+            {
+                return NativeStateChangeResult.Rejected(displayName + "不存在。");
+            }
+            if (before.Verified == verified)
+            {
+                return NativeStateChangeResult.Accepted(displayName + "已处于目标状态。");
+            }
+
+            NativeStateChangeResult native = null;
+            Exception nativeException = null;
+            try
+            {
+                native = ChangeInventoryState(
+                    options.U8,
+                    profile,
+                    voucherId,
+                    verified ? DocumentOperationCodes.Verify : DocumentOperationCodes.Unverify);
+            }
+            catch (Exception exception)
+            {
+                nativeException = exception;
+            }
+
+            VoucherState after = WaitForState(
+                options,
+                profile,
+                voucherId,
+                false,
+                verified);
+            if (after.Exists && after.Verified == verified)
+            {
+                return NativeStateChangeResult.Accepted(
+                    native == null ? displayName + "状态已确认。" : native.Message);
+            }
+            if (nativeException != null)
+            {
+                throw new InvalidOperationException(
+                    displayName + "操作异常且回查未确认：" + InnermostMessage(nativeException),
+                    nativeException);
+            }
+            return NativeStateChangeResult.Rejected(
+                displayName + "操作失败：" +
+                Empty(native?.Message, "U8 操作后回查未确认。"));
+        }
+
+        private static IReadOnlyList<TransferLinkedVoucher> WaitForTransferLinkedVouchers(
+            U8GatewayRuntimeOptions options,
+            string transferCode)
+        {
+            IReadOnlyList<TransferLinkedVoucher> linked = null;
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                linked = ReadTransferLinkedVouchers(options, transferCode);
+                if (string.IsNullOrWhiteSpace(MissingTransferLinkedTypes(linked)))
+                {
+                    return linked;
+                }
+                if (attempt < 9) Thread.Sleep(100);
+            }
+            return linked ?? new List<TransferLinkedVoucher>();
+        }
+
+        private static IReadOnlyList<TransferLinkedVoucher> ReadTransferLinkedVouchers(
+            U8GatewayRuntimeOptions options,
+            string transferCode)
+        {
+            const string sql =
+                "select N'09' VoucherType,N'其他出库单' DisplayName,1 AuditOrder," +
+                "convert(bigint,ID) VoucherId,isnull(cCode,N'') VoucherCode," +
+                "case when nullif(ltrim(rtrim(isnull(cHandler,N''))),N'') is null then 0 else 1 end Verified " +
+                "from dbo.RdRecord09 where cBusCode=@code or cSourceCodeLs=@code " +
+                "union all " +
+                "select N'08',N'其他入库单',2,convert(bigint,ID),isnull(cCode,N'')," +
+                "case when nullif(ltrim(rtrim(isnull(cHandler,N''))),N'') is null then 0 else 1 end " +
+                "from dbo.RdRecord08 where cBusCode=@code or cSourceCodeLs=@code";
+            var result = new List<TransferLinkedVoucher>();
+            using (var connection = new SqlConnection(ConnectionString(options)))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.Parameters.AddWithValue("@code", transferCode);
+                connection.Open();
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string voucherType = reader.GetString(0);
+                        result.Add(new TransferLinkedVoucher
+                        {
+                            VoucherType = voucherType,
+                            DisplayName = reader.GetString(1),
+                            AuditOrder = reader.GetInt32(2),
+                            VoucherId = reader.GetInt64(3),
+                            VoucherCode = reader.GetString(4),
+                            Verified = reader.GetInt32(5) == 1,
+                            Profile = LinkedTransferProfile(voucherType)
+                        });
+                    }
+                }
+            }
+            return result;
+        }
+
+        private static string MissingTransferLinkedTypes(
+            IReadOnlyList<TransferLinkedVoucher> linked)
+        {
+            bool outbound = linked != null && linked.Any(x => x.VoucherType == "09");
+            bool inbound = linked != null && linked.Any(x => x.VoucherType == "08");
+            if (!outbound && !inbound) return "其他出库单和其他入库单";
+            if (!outbound) return "其他出库单";
+            if (!inbound) return "其他入库单";
+            return null;
+        }
+
+        private static U8DocumentProfile LinkedTransferProfile(string voucherType)
+        {
+            bool outbound = string.Equals(voucherType, "09", StringComparison.Ordinal);
+            return new U8DocumentProfile
+            {
+                DocumentType = outbound ? "transfer-related-outbound" : "transfer-related-inbound",
+                Component = "USERPCO",
+                ComponentDocumentType = outbound ? "09" : "08",
+                DatabaseVoucherType = outbound ? "09" : "08",
+                HeaderTable = outbound ? "RdRecord09" : "RdRecord08",
+                LineTable = outbound ? "RdRecords09" : "RdRecords08"
+            };
+        }
+
+        private static string ReadVoucherCode(
+            U8GatewayRuntimeOptions options,
+            U8DocumentProfile profile,
+            long voucherId)
+        {
+            string sql = "select top (1) [" + CodeColumn(profile.DocumentType) + "] " +
+                "from dbo.[" + profile.HeaderTable + "] where [ID]=@id";
+            using (var connection = new SqlConnection(ConnectionString(options)))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.Parameters.AddWithValue("@id", voucherId);
+                connection.Open();
+                object value = command.ExecuteScalar();
+                return value == null || value == DBNull.Value ? null : Convert.ToString(value);
+            }
         }
 
         private static NativeStateChangeResult ChangeInventoryState(
@@ -1557,6 +1857,17 @@ namespace U8Gateway.U8.Documents
             public bool Exists { get; set; }
             public bool Verified { get; set; }
             public string Version { get; set; }
+        }
+
+        private sealed class TransferLinkedVoucher
+        {
+            public string VoucherType { get; set; }
+            public string DisplayName { get; set; }
+            public int AuditOrder { get; set; }
+            public long VoucherId { get; set; }
+            public string VoucherCode { get; set; }
+            public bool Verified { get; set; }
+            public U8DocumentProfile Profile { get; set; }
         }
 
         private sealed class NativeStateChangeResult
