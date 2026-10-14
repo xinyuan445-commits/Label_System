@@ -61,6 +61,20 @@ const pickedByRequirement = computed(() => {
   }
   return result
 })
+const overPickedByRequirement = computed(() => {
+  const result = new Map<number, number>()
+  const lines = Array.isArray(workingPayload.value.lines) ? workingPayload.value.lines : []
+  for (const line of lines) {
+    for (const allocation of line.sourceAllocations ?? []) {
+      const overPicked = Number(allocation.overQty)
+      result.set(
+        allocation.requirementId,
+        (result.get(allocation.requirementId) ?? 0) + overPicked,
+      )
+    }
+  }
+  return result
+})
 
 function pickedQuantity(line: MaterialRequirementLine): number {
   return pickedByRequirement.value.get(line.requirementId) ?? 0
@@ -68,6 +82,18 @@ function pickedQuantity(line: MaterialRequirementLine): number {
 
 function isIssueComplete(line: MaterialRequirementLine): boolean {
   return Number(line.remainingQuantity) <= 0.000001
+}
+
+function overIssueQuantity(line: MaterialRequirementLine): number {
+  const issuedOverPlan = Math.max(
+    Number(line.issuedQuantity) - Number(line.plannedQuantity),
+    0,
+  )
+  return issuedOverPlan + (overPickedByRequirement.value.get(line.requirementId) ?? 0)
+}
+
+function formatQty(value: number): string {
+  return Number(value).toFixed(6).replace(/\.?0+$/, '')
 }
 
 async function returnToDocument(): Promise<void> {
@@ -110,6 +136,9 @@ onBeforeRouteLeave((to) => {
             <aside>
               <b>{{ line.remainingQuantity }}</b>
               <span v-if="isIssueComplete(line)" class="complete-stamp">领料完成</span>
+              <span v-if="overIssueQuantity(line) > 0.000001" class="over-issue-stamp">
+                超领 {{ formatQty(overIssueQuantity(line)) }}
+              </span>
             </aside>
           </div>
           <p>{{ line.sourceDocumentNo }} · 行{{ line.sourceLineNo ?? '-' }} · {{ line.productCode }}</p>
@@ -149,5 +178,16 @@ onBeforeRouteLeave((to) => {
 
 .topbar {
   padding-top: var(--app-safe-top);
+}
+
+.detail-heading .over-issue-stamp {
+  padding: 3px 6px;
+  transform: rotate(4deg);
+  border: 2px solid rgba(210, 126, 18, .62);
+  border-radius: 5px;
+  color: #b56c0d;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .5px;
 }
 </style>

@@ -270,6 +270,11 @@ function materialPickingComplete(line: OutboundLine): boolean {
   return Boolean(progress && progress.remainingQty > 0 &&
     progress.scannedQty >= progress.remainingQty && progress.unallocatedQty <= 0)
 }
+
+function lineOverIssueQty(line: OutboundLine): number {
+  return (allocationByLine.value[line.id]?.allocations ?? [])
+    .reduce((total, allocation) => total + Number(allocation.overQty), 0)
+}
 const unresolvedOverIssueLines = computed(() => documentPolicy.value.allowOverIssue
   ? lines.value.filter((line) => allocationByLine.value[line.id]?.requiresOverIssueTarget)
   : [],
@@ -1768,6 +1773,9 @@ onBeforeRouteLeave((to) => {
                 <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.scannedQty ?? 0) }}</dd></div>
               </template>
             </dl>
+            <span v-if="lineOverIssueQty(line) > 0.000001" class="line-over-issue-stamp">
+              超领 {{ formatQty(lineOverIssueQty(line)) }}
+            </span>
             <span v-if="materialPickingComplete(line)" class="picking-complete-stamp">拣货完成</span>
             <button
               v-if="allocationByLine[line.id]?.requiresOverIssueTarget"
@@ -2445,6 +2453,23 @@ h1 {
   letter-spacing: 2px;
   line-height: 1;
   box-shadow: inset 0 0 0 2px rgba(190, 46, 46, .08);
+}
+
+.line-over-issue-stamp {
+  position: absolute;
+  bottom: 16px;
+  left: 18px;
+  pointer-events: none;
+  transform: rotate(7deg);
+  padding: 5px 8px 4px;
+  border: 2px solid rgba(210, 126, 18, .72);
+  border-radius: 5px;
+  color: rgba(181, 108, 13, .9);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1;
+  box-shadow: inset 0 0 0 2px rgba(210, 126, 18, .08);
 }
 
 .pending-over-issue {
