@@ -20,12 +20,12 @@ import {
   type DocumentPolicySettings,
 } from '@/services/business-document-settings'
 
-type GlobalSection = 'operation' | 'pallet'
+type GlobalSection = 'pallet'
 
 const route = useRoute()
 const router = useRouter()
 const settings = ref(loadBusinessDocumentSettings())
-const expandedSections = ref<Record<GlobalSection, boolean>>({ operation: true, pallet: false })
+const expandedSections = ref<Record<GlobalSection, boolean>>({ pallet: false })
 const message = ref('')
 const loading = ref(false)
 const saving = ref(false)
@@ -160,16 +160,6 @@ onMounted(async () => {
 
       <div class="group-title">全局设置</div>
 
-      <section class="settings-card collapsible-card operation-card">
-        <button class="collapse-heading" type="button" @click="toggleSection('operation')">
-          <span class="collapse-title"><b>操</b><span>操作设置</span></span>
-          <svg :class="{ expanded: expandedSections.operation }" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-        </button>
-        <div v-if="expandedSections.operation" class="collapse-content">
-          <label class="setting-row"><span>原因必填</span><span class="toggle"><input v-model="settings.globalOperation.reasonRequired" type="checkbox" /><i aria-hidden="true"></i></span></label>
-        </div>
-      </section>
-
       <section class="settings-card collapsible-card pallet-card">
         <button class="collapse-heading" type="button" @click="toggleSection('pallet')">
           <span class="collapse-title"><b>托</b><span>托盘设置</span></span>
@@ -302,11 +292,6 @@ onMounted(async () => {
 .pallet-card .collapse-title b {
   background: #fff0e3;
   color: #b56520;
-}
-
-.operation-card .collapse-title b {
-  background: #eee9fb;
-  color: #7450ad;
 }
 
 .collapse-heading svg {

@@ -1630,12 +1630,6 @@ function validate(): string {
       if (documentDirection.value === 'RED') return '退料数量超过原单已领数量'
       return documentPolicy.value.allowOverIssue ? '请选择超领产品' : '存在超过可领数量的物料'
     }
-    if (documentSettings.value.globalOperation.reasonRequired && !remark.value.trim()) {
-      return '请输入原因'
-    }
-    if (lines.value.some((line) => line.objectType === 'UNLABELED_MATERIAL') && !remark.value.trim()) {
-      return '请输入退料原因'
-    }
   }
   return ''
 }

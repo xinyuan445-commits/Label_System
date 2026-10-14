@@ -30,14 +30,7 @@ public sealed class MaterialOutboundService(
             "material-outbound", cancellationToken);
         ValidateBasicRequest(request, requiredFields);
 
-        var reasonRequired = await settings.GetBooleanSettingAsync(
-            "reason_required", null, false, cancellationToken);
-        if (reasonRequired && string.IsNullOrWhiteSpace(request.Reason))
-            throw new ApiException(StatusCodes.Status400BadRequest, "REASON_REQUIRED", "请输入原因。");
         var manual = request.Lines.Where(line => line.ObjectType == "UNLABELED_MATERIAL").ToArray();
-        if (manual.Length > 0 && string.IsNullOrWhiteSpace(request.Reason))
-            throw new ApiException(StatusCodes.Status400BadRequest,
-                "RETURN_REASON_REQUIRED", "请输入退料原因。");
         await manualReturns.ValidateAsync(
             manual.Select(line => new ManualReturnValidationLine(
                 line.MaterialCode, line.UnitCode, line.RequestedQty,

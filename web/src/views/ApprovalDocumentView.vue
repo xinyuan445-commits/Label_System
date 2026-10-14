@@ -6,7 +6,6 @@ import { getPdaBridge } from '@/bridge/pda-bridge'
 import type { PdaScanEvent } from '@/bridge/types'
 import DateField from '@/components/DateField.vue'
 import { getBusinessDocumentConfig, type BusinessDocumentType } from '@/services/business-document-config'
-import { loadBusinessDocumentSettings } from '@/services/business-document-settings'
 import {
   fetchApprovalDocument,
   fetchApprovalDocuments,
@@ -32,14 +31,12 @@ const selectedDocument = ref<ApprovalDocument | null>(null)
 const loading = ref(false)
 const submitting = ref(false)
 const confirmAction = ref<'audit' | 'unaudit' | null>(null)
-const reason = ref('')
 const errorMessage = ref('')
 const message = ref('')
 let messageTimer: ReturnType<typeof setTimeout> | null = null
 let stopScanListener: (() => void) | null = null
 
 const pageTitle = computed(() => `${getBusinessDocumentConfig(props.documentType).title}审核`)
-const reasonRequired = computed(() => loadBusinessDocumentSettings().globalOperation.reasonRequired)
 const returnRouteName = computed(() =>
   route.query.origin === 'all-functions' ? 'all-functions' : 'home',
 )
@@ -123,13 +120,11 @@ async function openDocument(document: ApprovalDocument): Promise<void> {
 
 function openConfirm(action: 'audit' | 'unaudit'): void {
   confirmAction.value = action
-  reason.value = ''
   errorMessage.value = ''
 }
 
 function closeConfirm(): void {
   confirmAction.value = null
-  reason.value = ''
   errorMessage.value = ''
 }
 
@@ -137,14 +132,10 @@ async function submitAction(): Promise<void> {
   const document = selectedDocument.value
   const action = confirmAction.value
   if (!document || !action) return
-  if (reasonRequired.value && !reason.value.trim()) {
-    errorMessage.value = '请输入原因'
-    return
-  }
 
   submitting.value = true
   try {
-    await submitApprovalAction(props.documentType, document, action, reason.value)
+    await submitApprovalAction(props.documentType, document, action, '')
     closeConfirm()
     selectedDocument.value = null
     await search()
@@ -306,7 +297,6 @@ onBeforeRouteLeave((to) => {
       <section class="confirm-sheet">
         <h2>{{ confirmAction === 'audit' ? '确认审核' : '确认弃审' }}</h2>
         <div class="confirm-document"><strong>{{ selectedDocument.documentNo }}</strong><span>明细 {{ selectedDocument.lines.length }}项 · 标签 {{ selectedDocument.labelImpacts.length }}个</span></div>
-        <label v-if="reasonRequired"><span><i>*</i>原因</span><textarea v-model="reason" rows="3" maxlength="200"></textarea></label>
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
         <div class="confirm-actions"><button type="button" :disabled="submitting" @click="closeConfirm">取消</button><button type="button" :disabled="submitting" @click="submitAction">{{ submitting ? '处理中' : (confirmAction === 'audit' ? '确认审核' : '确认弃审') }}</button></div>
       </section>

@@ -16,10 +16,6 @@ export interface DocumentPolicySettings {
   allowOverIssue: boolean
 }
 
-export interface GlobalOperationSettings {
-  reasonRequired: boolean
-}
-
 export interface GlobalPalletSettings {
   allowMixedMaterials: boolean
   allowMixedBatches: boolean
@@ -33,7 +29,6 @@ export interface BusinessDocumentSettings {
   globalPolicy: DocumentPolicySettings
   documentPolicies: Partial<Record<BusinessDocumentType, DocumentPolicySettings>>
   documentFields: Partial<Record<BusinessDocumentType, DocumentFieldSettings>>
-  globalOperation: GlobalOperationSettings
   globalPallet: GlobalPalletSettings
 }
 
@@ -70,17 +65,15 @@ const documentFieldDefinition: SettingDefinition = {
 }
 
 const globalDefinitions: Array<{
-  section: 'operation' | 'pallet'
-  property: keyof GlobalOperationSettings | keyof GlobalPalletSettings
+  property: keyof GlobalPalletSettings
   definition: SettingDefinition
 }> = [
-  { section: 'operation', property: 'reasonRequired', definition: { key: 'reason_required', name: '原因必填' } },
-  { section: 'pallet', property: 'allowMixedMaterials', definition: { key: 'allow_mixed_materials', name: '不同物料混托' } },
-  { section: 'pallet', property: 'allowMixedBatches', definition: { key: 'allow_mixed_batches', name: '同料不同批次混托' } },
-  { section: 'pallet', property: 'allowMixedWarehouses', definition: { key: 'allow_mixed_warehouses', name: '不同仓库混托' } },
-  { section: 'pallet', property: 'allowMixedLocations', definition: { key: 'allow_mixed_locations', name: '不同货位混托' } },
-  { section: 'pallet', property: 'allowPalletReuse', definition: { key: 'allow_pallet_reuse', name: '空托盘允许复用' } },
-  { section: 'pallet', property: 'allowPalletizedLabelDirectUse', definition: { key: 'allow_direct_use_of_palletized_label', name: '托内标签单独使用' } },
+  { property: 'allowMixedMaterials', definition: { key: 'allow_mixed_materials', name: '不同物料混托' } },
+  { property: 'allowMixedBatches', definition: { key: 'allow_mixed_batches', name: '同料不同批次混托' } },
+  { property: 'allowMixedWarehouses', definition: { key: 'allow_mixed_warehouses', name: '不同仓库混托' } },
+  { property: 'allowMixedLocations', definition: { key: 'allow_mixed_locations', name: '不同货位混托' } },
+  { property: 'allowPalletReuse', definition: { key: 'allow_pallet_reuse', name: '空托盘允许复用' } },
+  { property: 'allowPalletizedLabelDirectUse', definition: { key: 'allow_direct_use_of_palletized_label', name: '托内标签单独使用' } },
 ]
 
 const defaultPolicy: DocumentPolicySettings = {
@@ -91,7 +84,6 @@ const defaultPolicy: DocumentPolicySettings = {
   allowOverIssue: false,
 }
 
-const defaultGlobalOperation: GlobalOperationSettings = { reasonRequired: false }
 const defaultGlobalPallet: GlobalPalletSettings = {
   allowMixedMaterials: true,
   allowMixedBatches: true,
@@ -143,7 +135,6 @@ export function createDefaultBusinessDocumentSettings(): BusinessDocumentSetting
     globalPolicy: copyPolicy(),
     documentPolicies: {},
     documentFields: {},
-    globalOperation: { ...defaultGlobalOperation },
     globalPallet: { ...defaultGlobalPallet },
   }
 }
@@ -166,7 +157,6 @@ export function loadBusinessDocumentSettings(): BusinessDocumentSettings {
       globalPolicy: copyPolicy(stored.globalPolicy),
       documentPolicies,
       documentFields,
-      globalOperation: { ...defaultGlobalOperation, ...(stored.globalOperation ?? {}) },
       globalPallet: { ...defaultGlobalPallet, ...(stored.globalPallet ?? {}) },
     }
   } catch {
@@ -231,16 +221,9 @@ export async function fetchBusinessDocumentSettings(
     policy[property] = booleanValue(items, 'DOCUMENT', definition.key, policy[property])
   }
   for (const item of globalDefinitions) {
-    if (item.section === 'operation') {
-      settings.globalOperation.reasonRequired = booleanValue(
-        items, 'GLOBAL', item.definition.key, settings.globalOperation.reasonRequired,
-      )
-    } else {
-      const property = item.property as keyof GlobalPalletSettings
-      settings.globalPallet[property] = booleanValue(
-        items, 'GLOBAL', item.definition.key, settings.globalPallet[property],
-      )
-    }
+    settings.globalPallet[item.property] = booleanValue(
+      items, 'GLOBAL', item.definition.key, settings.globalPallet[item.property],
+    )
   }
   saveBusinessDocumentSettings(settings)
   return settings
@@ -283,10 +266,7 @@ export async function persistBusinessDocumentSettings(
     await updateSetting('DOCUMENT', documentType, definition, policy[property])
   }
   for (const item of globalDefinitions) {
-    const value = item.section === 'operation'
-      ? settings.globalOperation.reasonRequired
-      : settings.globalPallet[item.property as keyof GlobalPalletSettings]
-    await updateSetting('GLOBAL', null, item.definition, value)
+    await updateSetting('GLOBAL', null, item.definition, settings.globalPallet[item.property])
   }
   for (const property of globallySynced) {
     const definition = documentDefinitions[property]

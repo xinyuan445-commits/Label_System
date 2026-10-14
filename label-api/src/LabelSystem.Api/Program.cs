@@ -786,7 +786,6 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
     string voucherCode,
     string action,
     ApprovalActionRequest request,
-    LabelSystemRepository repository,
     UserRepository users,
     U8GatewayClient gateway,
     IOptionsMonitor<LabelSystemOptions> options,
@@ -805,12 +804,6 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
         string.IsNullOrWhiteSpace(request.ExpectedVersion))
         throw new ApiException(StatusCodes.Status400BadRequest,
             "APPROVAL_REQUEST_INVALID", "请求参数不完整。");
-    var reasonRequired = await repository.GetBooleanSettingAsync(
-        "reason_required", null, false, cancellationToken);
-    if (reasonRequired && string.IsNullOrWhiteSpace(request.Reason))
-        throw new ApiException(StatusCodes.Status400BadRequest,
-            "REASON_REQUIRED", "请输入原因。");
-
     var current = RequestContext.User(context);
     var erp = await users.GetErpOperatorAsync(current.Id, cancellationToken);
     var payload = JsonSerializer.Serialize(new

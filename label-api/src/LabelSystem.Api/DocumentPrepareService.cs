@@ -87,14 +87,6 @@ public sealed class DocumentPrepareService(
         var requiredFields = await settings.GetRequiredDocumentFieldsAsync(documentType, cancellationToken);
         ValidateBasicRequest(request, definition, requiredFields, hasSource);
         await ValidateManualReturnLinesAsync(request, definition, cancellationToken);
-        var reasonRequired = await settings.GetBooleanSettingAsync(
-            "reason_required", null, false, cancellationToken);
-        if (reasonRequired && string.IsNullOrWhiteSpace(request.Reason))
-            throw new ApiException(StatusCodes.Status400BadRequest, "REASON_REQUIRED", "请输入原因。");
-        if (request.Lines.Any(line => line.ObjectType == "UNLABELED_MATERIAL") &&
-            string.IsNullOrWhiteSpace(request.Reason))
-            throw new ApiException(StatusCodes.Status400BadRequest,
-                "RETURN_REASON_REQUIRED", "请输入退料原因。");
 
         if (hasSource)
             await ValidateSourceLinesAsync(request.Lines, cancellationToken);
