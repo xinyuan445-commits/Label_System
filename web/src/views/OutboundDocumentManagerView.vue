@@ -563,17 +563,18 @@ onBeforeRouteLeave((to) => {
         </div>
         <div v-if="selectedDocument.issuedLabels?.length" class="issued-label-list">
           <h3>待打印标签</h3>
-          <div v-for="label in selectedDocument.issuedLabels" :key="label.code">
-            <strong>{{ label.code }}</strong>
+          <div v-for="label in selectedDocument.issuedLabels" :key="label.id">
+            <strong>{{ label.code || '待生成' }}</strong>
             <span>{{ label.materialCode }} · {{ label.materialName || '--' }}</span>
             <span>{{ label.batchNo || '无批号' }} · {{ label.quantity }} {{ label.unitCode }}</span>
             <span>{{ label.warehouseCode }}{{ label.locationCode ? ` / ${label.locationCode}` : '' }}</span>
             <button
-              v-if="label.status === 'PENDING_PRINT' && selectedDocument.serverStatus === 'SUCCESS'"
+              v-if="label.code && label.status === 'PENDING_PRINT' && selectedDocument.serverStatus === 'SUCCESS'"
               type="button"
               :disabled="confirmingLabelCode === label.code"
               @click="confirmLabel(selectedDocument, label.code)"
             >{{ confirmingLabelCode === label.code ? '确认中' : '确认已贴标' }}</button>
+            <b v-else-if="label.status === 'PENDING_PRINT'">待打印</b>
             <b v-else-if="label.status === 'ACTIVE'">已启用</b>
           </div>
         </div>

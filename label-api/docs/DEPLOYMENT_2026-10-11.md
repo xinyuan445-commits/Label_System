@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-14 19:12 已发布 Business API `0.8.17` 到 `D:\LabelSystem\Api\releases\20261014_191256`，外置配置备份为 `D:\LabelSystem\Config\label-api.pre-0.8.17.json`。取消无标签红字退料、调拨部分移动和货位调整部分移动的提前发码：U8 成功后只创建无 Code 的 `PENDING_PRINT` 标签及库存流水，不读取编码规则、不消耗流水、不写 Code 登记；历史已有 Code 的待打印标签继续兼容。三套数据库已执行迁移 `014`，脚本哈希一致，`product_label.label_code` 仅允许待打印状态为空，非空 Code 使用过滤唯一索引。H5 更新为 `0.2.0-dev.70`，单据管理对新待打印标签显示“待生成”且不提供提前贴标确认。API 健康检查 `ready`、版本 `0.8.17`、数据库就绪、888 测试写入开启，5173 返回 200 和新版本。Gateway 与 APK 不变；本次未调用 U8 写接口，也未创建标签数据。
+
 2026-10-14 18:58 已发布 Business API `0.8.16` 到 `D:\LabelSystem\Api\releases\20261014_185811`，外置配置备份为 `D:\LabelSystem\Config\label-api.pre-0.8.16.json`。调拨和货位调整允许独立产品标签按部分数量处理：全量继续移动原标签，部分数量在 U8 成功后保留原标签余量并生成目标位置的待打印标签；托盘及托内标签仍整体移动。H5 更新为 `0.2.0-dev.69`，5173 已重启，运行时配置返回新版本。H5 构建和 Business API Release 构建均通过，API 健康检查 `ready`、版本 `0.8.16`、数据库就绪、888 测试写入开启。复用迁移 013，无数据库迁移，Gateway 和 APK 不变；本次未调用 U8 写接口，也未生成标签数据。
 
 2026-10-14 已发布 Business API `0.8.15` 到 `D:\LabelSystem\Api\releases\20261014_184515`，配置更新前备份为 `D:\LabelSystem\Config\label-api.pre-0.8.15.json`。货位调整不再从表头接收仓库、原货位和目标货位；服务端按标签或托盘当前仓库拆单，逐条校验目标货位属于当前仓库且不同于原货位，并约束整托目标一致。H5 更新为 `0.2.0-dev.68`，5173 已重启并返回 200。H5 构建和 Business API Release 构建均通过，API 健康检查 `ready`、版本 `0.8.15`、数据库就绪、888 测试写入开启。无数据库迁移，Gateway 和 APK 不变；本次未调用 U8 写接口。

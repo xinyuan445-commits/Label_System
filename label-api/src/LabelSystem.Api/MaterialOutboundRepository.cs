@@ -175,7 +175,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT label.label_code,flow.material_code,flow.batch_no,flow.unit_code,
+            SELECT label.id,label.label_code,flow.material_code,flow.batch_no,flow.unit_code,
                    flow.qty_after,flow.to_warehouse_code,flow.to_location_code,label.status
             FROM dbo.business_operation operation
             INNER JOIN dbo.business_operation_line line ON line.operation_id=operation.id
@@ -191,10 +191,11 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         while (await reader.ReadAsync(cancellationToken))
         {
             result.Add(new IssuedLabelItem(
-                reader.GetString(0), reader.GetString(1), null,
-                reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3),
-                reader.GetDecimal(4), reader.GetString(5),
-                reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetString(7)));
+                reader.GetInt64(0), reader.IsDBNull(1) ? null : reader.GetString(1),
+                reader.GetString(2), null,
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4),
+                reader.GetDecimal(5), reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7), reader.GetString(8)));
         }
         return result;
     }

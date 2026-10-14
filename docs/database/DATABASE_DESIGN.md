@@ -1,6 +1,6 @@
 # 标签管理系统数据库设计说明
 
-状态：结构、业务设置、U8 基础资料缓存、用户权限、漫游数据、本地密码凭据、用户管理审计、多端草稿同步、标签 Code 规则及退料发码关联已创建；三套环境最新迁移编号均为 `013`
+状态：结构、业务设置、U8 基础资料缓存、用户权限、漫游数据、本地密码凭据、用户管理审计、多端草稿同步、标签 Code 规则及打印时发码约束已创建；三套环境最新迁移编号均为 `014`
 数据库：Microsoft SQL Server 2019 Standard（15.0.2170.1）
 实例：`172.16.1.159` 默认实例
 更新时间：2026-10-14
@@ -49,9 +49,12 @@
 | 38 | `040_add_generated_label_to_operation_line.sql` | 记录无标签红字退料成功后生成的新产品标签 |
 | 39 | `041_install_migration_013_all_environments.sql` | 用 sqlcmd 将 013 安装到三个环境 |
 | 40 | `042_record_migration_013_checksum.sql` | 保存 013 迁移脚本 SHA-256 |
-| 41 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
-| 42 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
-| 43 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
+| 41 | `043_defer_product_label_code_until_print.sql` | 允许待打印标签在实际打印前不分配 Code |
+| 42 | `044_install_migration_014_all_environments.sql` | 用 sqlcmd 将 014 安装到三个环境 |
+| 43 | `045_record_migration_014_checksum.sql` | 保存 014 迁移脚本 SHA-256 |
+| 44 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
+| 45 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
+| 46 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
 
 脚本使用 UTF-8 保存。通过旧版 `sqlcmd` 执行时必须增加 `-f 65001`，并使用 `-b` 在 SQL 错误时返回失败；连接密码通过安全部署配置或 `SQLCMDPASSWORD` 提供，不写入命令脚本。
 
@@ -287,12 +290,12 @@ label_code_rule
 
 ### 5.3 `product_label` 产品标签主表
 
-一个标签码永久一条记录。物料、批次、仓库和货位从 `last_flow_id` 指向的最新有效流水取得，不在主表重复维护。
+一个产品标签内部对象永久一条记录；待打印阶段可以尚未分配标签码，分配后该 Code 永久绑定此记录。物料、批次、仓库和货位从 `last_flow_id` 指向的最新有效流水取得，不在主表重复维护。
 
 | 字段 | 类型 | 可空 | 说明 |
 | --- | --- | --- | --- |
 | `id` | bigint identity | 否 | 内部主键 |
-| `label_code` | nvarchar(100) | 否 | 全局唯一标签码，作废后也不得复用 |
+| `label_code` | nvarchar(100) | 是 | 全局唯一标签码；仅未开始打印的 `PENDING_PRINT` 标签允许为空，分配后不得复用 |
 | `current_qty` | decimal(18,6) | 否 | 当前剩余数量，默认 0 |
 | `status` | varchar(30) | 否 | 标签状态 |
 | `last_flow_id` | bigint | 是 | 同一标签最新已生效流水 ID，也是当前库存身份和位置的指针 |
@@ -305,7 +308,7 @@ label_code_rule
 
 所有状态均允许重新输出原标签，但只有已有成功 `PRINT` 流水的标签才记为 `REPRINT`，且不改变状态、余额或托盘关系。尚未首次打印成功的 `PENDING_PRINT` 使用原任务完成首次打印，成功流水仍为 `PRINT`。非 `ACTIVE` 状态补打必须由应用执行二次确认。
 
-关键约束：标签码唯一；当前数量不得小于零；`last_flow_id` 必须属于当前标签。
+关键约束：非空标签码通过过滤唯一索引保持唯一；只有 `PENDING_PRINT` 允许标签码为空；当前数量不得小于零；`last_flow_id` 必须属于当前标签。
 
 ### 5.4 `pallet_material` 托盘料号配置表
 
@@ -588,17 +591,17 @@ label_code_rule
 
 ### 5.26 `label_code_sequence` 标签 Code 流水
 
-按规则版本和分区键保存最后分配流水号，并使用行版本保护并发。该表只为后续正式发码预留；本阶段不消耗流水。正式实现必须在分配流水与统一登记的同一数据库事务内完成。
+按规则版本和分区键保存最后分配流水号，并使用行版本保护并发。业务制单和待打印任务创建不消耗流水；打印平台开始首次打印时，必须在分配流水、回填标签 Code 和统一登记的同一数据库事务内完成。
 
 ### 5.27 `label_code_registry` Code 统一登记
 
-保存 Code 的 SHA-256 唯一哈希、原始值、标准化值、业务对象、规则版本、账套快照、解析 JSON 和登记状态。产品标签或托盘建立后可以关联对应主表；外部标签不关联本地业务对象。本阶段不写入该表，后续正式发码和外部码首次登记必须保证哈希全局唯一。
+保存 Code 的 SHA-256 唯一哈希、原始值、标准化值、业务对象、规则版本、账套快照、解析 JSON 和登记状态。产品标签或托盘建立后可以关联对应主表；外部标签不关联本地业务对象。新待打印标签在 Code 为空时不写入该表；打印开始分配 Code 时必须保证哈希全局唯一。既有已分配 Code 的待打印记录继续保留。
 
 ## 6. 关键索引与查询
 
 | 查询 | 主要索引或约束 |
 | --- | --- |
-| 标签扫码查询 | `product_label.label_code` 唯一约束 |
+| 标签扫码查询 | `product_label.label_code` 非空过滤唯一索引 |
 | 托盘料号判断 | `pallet_material.material_code` 唯一约束 |
 | 托盘标签查询 | `pallet.pallet_code` 唯一约束 |
 | 托盘存货、批号和在库状态 | `pallet(material_code, batch_no, current_qty)` |
@@ -686,4 +689,4 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 3. 对应的 SQL 迁移脚本。
 4. API 请求、响应及错误码合同。
 
-迁移 001 至 013 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。迁移 `013` 在 `business_operation_line` 增加唯一的 `generated_label_id`，用于把无标签红字退料或部分移动明细与 U8 成功后新建的产品标签关联；该字段不代替原扫码 `label_id`。调拨和货位调整部分移动复用现有 `inventory_flow.relation_group_no`、`flow_role` 及标签登记结构，不需要新增迁移。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。
+迁移 001 至 014 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。迁移 `013` 在 `business_operation_line` 增加唯一的 `generated_label_id`，用于把无标签红字退料或部分移动明细与 U8 成功后新建的产品标签关联；该字段不代替原扫码 `label_id`。迁移 `014` 允许 `PENDING_PRINT` 产品标签在实际打印前保持 `label_code` 为空，并把唯一约束改为非空过滤唯一索引。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。

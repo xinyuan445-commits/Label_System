@@ -154,7 +154,6 @@ public sealed class DocumentPrepareService(
             manual.Select(line => new ManualReturnValidationLine(
                 line.MaterialCode, line.UnitCode, line.RequestedQty,
                 line.BatchNo, line.WarehouseCode, line.LocationCode)).ToArray(),
-            request.ClientRequestId,
             cancellationToken);
     }
 

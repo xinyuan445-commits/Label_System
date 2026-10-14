@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Options;
-
 namespace LabelSystem.Api;
 
 public sealed record ManualReturnValidationLine(
@@ -10,40 +8,13 @@ public sealed record ManualReturnValidationLine(
     string? WarehouseCode,
     string? LocationCode);
 
-public sealed class ManualReturnValidationService(
-    LabelCodeRuleRepository labelRules,
-    LabelCodeRuleEngine codeRules,
-    U8GatewayClient u8,
-    IOptionsMonitor<LabelSystemOptions> options)
+public sealed class ManualReturnValidationService(U8GatewayClient u8)
 {
     public async Task ValidateAsync(
         IReadOnlyList<ManualReturnValidationLine> lines,
-        string sourceDocumentNo,
         CancellationToken cancellationToken)
     {
         if (lines.Count == 0) return;
-
-        var activeRule = (await labelRules.ListAsync(true, cancellationToken))
-            .Where(rule => rule.IsEnabled &&
-                           (rule.ObjectType is "PRODUCT_LABEL" or "INVENTORY_OBJECT"))
-            .OrderBy(rule => rule.ObjectType == "PRODUCT_LABEL" ? 0 : 1)
-            .ThenBy(rule => rule.Priority)
-            .ThenBy(rule => rule.Id)
-            .Select(rule => new
-            {
-                Rule = rule,
-                Version = rule.Versions.FirstOrDefault(version => version.Status == "ACTIVE")
-            })
-            .FirstOrDefault(item => item.Version is not null);
-        if (activeRule is null)
-            throw new ApiException(StatusCodes.Status409Conflict,
-                "LABEL_RULE_NOT_CONFIGURED", "没有可用的产品标签编码规则。");
-        var validatedRule = codeRules.Validate(activeRule.Version!.Spec);
-        var uniqueSegment = validatedRule.Spec.Segments.FirstOrDefault(segment =>
-            segment.Kind == "FIELD" && segment.Field == "LABEL_UNIQUE_VALUE");
-        if (uniqueSegment is null && !validatedRule.Spec.Segments.Any(segment => segment.Kind == "SEQUENCE"))
-            throw new ApiException(StatusCodes.Status409Conflict,
-                "LABEL_RULE_NOT_UNIQUE", "产品标签编码规则缺少唯一值或流水号。");
 
         var positions = await u8.GetWarehousePositionsAsync(cancellationToken);
         foreach (var line in lines)
@@ -77,24 +48,6 @@ public sealed class ManualReturnValidationService(
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "LOCATION_CHANGED", $"货位不属于所选仓库：{line.MaterialCode}");
 
-            var uniqueLength = uniqueSegment?.Length ?? uniqueSegment?.MaxLength ?? 10;
-            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["LABEL_TYPE"] = "PRODUCT",
-                ["MATERIAL_CODE"] = line.MaterialCode.Trim(),
-                ["BATCH_NO"] = string.IsNullOrWhiteSpace(line.BatchNo) ? "NO_BATCH" : line.BatchNo.Trim(),
-                ["ISSUED_QUANTITY"] = line.RequestedQty.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["UNIT_CODE"] = line.UnitCode.Trim(),
-                ["SOURCE_DOCUMENT_NO"] = sourceDocumentNo.Trim(),
-                ["LABEL_UNIQUE_VALUE"] = new string('0', uniqueLength),
-                ["SEQUENCE"] = "1",
-                ["CURRENT_DATE"] = BusinessClock.Now.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
-            };
-            var previewCode = codeRules.Render(
-                validatedRule.Spec, values, options.CurrentValue.ErpAccountId);
-            if (previewCode.Length > 100)
-                throw new ApiException(StatusCodes.Status409Conflict,
-                    "LABEL_CODE_TOO_LONG", $"标签编码超过数据库长度：{line.MaterialCode}");
         }
     }
 }

@@ -82,7 +82,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | POST | `/operations/documents/{documentType}/submit?autoApprove=false` | 通用单据直接上传 ERP |
 | GET | `/operations/groups?documentType=...&status=...&operatorId=...&startDate=...&endDate=...&skip=...&take=...` | 分页查询业务组；管理员可加 `allUsers=true` |
 | GET | `/operations/groups/{groupId}` | 查询拆单组 |
-| POST | `/operations/groups/{groupId}/issued-labels/{labelCode}/confirm` | 确认无标签退料生成的实体标签已贴附并启用 |
+| POST | `/operations/groups/{groupId}/issued-labels/{labelCode}/confirm` | 兼容确认历史已提前分配 Code 的待打印标签；新标签等待打印平台处理 |
 | POST | `/operations/groups/{groupId}/validate` | 材料出库写入前校验；不调用 U8 写接口 |
 | POST | `/operations/groups/{groupId}/execute` | 创建人执行材料出库拆组；请求体可带 `autoApprove` |
 | POST | `/operations/groups/{groupId}/heartbeat` | 续期业务锁 |
@@ -90,7 +90,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 
 `autoApprove=true` 对九类单据统一生效。服务端先确认新增、回写 ERP 单号并提交本地库存事务，再以新增返回的版本审核；审核明确失败时业务组停在 `PENDING_APPROVAL`，可继续审核但不得重新新增，审核结果未知时进入 `NEEDS_RECONCILIATION`。首次审核沿用固定 `:auto-audit` 幂等后缀；明确失败后的继续审核按失败事件数追加递增序号，既不重放新增，也不会被上一次审核的幂等结果覆盖。
 
-红字材料出库可在通用或生产订单专用提交接口的 `lines` 中使用 `objectType=UNLABELED_MATERIAL`，并提供 `materialCode`、`unitCode`、`requestedQty`、`batchNo`、`warehouseCode`、`locationCode`；参照生产订单时还必须携带完整需求行分配。该类型只允许 `material-outbound + RED`，不要求退料原因。有原单时正常数量不得超过需求行当前已领数量，`overQty` 必须为零。提交成功返回的业务组包含 `issuedLabels`；新标签初始为 `PENDING_PRINT`，只有确认实体标签已贴附后才变为 `ACTIVE`。确认接口要求业务组已经完成，重复确认同一已启用标签按幂等成功返回。
+红字材料出库可在通用或生产订单专用提交接口的 `lines` 中使用 `objectType=UNLABELED_MATERIAL`，并提供 `materialCode`、`unitCode`、`requestedQty`、`batchNo`、`warehouseCode`、`locationCode`；参照生产订单时还必须携带完整需求行分配。该类型只允许 `material-outbound + RED`，不要求退料原因。有原单时正常数量不得超过需求行当前已领数量，`overQty` 必须为零。提交成功返回的业务组包含 `issuedLabels`；新标签初始为 `PENDING_PRINT`，其中 `id` 为内部标签 ID，实际打印前 `code=null`。业务提交不读取编码规则或分配流水；未来由打印平台按内部 ID 开始打印并生成 Code。
 
 红字材料出库也允许 `objectType=PRODUCT_LABEL` 引用状态为 `USED` 的已耗尽标签。服务端仍校验标签身份和占用，只取消“当前库存量必须覆盖本次数量”的蓝字限制；退料仓库、货位来自本次明细。U8 写入确认后原标签增加退料数量并恢复 `ACTIVE`。`PALLET` 不允许用于红字材料退料。
 
@@ -251,4 +251,10 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 
 `transfer-order` 和 `location-adjustment` 的独立 `PRODUCT_LABEL` 明细允许 `0 < requestedQty <= inventoryQtySnapshot`。服务端加锁后重新读取当前余额；数量超过当前余额返回 `LABEL_QUANTITY_INSUFFICIENT`。`PALLET` 明细及带 `sourcePalletCode` 的托内产品明细仍必须按当前余额整体提交，否则返回 `WHOLE_PALLET_QUANTITY_REQUIRED`。
 
-全量移动继续为原标签写入位置流水。部分移动在 U8 新增回查成功后原子完成：原标签扣减 `requestedQty` 并保留来源位置，目标位置创建 `PENDING_PRINT` 产品标签，两条 `inventory_flow` 使用同一 `relation_group_no`、`operation_type=SPLIT`，角色分别为 `SOURCE` 和 `TARGET`。业务组查询通过既有 `issuedLabels` 返回新标签，确认已贴标仍调用现有待打印确认接口。
+全量移动继续为原标签写入位置流水。部分移动在 U8 新增回查成功后原子完成：原标签扣减 `requestedQty` 并保留来源位置，目标位置创建无 Code 的 `PENDING_PRINT` 产品标签，两条 `inventory_flow` 使用同一 `relation_group_no`、`operation_type=SPLIT`，角色分别为 `SOURCE` 和 `TARGET`。业务组查询通过既有 `issuedLabels` 返回内部标签 ID 和业务信息，等待打印平台后续生成 Code。
+
+## 打印时生成标签 Code（0.8.17）
+
+业务完成产生的 `PENDING_PRINT` 产品标签允许 `label_code=null`。`issuedLabels` 返回 `id`、可空 `code`、物料、批次、数量、仓库、货位和状态；H5 对空 Code 显示“待生成”，不提供“确认已贴标”。业务完成阶段不更新 `label_code_sequence`，也不写入 `label_code_registry`。
+
+打印平台后续必须使用内部 `id` 发起首次打印，在同一事务中分配流水、生成 Code、回填标签并登记唯一哈希。Code 一经分配即不可回收；打印失败只能复用原 Code 重试。现有按 `{labelCode}/confirm` 的接口仅兼容迁移前已经提前分配 Code 的待打印记录。

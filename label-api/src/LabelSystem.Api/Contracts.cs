@@ -421,7 +421,8 @@ public sealed record OperationGroupResult(
     IReadOnlyList<IssuedLabelItem>? IssuedLabels = null);
 
 public sealed record IssuedLabelItem(
-    string Code,
+    long Id,
+    string? Code,
     string MaterialCode,
     string? MaterialName,
     string? BatchNo,

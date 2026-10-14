@@ -35,7 +35,6 @@ public sealed class MaterialOutboundService(
             manual.Select(line => new ManualReturnValidationLine(
                 line.MaterialCode, line.UnitCode, line.RequestedQty,
                 line.BatchNo, line.WarehouseCode, line.LocationCode)).ToArray(),
-            manual.FirstOrDefault()?.SourceDocumentNo ?? request.ClientRequestId,
             cancellationToken);
 
         var requirements = await u8.GetMaterialRequirementsAsync(

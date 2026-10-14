@@ -63,7 +63,8 @@ export interface OperationGroupSnapshot {
   errorMessage?: string | null
   operations: PreparedOperation[]
   issuedLabels?: Array<{
-    code: string
+    id: number
+    code: string | null
     materialCode: string
     materialName?: string | null
     batchNo?: string | null
