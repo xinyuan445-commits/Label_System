@@ -657,9 +657,17 @@ function updateEditorTargetWarehouse(value: string): void {
   }
 }
 
+function bodyFieldAppliesToLine(field: DocumentFieldDefinition, line: OutboundLine): boolean {
+  return !(line.objectType === 'UNLABELED_MATERIAL' && field.key === 'body.availableQty')
+}
+
 function missingRequiredBodyField(line: OutboundLine): DocumentFieldDefinition | undefined {
   return documentFields.value.find(
-    (field) => field.area === 'body' && fieldRequired(field.key) && isBlank(bodyValue(line, field.key)),
+    (field) =>
+      field.area === 'body' &&
+      fieldRequired(field.key) &&
+      bodyFieldAppliesToLine(field, line) &&
+      isBlank(bodyValue(line, field.key)),
   )
 }
 
@@ -1576,7 +1584,9 @@ function validate(): string {
     (field) => field.area === 'body' && fieldRequired(field.key),
   )
   for (const line of lines.value) {
-    const missing = requiredBodyFields.find((field) => isBlank(bodyValue(line, field.key)))
+    const missing = requiredBodyFields.find(
+      (field) => bodyFieldAppliesToLine(field, line) && isBlank(bodyValue(line, field.key)),
+    )
     if (missing) return `请填写${missing.label}`
     if (line.requiresBatch && !line.batchNo.trim()) return `请输入批号：${line.materialCode}`
   }
