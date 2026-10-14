@@ -461,10 +461,20 @@ function formatQty(value: number | null): string {
 }
 
 function fieldVisible(key: string): boolean {
+  if (props.documentType === 'transfer-order') {
+    if (['header.warehouseCode', 'header.targetWarehouseCode', 'header.targetLocationCode'].includes(key)) {
+      return false
+    }
+    if ([
+      'body.warehouseCode', 'body.locationCode',
+      'body.targetWarehouseCode', 'body.targetLocationCode',
+    ].includes(key)) return true
+  }
   return documentFieldSettings.value[key]?.visible ?? false
 }
 
 function fieldRequired(key: string): boolean {
+  if (props.documentType === 'transfer-order' && key === 'body.targetWarehouseCode') return true
   return documentFieldSettings.value[key]?.required ?? false
 }
 
@@ -662,13 +672,25 @@ function bodyFieldAppliesToLine(field: DocumentFieldDefinition, line: OutboundLi
 }
 
 function missingRequiredBodyField(line: OutboundLine): DocumentFieldDefinition | undefined {
-  return documentFields.value.find(
+  const missing = documentFields.value.find(
     (field) =>
       field.area === 'body' &&
       fieldRequired(field.key) &&
       bodyFieldAppliesToLine(field, line) &&
       isBlank(bodyValue(line, field.key)),
   )
+  if (missing) return missing
+  if (props.documentType === 'transfer-order') {
+    const targetWarehouse = String(bodyValue(line, 'body.targetWarehouseCode') ?? '')
+    const targetLocation = String(bodyValue(line, 'body.targetLocationCode') ?? '')
+    const managesPositions = warehousePositionOptions.value.some(
+      (item) => item.warehouseCode === targetWarehouse && item.positionCode,
+    )
+    if (managesPositions && !targetLocation) {
+      return documentFields.value.find((field) => field.key === 'body.targetLocationCode')
+    }
+  }
+  return undefined
 }
 
 function lineEditError(line: OutboundLine): string {
@@ -699,6 +721,15 @@ function lineEditError(line: OutboundLine): string {
       item.warehouseCode === line.warehouseCode && item.positionCode === line.locationCode,
     )
   ) return '货位不属于所选仓库'
+  if (props.documentType === 'transfer-order') {
+    const targetWarehouse = String(bodyValue(line, 'body.targetWarehouseCode') ?? '')
+    const targetLocation = String(bodyValue(line, 'body.targetLocationCode') ?? '')
+    if (targetWarehouse === line.warehouseCode) return '调出仓库和调入仓库不能相同'
+    if (targetLocation && targetWarehouse &&
+        !warehousePositionOptions.value.some((item) =>
+          item.warehouseCode === targetWarehouse && item.positionCode === targetLocation,
+        )) return '调入货位不属于调入仓库'
+  }
   if (
     props.documentType === 'material-outbound' && selectedSourceLines.value.length > 0 &&
     !materialRequirements.value.some((item) =>
@@ -861,6 +892,22 @@ function handleCurrencyChange(value: string): void {
 }
 
 function applyReferenceDefaults(): void {
+  if (props.documentType === 'transfer-order') {
+    const findTransferStyle = (direction: 'IN' | 'OUT', name: string) =>
+      rdStyleOptions.value.find((item) =>
+        item.direction === direction && item.isTerminal && item.name.trim() === name,
+      ) ?? rdStyleOptions.value.find((item) =>
+        item.direction === direction && item.isTerminal && item.name.includes(name),
+      )
+    if (isBlank(headerFieldValues.value['header.outCategoryCode'])) {
+      const selected = findTransferStyle('OUT', '调拨出库')
+      if (selected) setHeaderField('header.outCategoryCode', selected.code)
+    }
+    if (isBlank(headerFieldValues.value['header.inCategoryCode'])) {
+      const selected = findTransferStyle('IN', '调拨入库')
+      if (selected) setHeaderField('header.inCategoryCode', selected.code)
+    }
+  }
   if (documentFields.value.some((field) => field.key === 'header.purchaseTypeCode') &&
       isBlank(headerFieldValues.value['header.purchaseTypeCode'])) {
     const selected = purchaseTypeOptions.value.find((item) => item.isDefault) ?? purchaseTypeOptions.value[0]

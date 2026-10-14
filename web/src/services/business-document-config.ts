@@ -143,6 +143,8 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
     warehouseRequired: true,
     targetWarehouseLabel: '调入仓库',
     targetWarehouseRequired: true,
+    targetLocationLabel: '调入货位',
+    targetLocationRequired: false,
     departmentRequired: true,
     productionBatch: false,
     detailTitle: '调拨明细',

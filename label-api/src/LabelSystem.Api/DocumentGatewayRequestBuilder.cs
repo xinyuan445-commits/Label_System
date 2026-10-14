@@ -133,7 +133,7 @@ internal static class DocumentGatewayRequestBuilder
             case "transfer":
                 header["dtvdate"] = date;
                 header["cowhcode"] = operation.WarehouseCode;
-                header["ciwhcode"] = Empty(value.TargetWarehouseCode);
+                header["ciwhcode"] = Empty(operation.Lines.FirstOrDefault()?.TargetWarehouseCode);
                 header["cordcode"] = AdditionalText(value.AdditionalFields, "outCategoryCode") ?? value.CategoryCode;
                 header["cirdcode"] = AdditionalText(value.AdditionalFields, "inCategoryCode") ?? value.CategoryCode;
                 header["codepcode"] = Empty(value.DepartmentCode);

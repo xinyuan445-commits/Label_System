@@ -64,12 +64,12 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
       'header.partnerCode', config.partnerLabel, 'header', 'text', true, config.partnerRequired,
     ))
   }
-  if (config.warehouseLabel) {
+  if (config.warehouseLabel && documentType !== 'transfer-order') {
     fields.push(field(
       'header.warehouseCode', config.warehouseLabel, 'header', 'text', true, config.warehouseRequired,
     ))
   }
-  if (config.targetWarehouseLabel) {
+  if (config.targetWarehouseLabel && documentType !== 'transfer-order') {
     fields.push(field(
       'header.targetWarehouseCode', config.targetWarehouseLabel, 'header', 'text', true,
       config.targetWarehouseRequired,
@@ -81,7 +81,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
       config.sourceLocationRequired,
     ))
   }
-  if (config.targetLocationLabel) {
+  if (config.targetLocationLabel && documentType !== 'transfer-order') {
     fields.push(field(
       'header.targetLocationCode', config.targetLocationLabel, 'header', 'text', true,
       config.targetLocationRequired,
@@ -200,14 +200,20 @@ function bodyBasicGroup(documentType: BusinessDocumentType): DocumentFieldGroup 
     field('body.materialName', '物料名称', 'body', 'text'),
     field('body.batchNo', '批号', 'body', 'text', true),
     field('body.unitCode', '计量单位', 'body', 'text', true, true),
-    field('body.warehouseCode', '仓库', 'body', 'text', true, true),
+    field('body.warehouseCode', documentType === 'transfer-order' ? '调出仓库' : '仓库', 'body', 'text', true, true),
     field('body.locationCode', '货位', 'body', 'text', true),
   ]
   if (config.targetWarehouseLabel) {
-    fields.push(field('body.targetWarehouseCode', config.targetWarehouseLabel, 'body', 'text'))
+    fields.push(field(
+      'body.targetWarehouseCode', config.targetWarehouseLabel, 'body', 'text',
+      documentType === 'transfer-order', documentType === 'transfer-order',
+    ))
   }
   if (config.targetLocationLabel) {
-    fields.push(field('body.targetLocationCode', config.targetLocationLabel, 'body', 'text'))
+    fields.push(field(
+      'body.targetLocationCode', config.targetLocationLabel, 'body', 'text',
+      documentType === 'transfer-order', false,
+    ))
   }
   fields.push(
     field('body.availableQty', '可用量', 'body', 'number', true, true),

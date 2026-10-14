@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using Microsoft.Data.SqlClient;
 
 namespace LabelSystem.Api;
@@ -13,7 +14,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         decimal? InventoryQty,
         string BatchNo,
         string WarehouseCode,
-        string LocationCode);
+        string LocationCode,
+        string TargetWarehouseCode,
+        string TargetLocationCode);
 
     public async Task<MaterialOutboundPrepareResult> PrepareAsync(
         DocumentPrepareRequest request,
@@ -85,8 +88,21 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         }
 
         var resolved = ResolveLines(request, definition, products, pallets);
+        if (definition.DocumentType == "transfer-order")
+        {
+            var unchanged = resolved.FirstOrDefault(line =>
+                string.Equals(line.WarehouseCode, line.TargetWarehouseCode,
+                    StringComparison.OrdinalIgnoreCase));
+            if (unchanged is not null)
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "WAREHOUSE_UNCHANGED", $"调出仓库和调入仓库不能相同：{unchanged.Request.LabelCode}");
+        }
         if (definition.WholePalletMove)
+        {
             await ValidateWholePalletMovesAsync(connection, transaction, request.Lines, products, pallets, cancellationToken);
+            if (definition.DocumentType == "transfer-order")
+                ValidatePalletTransferTargets(resolved, pallets.Values);
+        }
 
         var now = BusinessClock.NowDatabase;
         var lockExpiresAt = now.AddMinutes(Math.Clamp(options.LockMinutes, 1, 120));
@@ -99,6 +115,16 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 }).OrderBy(group => group.Key.Type, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(group => group.Key.Id)
                 .Select(group => (Type: group.Key.Type, Id: group.Key.Id.ToString(), No: group.Key.No, Lines: group.ToArray())).ToArray()
+            : definition.DocumentType == "transfer-order"
+                ? resolved.GroupBy(line => new
+                    {
+                        Source = line.WarehouseCode,
+                        Target = line.TargetWarehouseCode
+                    })
+                    .OrderBy(group => group.Key.Source, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(group => group.Key.Target, StringComparer.OrdinalIgnoreCase)
+                    .Select(group => (Type: string.Empty, Id: string.Empty, No: string.Empty, Lines: group.ToArray()))
+                    .ToArray()
             : definition.GroupByWarehouse
                 ? resolved.GroupBy(line => line.WarehouseCode, StringComparer.OrdinalIgnoreCase)
                     .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
@@ -142,7 +168,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             options.U8WritesEnabled,
             created.Select(item => new PreparedOperation(
                 item.Id, item.No, item.SourceNo,
-                request.Header.WarehouseCode?.Trim() ?? resolved.First().WarehouseCode,
+                item.Lines[0].WarehouseCode,
                 item.Lines.Length, item.Lines.Sum(line => line.Request.RequestedQty))).ToArray());
     }
 
@@ -177,7 +203,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                         "LABEL_LOCATION_MISSING", $"标签没有退料仓库：{line.LabelCode}");
                 result.Add(new ResolvedLine(
                     line, product.Id, null, product.PalletId, product.CurrentQty,
-                    product.BatchNo, warehouseCode, locationCode));
+                    product.BatchNo, warehouseCode, locationCode,
+                    ResolveTargetWarehouse(request, definition, line),
+                    ResolveTargetLocation(request, line)));
             }
             else if (line.ObjectType == "PALLET")
             {
@@ -186,7 +214,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 EnsurePosition(request, definition, pallet.Line.WarehouseCode, pallet.Line.LocationCode, line.LabelCode);
                 result.Add(new ResolvedLine(
                     line, null, pallet.Id, null, pallet.Line.AvailableQty,
-                    pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode));
+                    pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode,
+                    ResolveTargetWarehouse(request, definition, line),
+                    ResolveTargetLocation(request, line)));
             }
             else
             {
@@ -194,7 +224,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     line, null, null, null, null,
                     line.BatchNo?.Trim() ?? string.Empty,
                     line.WarehouseCode?.Trim() ?? string.Empty,
-                    line.LocationCode?.Trim() ?? string.Empty));
+                    line.LocationCode?.Trim() ?? string.Empty,
+                    ResolveTargetWarehouse(request, definition, line),
+                    ResolveTargetLocation(request, line)));
             }
         }
         foreach (var group in result.GroupBy(line => new
@@ -336,6 +368,24 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         }
     }
 
+    private static void ValidatePalletTransferTargets(
+        IReadOnlyList<ResolvedLine> lines,
+        IEnumerable<PalletSnapshot> pallets)
+    {
+        foreach (var pallet in pallets)
+        {
+            var palletLine = lines.FirstOrDefault(line => line.PalletId == pallet.Id);
+            if (palletLine is null) continue;
+            if (lines.Any(line => line.SourcePalletId == pallet.Id &&
+                                  (!string.Equals(line.TargetWarehouseCode, palletLine.TargetWarehouseCode,
+                                      StringComparison.OrdinalIgnoreCase) ||
+                                   !string.Equals(line.TargetLocationCode, palletLine.TargetLocationCode,
+                                      StringComparison.OrdinalIgnoreCase))))
+                throw new ApiException(StatusCodes.Status409Conflict,
+                    "WHOLE_PALLET_TARGET_MISMATCH", $"托盘 {pallet.Line.LabelCode} 必须整体调入同一位置。");
+        }
+    }
+
     private static async Task<long> InsertOperationAsync(
         SqlConnection connection,
         SqlTransaction transaction,
@@ -459,11 +509,8 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             AddDecimal(command, "@requested_qty", line.Request.RequestedQty);
             command.Parameters.Add("@from_warehouse", SqlDbType.NVarChar, 100).Value = line.WarehouseCode;
             command.Parameters.Add("@from_location", SqlDbType.NVarChar, 100).Value = DbValue(line.LocationCode);
-            var targetWarehouse = request.Header.TargetWarehouseCode;
-            if (definition.DocumentType is "purchase-inbound" or "location-adjustment")
-                targetWarehouse ??= request.Header.WarehouseCode;
-            command.Parameters.Add("@to_warehouse", SqlDbType.NVarChar, 100).Value = DbValue(targetWarehouse);
-            command.Parameters.Add("@to_location", SqlDbType.NVarChar, 100).Value = DbValue(request.Header.TargetLocationCode);
+            command.Parameters.Add("@to_warehouse", SqlDbType.NVarChar, 100).Value = DbValue(line.TargetWarehouseCode);
+            command.Parameters.Add("@to_location", SqlDbType.NVarChar, 100).Value = DbValue(line.TargetLocationCode);
             command.Parameters.Add("@remark", SqlDbType.NVarChar, 500).Value = DbValue(line.Request.Remark);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -566,6 +613,39 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         parameter.Precision = 18;
         parameter.Scale = 6;
         parameter.Value = value;
+    }
+
+    private static string ResolveTargetWarehouse(
+        DocumentPrepareRequest request,
+        DocumentPrepareDefinition definition,
+        DocumentPrepareLine line)
+    {
+        var value = line.TargetWarehouseCode ??
+                    AdditionalText(line.AdditionalFields, "targetWarehouseCode") ??
+                    request.Header.TargetWarehouseCode;
+        if (definition.DocumentType is "purchase-inbound" or "location-adjustment")
+            value ??= request.Header.WarehouseCode;
+        return value?.Trim() ?? string.Empty;
+    }
+
+    private static string ResolveTargetLocation(DocumentPrepareRequest request, DocumentPrepareLine line) =>
+        (line.TargetLocationCode ??
+         AdditionalText(line.AdditionalFields, "targetLocationCode") ??
+         request.Header.TargetLocationCode)?.Trim() ?? string.Empty;
+
+    private static string? AdditionalText(JsonElement? fields, string name)
+    {
+        if (fields is not { ValueKind: JsonValueKind.Object } value) return null;
+        foreach (var property in value.EnumerateObject())
+        {
+            var logical = property.Name.StartsWith("body.", StringComparison.OrdinalIgnoreCase)
+                ? property.Name[5..] : property.Name;
+            if (!logical.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                property.Value.ValueKind == JsonValueKind.Null) continue;
+            var text = property.Value.ToString().Trim();
+            return text.Length == 0 ? null : text;
+        }
+        return null;
     }
 
     private static object DbValue(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();

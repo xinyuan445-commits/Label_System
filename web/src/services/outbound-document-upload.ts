@@ -153,6 +153,8 @@ function createInventoryPrepareLines(payload: InventoryDocumentPayload) {
     batchNo: line.batchNo || null,
     warehouseCode: line.warehouseCode || null,
     locationCode: line.locationCode || null,
+    targetWarehouseCode: line.fieldValues?.['body.targetWarehouseCode'] || null,
+    targetLocationCode: line.fieldValues?.['body.targetLocationCode'] || null,
     requiresBatch: line.requiresBatch === true,
   }))
   const sources = (payload.selectedSourceLines ?? []).map((line) => ({

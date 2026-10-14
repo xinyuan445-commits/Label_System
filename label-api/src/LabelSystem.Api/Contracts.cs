@@ -384,7 +384,9 @@ public sealed record DocumentPrepareLine(
     string? BatchNo = null,
     string? WarehouseCode = null,
     string? LocationCode = null,
-    bool RequiresBatch = false);
+    bool RequiresBatch = false,
+    string? TargetWarehouseCode = null,
+    string? TargetLocationCode = null);
 
 public sealed record SourceDocumentLine(
     string SourceType,

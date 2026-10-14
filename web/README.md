@@ -11,7 +11,9 @@ npm run dev
 
 当前开发地址固定为 `http://172.16.10.45:5173/`。电脑 IP 或端口变化后，在登录页进入“设置 > 地址设置”修改开发地址，并同步维护 Business API 的精确 CORS 来源。
 
-运行时配置位于 `public/runtime-config.json`。development 的登录、设置、源单、标签/托盘和九类单据上传均调用 `http://172.16.1.159:9890` 的 Business API；本地模拟登录、模拟源单和模拟业务上传已关闭。`enableMockScanner` 只模拟扫码输入事件，不生成标签数据。当前 H5 版本为 `0.2.0-dev.66`。
+运行时配置位于 `public/runtime-config.json`。development 的登录、设置、源单、标签/托盘和九类单据上传均调用 `http://172.16.1.159:9890` 的 Business API；本地模拟登录、模拟源单和模拟业务上传已关闭。`enableMockScanner` 只模拟扫码输入事件，不生成标签数据。当前 H5 版本为 `0.2.0-dev.67`。
+
+调拨单不在表头选择调出、调入仓库。扫码后调出仓库和货位取标签当前位置，明细编辑选择调入仓库及调入货位；需要货位管理的调入仓库必须选择货位。调出、调入类别分别默认匹配缓存中的“调拨出库”“调拨入库”，仍允许用户改选。
 
 ```powershell
 npm run typecheck

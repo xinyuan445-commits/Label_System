@@ -46,7 +46,7 @@ public sealed class DocumentPrepareService(
         {
             ["transfer-order"] = new(
                 "transfer-order", "调拨单", "TRANSFER", "transfer", "TR",
-                true, true, false, true, false, true, false, false, false, true),
+                false, false, false, true, false, true, false, false, false, false),
             ["location-adjustment"] = new(
                 "location-adjustment", "货位调整", "LOCATION_ADJUSTMENT", "location-adjustment", "LA",
                 true, false, true, false, false, true, false, false, false, true),
@@ -180,10 +180,11 @@ public sealed class DocumentPrepareService(
         Require(request.Header.PartnerCode,
             IsRequired(requiredFields, "header.partnerCode", RequiresPartner(definition.DocumentType)),
             "PARTNER_REQUIRED", "请输入往来单位。");
-        Require(request.Header.WarehouseCode, IsRequired(requiredFields, "header.warehouseCode", definition.RequireWarehouse), "WAREHOUSE_REQUIRED", "请输入仓库。");
-        Require(request.Header.TargetWarehouseCode, IsRequired(requiredFields, "header.targetWarehouseCode", definition.RequireTargetWarehouse),
+        var lineLevelTransfer = definition.DocumentType == "transfer-order";
+        Require(request.Header.WarehouseCode, !lineLevelTransfer && IsRequired(requiredFields, "header.warehouseCode", definition.RequireWarehouse), "WAREHOUSE_REQUIRED", "请输入仓库。");
+        Require(request.Header.TargetWarehouseCode, !lineLevelTransfer && IsRequired(requiredFields, "header.targetWarehouseCode", definition.RequireTargetWarehouse),
             "TARGET_WAREHOUSE_REQUIRED", "请输入调入仓库。");
-        Require(request.Header.TargetLocationCode, IsRequired(requiredFields, "header.targetLocationCode", definition.RequireTargetLocation),
+        Require(request.Header.TargetLocationCode, !lineLevelTransfer && IsRequired(requiredFields, "header.targetLocationCode", definition.RequireTargetLocation),
             "TARGET_LOCATION_REQUIRED", "请输入目标货位。");
         Require(request.Header.SourceLocationCode,
             IsRequired(requiredFields, "header.sourceLocationCode", false),
@@ -198,23 +199,11 @@ public sealed class DocumentPrepareService(
         DocumentAdditionalFields.Validate(request.Header.AdditionalFields);
         DocumentAdditionalFields.ValidateRequired(
             request.Header.AdditionalFields, requiredFields, "header.", MappedHeaderFields);
-        Require(request.Header.TargetWarehouseCode,
-            IsRequired(requiredFields, "body.targetWarehouseCode", false),
-            "TARGET_WAREHOUSE_REQUIRED", "请输入调入仓库。");
-        Require(request.Header.TargetLocationCode,
-            IsRequired(requiredFields, "body.targetLocationCode", false),
-            "TARGET_LOCATION_REQUIRED", "请输入目标货位。");
         if (hasSource && !definition.SupportsSource)
             throw new ApiException(StatusCodes.Status400BadRequest,
                 "SOURCE_NOT_SUPPORTED", "当前单据不能关联源单。");
         if (hasSource && string.IsNullOrWhiteSpace(request.Header.SourceType))
             throw new ApiException(StatusCodes.Status400BadRequest, "SOURCE_REQUIRED", "请选择源单。");
-
-        if (definition.DocumentType == "transfer-order" &&
-            string.Equals(request.Header.WarehouseCode?.Trim(), request.Header.TargetWarehouseCode?.Trim(),
-                StringComparison.OrdinalIgnoreCase))
-            throw new ApiException(StatusCodes.Status400BadRequest,
-                "WAREHOUSE_UNCHANGED", "调出仓库和调入仓库不能相同。");
 
         var objects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in request.Lines)
@@ -235,6 +224,22 @@ public sealed class DocumentPrepareService(
                 "WAREHOUSE_REQUIRED", "请选择仓库。");
             Require(line.LocationCode, IsRequired(requiredFields, "body.locationCode", false),
                 "LOCATION_REQUIRED", "请选择货位。");
+            var targetWarehouse = line.TargetWarehouseCode ??
+                                  AdditionalText(line.AdditionalFields, "targetWarehouseCode") ??
+                                  request.Header.TargetWarehouseCode;
+            var targetLocation = line.TargetLocationCode ??
+                                 AdditionalText(line.AdditionalFields, "targetLocationCode") ??
+                                 request.Header.TargetLocationCode;
+            Require(targetWarehouse,
+                definition.DocumentType == "transfer-order" || IsRequired(requiredFields, "body.targetWarehouseCode", false),
+                "TARGET_WAREHOUSE_REQUIRED", "请选择调入仓库。");
+            Require(targetLocation,
+                IsRequired(requiredFields, "body.targetLocationCode", false),
+                "TARGET_LOCATION_REQUIRED", "请选择调入货位。");
+            if (definition.DocumentType == "transfer-order" &&
+                string.Equals(line.WarehouseCode?.Trim(), targetWarehouse?.Trim(), StringComparison.OrdinalIgnoreCase))
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "WAREHOUSE_UNCHANGED", "调出仓库和调入仓库不能相同。");
             Require(line.Remark, IsRequired(requiredFields, "body.remark", false),
                 "LINE_REMARK_REQUIRED", "请输入行备注。");
             if (line.RequestedQty < 0 || (!definition.AllowZeroQuantity && line.RequestedQty <= 0))
@@ -265,6 +270,21 @@ public sealed class DocumentPrepareService(
     {
         if (required && string.IsNullOrWhiteSpace(value))
             throw new ApiException(StatusCodes.Status400BadRequest, code, message);
+    }
+
+    private static string? AdditionalText(JsonElement? fields, string name)
+    {
+        if (fields is not { ValueKind: JsonValueKind.Object } value) return null;
+        foreach (var property in value.EnumerateObject())
+        {
+            var logical = property.Name.StartsWith("body.", StringComparison.OrdinalIgnoreCase)
+                ? property.Name[5..] : property.Name;
+            if (!logical.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                property.Value.ValueKind == JsonValueKind.Null) continue;
+            var text = property.Value.ToString().Trim();
+            return text.Length == 0 ? null : text;
+        }
+        return null;
     }
 
     private static bool IsRequired(
