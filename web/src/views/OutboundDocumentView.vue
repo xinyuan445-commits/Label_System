@@ -52,6 +52,7 @@ import {
 } from '@/services/outbound-document-drafts'
 import { uploadOutboundDocument } from '@/services/outbound-document-upload'
 import {
+  consumeReturnRequirementSelection,
   consumeSourceDocumentSelection,
   type MaterialRequirementLine,
   type OutboundDocumentType,
@@ -89,6 +90,7 @@ interface OutboundLine {
   unallocatedQty?: number
   requiresOverIssueQuantity?: boolean
   requiresBatch?: boolean
+  returnRequirementId?: number
 }
 
 interface MaterialOutboundSubmissionLine {
@@ -202,6 +204,7 @@ const manualQuantity = ref<number | null>(null)
 const manualWarehouseCode = ref('')
 const manualLocationCode = ref('')
 const manualEditingLineId = ref<string | null>(null)
+const manualRequirementId = ref<number | null>(null)
 
 const handledHeaderFieldKeys = new Set([
   'header.documentDate',
@@ -256,6 +259,11 @@ const readonlyEditorFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) &&
     inventoryIdentityFieldKeys.has(field.key),
 ))
+const returnRequirementTargets = computed(() => Object.fromEntries(
+  lines.value
+    .filter((line) => Number.isInteger(line.returnRequirementId))
+    .map((line) => [line.id, line.returnRequirementId as number]),
+))
 const allocationByLine = computed(() =>
   props.documentType === 'material-outbound'
     ? allocateMaterialScans(
@@ -264,6 +272,7 @@ const allocationByLine = computed(() =>
         documentDirection.value === 'BLUE' && documentPolicy.value.allowOverIssue,
         overIssueTargets.value,
         documentDirection.value === 'RED' ? 'issued' : 'remaining',
+        returnRequirementTargets.value,
       )
     : {},
 )
@@ -1026,8 +1035,12 @@ function handleScan(event: PdaScanEvent): void {
   void addBarcode(event.barcode)
 }
 
-function prepareManualReturn(material: MaterialOption): void {
+function prepareManualReturn(
+  material: MaterialOption,
+  requirement: MaterialRequirementLine | null = null,
+): void {
   manualEditingLineId.value = null
+  manualRequirementId.value = requirement?.requirementId ?? null
   manualMaterialResults.value = []
   manualMaterial.value = material
   manualBatchNo.value = ''
@@ -1039,6 +1052,7 @@ function prepareManualReturn(material: MaterialOption): void {
 
 function openExistingManualReturn(line: OutboundLine): void {
   manualEditingLineId.value = line.id
+  manualRequirementId.value = line.returnRequirementId ?? null
   manualMaterial.value = {
     code: line.materialCode,
     name: line.materialName,
@@ -1066,6 +1080,7 @@ function openLineEditor(line: OutboundLine): void {
 function closeManualReturn(): void {
   showManualReturn.value = false
   manualEditingLineId.value = null
+  manualRequirementId.value = null
   manualMaterialQuery.value = ''
   manualMaterialResults.value = []
   manualMaterial.value = null
@@ -1097,6 +1112,23 @@ async function queryManualMaterials(): Promise<void> {
 function selectManualMaterial(material: MaterialOption): void {
   manualMaterialQuery.value = `${material.code} ${material.name}`
   prepareManualReturn(material)
+}
+
+async function openSelectedReturnRequirement(requirement: MaterialRequirementLine): Promise<void> {
+  try {
+    const materials = await searchMaterials(requirement.materialCode)
+    const material = materials.find((item) =>
+      item.code.localeCompare(requirement.materialCode, undefined, { sensitivity: 'accent' }) === 0,
+    )
+    if (!material) throw new Error(`物料不存在：${requirement.materialCode}`)
+    prepareManualReturn({
+      ...material,
+      name: requirement.materialName || material.name,
+      requiresBatch: requirement.requiresBatch,
+    }, requirement)
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '物料读取失败', 'error')
+  }
 }
 
 function handleManualWarehouseChange(): void {
@@ -1133,6 +1165,7 @@ function confirmManualReturn(): void {
     requestedQty: quantity,
     fieldValues: {},
     requiresBatch: material.requiresBatch,
+    returnRequirementId: manualRequirementId.value ?? undefined,
   }
   if (manualEditingLineId.value) {
     savedLine.id = manualEditingLineId.value
@@ -1686,6 +1719,13 @@ onMounted(async () => {
       departmentCode.value = departments[0] ?? ''
     }
   }
+  const returnRequirement = consumeReturnRequirementSelection(props.documentType)
+  if (
+    returnRequirement && props.documentType === 'material-outbound' &&
+    documentDirection.value === 'RED' && selectedSourceLines.value.length > 0
+  ) {
+    await openSelectedReturnRequirement(returnRequirement)
+  }
   stopScanListener = bridge.subscribeScan(handleScan)
   void refreshDocumentSettings()
   void loadReferenceData()
@@ -1940,7 +1980,7 @@ onBeforeRouteLeave((to) => {
           <button type="button" @click="simulateOrAdd">添加</button>
         </div>
         <div
-          v-if="documentType === 'material-outbound' && documentDirection === 'RED'"
+          v-if="documentType === 'material-outbound' && documentDirection === 'RED' && !selectedSourceLines.length"
           class="manual-return-search"
         >
           <div class="material-search-row">

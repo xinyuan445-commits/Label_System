@@ -14,6 +14,7 @@ import type {
   OutboundDocumentType,
   SourceDocumentLine,
 } from '@/services/source-document-selection'
+import { saveReturnRequirementSelection } from '@/services/source-document-selection'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,7 +29,9 @@ const documentType = computed<OutboundDocumentType>(() => {
   return isBusinessDocumentType(code) ? code : 'material-outbound'
 })
 const title = computed(() =>
-  documentType.value === 'material-outbound' ? '领料明细' : '源单明细',
+  documentType.value === 'material-outbound'
+    ? isRedMaterialReturn.value ? '退料明细' : '领料明细'
+    : '源单明细',
 )
 const workingPayload = computed(() => {
   const state = readOutboundDocumentWorkingState(documentType.value)
@@ -37,9 +40,13 @@ const workingPayload = computed(() => {
         selectedSourceLines?: SourceDocumentLine[]
         materialRequirements?: MaterialRequirementLine[]
         lines?: WorkingDetailLine[]
+        documentDirection?: 'BLUE' | 'RED'
       }
     : {}
 })
+const isRedMaterialReturn = computed(() =>
+  documentType.value === 'material-outbound' && workingPayload.value.documentDirection === 'RED',
+)
 const sourceLines = computed(() =>
   Array.isArray(workingPayload.value.selectedSourceLines)
     ? workingPayload.value.selectedSourceLines
@@ -49,6 +56,10 @@ const requirements = computed(() =>
   Array.isArray(workingPayload.value.materialRequirements)
     ? workingPayload.value.materialRequirements
     : [],
+)
+const displayedRequirements = computed(() => isRedMaterialReturn.value
+  ? requirements.value.filter((line) => Number(line.issuedQuantity) > 0.000001)
+  : requirements.value,
 )
 const pickedByRequirement = computed(() => {
   const result = new Map<number, number>()
@@ -92,6 +103,10 @@ function overIssueQuantity(line: MaterialRequirementLine): number {
   return issuedOverPlan + (overPickedByRequirement.value.get(line.requirementId) ?? 0)
 }
 
+function returnableQuantity(line: MaterialRequirementLine): number {
+  return Math.max(Number(line.issuedQuantity) - pickedQuantity(line), 0)
+}
+
 function formatQty(value: number): string {
   return Number(value).toFixed(6).replace(/\.?0+$/, '')
 }
@@ -99,6 +114,15 @@ function formatQty(value: number): string {
 async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
   await returnToParentDocument(router, route, documentType.value)
+}
+
+async function selectReturnRequirement(line: MaterialRequirementLine): Promise<void> {
+  if (returnableQuantity(line) <= 0.000001) return
+  saveReturnRequirementSelection({
+    outboundDocumentType: documentType.value,
+    requirement: line,
+  })
+  await returnToDocument()
 }
 
 onBeforeRouteLeave((to) => {
@@ -124,30 +148,42 @@ onBeforeRouteLeave((to) => {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
         </button>
         <h1>{{ title }}</h1>
-        <span>{{ requirements.length || sourceLines.length }}项</span>
+        <span>{{ displayedRequirements.length || sourceLines.length }}项</span>
       </div>
     </header>
 
     <div class="page-content">
-      <section v-if="requirements.length" class="detail-list">
-        <article v-for="line in requirements" :key="line.requirementId" class="detail-card">
+      <section v-if="displayedRequirements.length" class="detail-list">
+        <article v-for="line in displayedRequirements" :key="line.requirementId" class="detail-card">
           <div class="detail-heading">
             <div><strong>{{ line.materialCode }}</strong><span>{{ line.materialName }}</span></div>
             <aside>
-              <b>{{ line.remainingQuantity }}</b>
-              <span v-if="isIssueComplete(line)" class="complete-stamp">领料完成</span>
-              <span v-if="overIssueQuantity(line) > 0.000001" class="over-issue-stamp">
+              <b>{{ isRedMaterialReturn ? `可退 ${formatQty(returnableQuantity(line))}` : line.remainingQuantity }}</b>
+              <span v-if="!isRedMaterialReturn && isIssueComplete(line)" class="complete-stamp">领料完成</span>
+              <span v-if="!isRedMaterialReturn && overIssueQuantity(line) > 0.000001" class="over-issue-stamp">
                 超领 {{ formatQty(overIssueQuantity(line)) }}
               </span>
             </aside>
           </div>
           <p>{{ line.sourceDocumentNo }} · 行{{ line.sourceLineNo ?? '-' }} · {{ line.productCode }}</p>
-          <dl>
+          <dl :class="{ 'return-quantities': isRedMaterialReturn }">
             <div><dt>计划</dt><dd>{{ line.plannedQuantity }}</dd></div>
             <div><dt>已领</dt><dd>{{ line.issuedQuantity }}</dd></div>
-            <div><dt>待领</dt><dd>{{ line.remainingQuantity }}</dd></div>
-            <div><dt>已拣</dt><dd>{{ pickedQuantity(line) }}</dd></div>
+            <template v-if="isRedMaterialReturn">
+              <div><dt>本次退料</dt><dd>{{ formatQty(pickedQuantity(line)) }}</dd></div>
+            </template>
+            <template v-else>
+              <div><dt>待领</dt><dd>{{ line.remainingQuantity }}</dd></div>
+              <div><dt>已拣</dt><dd>{{ pickedQuantity(line) }}</dd></div>
+            </template>
           </dl>
+          <button
+            v-if="isRedMaterialReturn"
+            class="return-select"
+            type="button"
+            :disabled="returnableQuantity(line) <= 0.000001"
+            @click="selectReturnRequirement(line)"
+          >{{ returnableQuantity(line) > 0.000001 ? '退料' : '已选完' }}</button>
         </article>
       </section>
 
@@ -161,7 +197,7 @@ onBeforeRouteLeave((to) => {
         </article>
       </section>
 
-      <div v-else class="empty-state">暂无明细</div>
+      <div v-else class="empty-state">{{ isRedMaterialReturn ? '暂无可退明细' : '暂无明细' }}</div>
     </div>
   </main>
 </template>
@@ -189,5 +225,25 @@ onBeforeRouteLeave((to) => {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .5px;
+}
+
+.detail-card dl.return-quantities {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.return-select {
+  width: 100%;
+  height: 42px;
+  margin-top: 11px;
+  border: 0;
+  border-radius: 10px;
+  background: #2368c4;
+  color: #fff;
+  font-weight: 750;
+}
+
+.return-select:disabled {
+  background: #d7dee7;
+  color: #8794a4;
 }
 </style>

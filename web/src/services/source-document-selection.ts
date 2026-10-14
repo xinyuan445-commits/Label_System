@@ -47,6 +47,11 @@ export interface SourceDocumentSelection {
   requirements: MaterialRequirementLine[]
 }
 
+export interface ReturnRequirementSelection {
+  outboundDocumentType: OutboundDocumentType
+  requirement: MaterialRequirementLine
+}
+
 export interface SourceDocumentQuery {
   documentType: OutboundDocumentType
   sourceType: string
@@ -60,6 +65,7 @@ interface SourceDocumentSearchResult {
 }
 
 const selectionKey = 'label-system:source-document-selection'
+const returnRequirementSelectionKey = 'label-system:return-requirement-selection'
 
 const mockSourceLines: SourceDocumentLine[] = [
   {
@@ -227,6 +233,30 @@ export function consumeSourceDocumentSelection(
       !Array.isArray(selection.selectedLines) || !Array.isArray(selection.requirements)
     ) return null
     return selection as SourceDocumentSelection
+  } catch {
+    return null
+  }
+}
+
+export function saveReturnRequirementSelection(selection: ReturnRequirementSelection): void {
+  sessionStorage.setItem(returnRequirementSelectionKey, JSON.stringify(selection))
+}
+
+export function consumeReturnRequirementSelection(
+  outboundDocumentType: OutboundDocumentType,
+): MaterialRequirementLine | null {
+  const raw = sessionStorage.getItem(returnRequirementSelectionKey)
+  if (!raw) return null
+  sessionStorage.removeItem(returnRequirementSelectionKey)
+
+  try {
+    const selection = JSON.parse(raw) as Partial<ReturnRequirementSelection>
+    const requirement = selection.requirement
+    if (
+      selection.outboundDocumentType !== outboundDocumentType ||
+      !requirement || !Number.isInteger(requirement.requirementId) || requirement.requirementId <= 0
+    ) return null
+    return requirement
   } catch {
     return null
   }

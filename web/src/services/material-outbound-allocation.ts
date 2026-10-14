@@ -81,6 +81,7 @@ export function allocateMaterialScans(
   allowOverIssue: boolean,
   overIssueTargets: Record<string, number>,
   quantityBasis: 'remaining' | 'issued' = 'remaining',
+  requirementTargets: Record<string, number> = {},
 ): Record<string, AllocatedMaterialScanLine> {
   const result: Record<string, AllocatedMaterialScanLine> = {}
   const requirementGroups = new Map<string, MaterialRequirementLine[]>()
@@ -108,7 +109,11 @@ export function allocateMaterialScans(
 
   for (const line of lines) {
     const allocations: SourceQuantityAllocation[] = []
-    const matches = requirementGroups.get(materialKey(line.materialCode)) ?? []
+    const materialMatches = requirementGroups.get(materialKey(line.materialCode)) ?? []
+    const requirementTarget = requirementTargets[line.id]
+    const matches = requirementTarget
+      ? materialMatches.filter((item) => item.requirementId === requirementTarget)
+      : materialMatches
     let pending = qty(line.requestedQty)
     for (const requirement of matches) {
       if (pending <= 0) break
