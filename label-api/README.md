@@ -106,4 +106,6 @@ dotnet run --project src\LabelSystem.Api\LabelSystem.Api.csproj
 
 Gateway `0.5.8` 起，调拨审核和弃审会联动 U8 自动生成的其他出库单、其他入库单；Business API 沿用现有审核接口和失败重试状态，不重复执行调拨新增或本地位置流水。
 
+测试账套已完成调拨制单和审核验收：调拨主单及 U8 自动生成的其他出库单、其他入库单均回查为已审核。
+
 2026-10-13 材料出库端到端验证已通过：同一生产订单按仓库拆成 U8 单据 `CLCKD20263349` 和 `CLCKD20263350`，业务组成功后写入 3 条 `MATERIAL_OUTBOUND` 流水并释放全部标签锁。两张 U8 单据保持未审核，符合 `autoApprove=false`。
