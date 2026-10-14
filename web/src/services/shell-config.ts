@@ -1,5 +1,7 @@
 export type ShellEnvironment = 'development' | 'test' | 'production'
 export type ScanSoundMode = 'short' | 'soft' | 'double' | 'off'
+export type ScanFeedbackMode = 'tone' | 'voice' | 'off'
+export type ScanFeedbackResult = 'success' | 'error'
 
 export interface ShellConfig {
   environment: ShellEnvironment
@@ -7,6 +9,7 @@ export interface ShellConfig {
   testUrl: string
   productionUrl: string
   scanSound: ScanSoundMode
+  scanFeedbackMode: ScanFeedbackMode
   bridgeVersion: string
   apkVersion: string
   apkVersionCode: number
@@ -14,7 +17,7 @@ export interface ShellConfig {
 
 interface ShellMessage {
   source: 'label-system-pda'
-  type: 'config' | 'config-saved' | 'config-error' | 'sound-tested'
+  type: 'config' | 'config-saved' | 'config-error' | 'sound-tested' | 'feedback-played'
   payload?: unknown
 }
 
@@ -27,9 +30,10 @@ const defaultConfig: ShellConfig = {
   testUrl: 'http://172.16.10.45:5174/',
   productionUrl: 'http://172.16.10.45:5175/',
   scanSound: 'short',
+  scanFeedbackMode: 'tone',
   bridgeVersion: 'pda-bridge-v1',
-  apkVersion: '0.4.0',
-  apkVersionCode: 104,
+  apkVersion: '0.5.0',
+  apkVersionCode: 106,
 }
 
 function isEnvironment(value: unknown): value is ShellEnvironment {
@@ -38,6 +42,10 @@ function isEnvironment(value: unknown): value is ShellEnvironment {
 
 function isScanSound(value: unknown): value is ScanSoundMode {
   return value === 'short' || value === 'soft' || value === 'double' || value === 'off'
+}
+
+function isScanFeedbackMode(value: unknown): value is ScanFeedbackMode {
+  return value === 'tone' || value === 'voice' || value === 'off'
 }
 
 function normalizeUrl(value: string): string {
@@ -61,12 +69,16 @@ function parseConfig(value: unknown): ShellConfig {
     throw new Error('环境无效')
   }
 
+  const scanSound = isScanSound(candidate.scanSound) ? candidate.scanSound : 'short'
   return {
     environment: candidate.environment,
     developmentUrl: normalizeUrl(String(candidate.developmentUrl || '')),
     testUrl: normalizeUrl(String(candidate.testUrl || '')),
     productionUrl: normalizeUrl(String(candidate.productionUrl || '')),
-    scanSound: isScanSound(candidate.scanSound) ? candidate.scanSound : 'short',
+    scanSound,
+    scanFeedbackMode: isScanFeedbackMode(candidate.scanFeedbackMode)
+      ? candidate.scanFeedbackMode
+      : scanSound === 'off' ? 'off' : 'tone',
     bridgeVersion: String(candidate.bridgeVersion || defaultConfig.bridgeVersion),
     apkVersion: String(candidate.apkVersion || defaultConfig.apkVersion),
     apkVersionCode:
@@ -192,6 +204,61 @@ function playBrowserTone(mode: ScanSoundMode): void {
     play(mode === 'soft' ? 1100 : 1900, now, mode === 'soft' ? 0.16 : 0.1)
   }
   window.setTimeout(() => void context.close(), 500)
+}
+
+function playBrowserFeedback(mode: ScanFeedbackMode, result: ScanFeedbackResult): void {
+  if (mode === 'off') return
+  if (mode === 'voice') {
+    if (!('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(result === 'success' ? 'O K' : 'N G')
+    utterance.lang = 'en-US'
+    utterance.rate = 1.25
+    window.speechSynthesis.speak(utterance)
+    return
+  }
+  if (result === 'success') {
+    playBrowserTone('short')
+    return
+  }
+  const context = new window.AudioContext()
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  oscillator.frequency.value = 360
+  gain.gain.value = 0.25
+  oscillator.connect(gain)
+  gain.connect(context.destination)
+  oscillator.start()
+  oscillator.stop(context.currentTime + 0.32)
+  window.setTimeout(() => void context.close(), 500)
+}
+
+export function playScanFeedback(result: ScanFeedbackResult): void {
+  if (!isNativeShell()) {
+    const config = loadBrowserConfig()
+    playBrowserFeedback(config.scanFeedbackMode, result)
+    return
+  }
+  window.parent.postMessage(
+    { source: 'label-system-h5', type: 'feedback-play', payload: { result } },
+    nativeBridgeOrigin,
+  )
+}
+
+export async function testScanFeedback(
+  mode: ScanFeedbackMode,
+  result: ScanFeedbackResult,
+): Promise<void> {
+  if (!isNativeShell()) {
+    playBrowserFeedback(mode, result)
+    return
+  }
+  await waitForNativeConfig(['feedback-played', 'config-error'], () => {
+    window.parent.postMessage(
+      { source: 'label-system-h5', type: 'feedback-play', payload: { mode, result } },
+      nativeBridgeOrigin,
+    )
+  })
 }
 
 export async function testScanSound(mode: ScanSoundMode): Promise<void> {

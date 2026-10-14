@@ -57,6 +57,7 @@ import {
 } from '@/services/source-document-selection'
 import { createUniqueId } from '@/utils/unique-id'
 import { readSession } from '@/services/auth'
+import { playScanFeedback } from '@/services/shell-config'
 
 type LineObjectType = 'PRODUCT_LABEL' | 'PALLET'
 const materialOutboundSourceCategoryCode = '202'
@@ -632,6 +633,7 @@ function confirmEditingLine(): void {
   const error = lineEditError(current)
   if (error) {
     notify(error, 'error')
+    if (pendingScanTotal.value > 0) playScanFeedback('error')
     return
   }
   const normalizedLine: OutboundLine = {
@@ -671,6 +673,7 @@ function confirmEditingLine(): void {
   pendingScanTotal.value = 0
   editingExistingLineId.value = null
   notify(count > 1 ? `已添加${count}项` : '已添加', 'success')
+  playScanFeedback('success')
 }
 
 function cancelLineConfirmation(): void {
@@ -810,6 +813,7 @@ async function addBarcode(rawCode: string): Promise<void> {
     lines.value.some((line) => line.labelCode === barcode)
   ) {
     notify('标签已添加', 'error')
+    playScanFeedback('error')
     scanCode.value = ''
     return
   }
@@ -835,6 +839,7 @@ async function addBarcode(rawCode: string): Promise<void> {
       (requiresWholePallet || !documentSettings.value.globalPallet.allowPalletizedLabelDirectUse)
     ) {
       notify('请扫描托盘码', 'error')
+      playScanFeedback('error')
       return
     }
     if (
@@ -849,6 +854,7 @@ async function addBarcode(rawCode: string): Promise<void> {
       )
     ) {
       notify('该物料不在领料范围', 'error')
+      playScanFeedback('error')
       return
     }
     if (
@@ -861,10 +867,12 @@ async function addBarcode(rawCode: string): Promise<void> {
       )
     ) {
       notify('该物料不在所选源单中', 'error')
+      playScanFeedback('error')
       return
     }
     if (found.some((item) => lines.value.some((line) => line.labelCode === item.labelCode))) {
       notify('标签已添加', 'error')
+      playScanFeedback('error')
       return
     }
     const sourceRemaining = remainingDemandByMaterial()
@@ -934,11 +942,13 @@ async function addBarcode(rawCode: string): Promise<void> {
           : additions.length > 1 ? `已添加${additions.length}项` : '已添加',
         'success',
       )
+      playScanFeedback('success')
     } else {
       openLineConfirmation(additions)
     }
   } catch (error) {
     notify(error instanceof Error ? error.message : '标签查询失败', 'error')
+    playScanFeedback('error')
   } finally {
     resolvingBarcodes.delete(barcode)
     scanCode.value = ''

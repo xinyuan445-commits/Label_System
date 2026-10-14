@@ -1,5 +1,21 @@
 # APK 构建记录
 
+## 0.5.0 CT58C 测试包
+
+- 日期：2026-10-14
+- 包名：`com.tencent.weauth`
+- versionCode：`106`
+- 桥协议：`pda-bridge-v1`
+- 文件：`releases/ct58c-test/label-system-0.5.0-ct58c.apk`
+- 大小：36,787,505 字节
+- SHA-256：`CE38833D9A0EE867BF5CA6E57CC58A2775C4AB78985FDF880E05D6C56D51473B`
+- 签名校验：APK Signature Scheme v2、v3 通过
+- 原生能力：按 H5 业务校验结果播放成功/失败提示音，或离线逐字母播报“OK”/“NG”；结果音串行且限制积压
+- 离线校验：最终 APK 包含 `classes3.dex`、`assets/scan_ok.wav` 和 `assets/scan_ng.wav`
+- 安装：已在 CT58C `00772513210059` 原位覆盖安装，原应用数据与地址设置保留
+- 原生验证：应用启动，桥健康检查返回 `0.5.0/106`；配置兼容迁移为 `tone/short`；语音模式 OK、NG 两个反馈请求均成功播放且无桥错误日志
+- 待用户验收：设备实际听感、设置切换、自动加入、手工确认、重复标签和查询失败场景
+
 ## 0.4.1 CT58C 测试包
 
 - 日期：2026-10-12

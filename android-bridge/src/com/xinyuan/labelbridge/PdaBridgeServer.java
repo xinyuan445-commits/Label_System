@@ -4,11 +4,15 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.media.ToneGenerator;
 import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetAddress;
@@ -38,9 +42,12 @@ final class PdaBridgeServer {
     private static final int MAX_QUEUE_SIZE = 100;
     private static final Object EVENT_LOCK = new Object();
     private static final Object CONFIG_LOCK = new Object();
+    private static final Object AUDIO_LOCK = new Object();
     private static final ArrayDeque<ScanEvent> EVENTS = new ArrayDeque<>();
+    private static final ArrayDeque<Runnable> AUDIO_QUEUE = new ArrayDeque<>();
     private static volatile Context appContext;
     private static volatile boolean started;
+    private static volatile boolean audioWorkerRunning;
     private static volatile long lastPollAt;
 
     private PdaBridgeServer() { }
@@ -83,7 +90,6 @@ final class PdaBridgeServer {
             EVENTS.addLast(event);
         }
         Log.i(TAG, "Scan queued for H5; length=" + barcode.length());
-        playConfiguredTone();
         return true;
     }
 
@@ -175,6 +181,20 @@ final class PdaBridgeServer {
                     "{\"error\":\"Invalid sound mode\"}");
             } else {
                 playTone(mode);
+                respond(socket, 200, "application/json; charset=utf-8", "{\"played\":true}");
+            }
+            return;
+        }
+        if ("POST".equals(method) && requestTarget.startsWith("/v1/feedback")) {
+            String body = readBody(reader, headers.get("content-length"));
+            Map<String, String> parameters = parseParameters(body);
+            String result = parameters.get("result");
+            String mode = parameters.get("mode");
+            if (!isFeedbackResult(result) || (mode != null && !mode.isEmpty() && !isFeedbackMode(mode))) {
+                respond(socket, 400, "application/json; charset=utf-8",
+                    "{\"error\":\"Invalid feedback\"}");
+            } else {
+                playFeedback(result, mode);
                 respond(socket, 200, "application/json; charset=utf-8", "{\"played\":true}");
             }
             return;
@@ -274,6 +294,7 @@ final class PdaBridgeServer {
             .putString("testUrl", config.testUrl)
             .putString("productionUrl", config.productionUrl)
             .putString("scanSound", config.scanSound)
+            .putString("scanFeedbackMode", config.scanFeedbackMode)
             .apply();
     }
 
@@ -308,7 +329,7 @@ final class PdaBridgeServer {
             + "async function reachable(url){try{await Promise.race([fetch(url,{mode:'no-cors',cache:'no-store'}),new Promise((_,reject)=>setTimeout(()=>reject(new Error()),4000))]);return true}catch(x){return false}}"
             + "async function checkTarget(forceReload=false){if(checking)return;checking=true;const url=target(),wasOffline=offline.classList.contains('visible');message.textContent=wasOffline?'正在连接…':'';"
             + "try{if(await reachable(url)){hideOffline();if(forceReload||wasOffline||app.src!==url)app.src=url}else showOffline('请检查服务或更换地址')}finally{checking=false}}"
-            + "async function storeConfig(payload){const body=new URLSearchParams();for(const k of ['environment','developmentUrl','testUrl','productionUrl','scanSound'])body.set(k,String(payload[k]||''));"
+            + "async function storeConfig(payload){const body=new URLSearchParams();for(const k of ['environment','developmentUrl','testUrl','productionUrl','scanSound','scanFeedbackMode'])body.set(k,String(payload[k]||''));"
             + "const r=await fetch('/v1/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});if(!r.ok)throw new Error();config=await r.json();return config}"
             + "function sendConfig(type='config'){app.contentWindow.postMessage({source:'label-system-pda',type,payload:config},'*')}"
             + "app.addEventListener('load',()=>sendConfig());"
@@ -323,6 +344,10 @@ final class PdaBridgeServer {
             + "if(e.data.type==='sound-test'){try{const body=new URLSearchParams({mode:String(e.data.payload&&e.data.payload.mode||'')});"
             + "const r=await fetch('/v1/sound',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});"
             + "if(!r.ok)throw new Error();app.contentWindow.postMessage({source:'label-system-pda',type:'sound-tested',payload:config},'*');}"
+            + "catch(x){app.contentWindow.postMessage({source:'label-system-pda',type:'config-error'},'*')}return;}"
+            + "if(e.data.type==='feedback-play'){try{const body=new URLSearchParams({result:String(e.data.payload&&e.data.payload.result||''),mode:String(e.data.payload&&e.data.payload.mode||'')});"
+            + "const r=await fetch('/v1/feedback',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body});"
+            + "if(!r.ok)throw new Error();app.contentWindow.postMessage({source:'label-system-pda',type:'feedback-played',payload:config},'*');}"
             + "catch(x){app.contentWindow.postMessage({source:'label-system-pda',type:'config-error'},'*')}return;}"
             + "if(e.data.type!=='config-save')return;"
             + "try{config=await storeConfig(e.data.payload||{});sendConfig('config-saved');"
@@ -413,42 +438,129 @@ final class PdaBridgeServer {
             || "off".equals(value);
     }
 
-    private static void playConfiguredTone() {
-        SharedPreferences preferences = preferences();
-        String mode = preferences == null ? "short" : preferences.getString("scanSound", "short");
-        playTone(isSoundMode(mode) ? mode : "short");
+    private static boolean isFeedbackMode(String value) {
+        return "tone".equals(value) || "voice".equals(value) || "off".equals(value);
+    }
+
+    private static boolean isFeedbackResult(String value) {
+        return "success".equals(value) || "error".equals(value);
+    }
+
+    private static void playFeedback(final String result, String modeOverride) {
+        BridgeConfig config = getConfig(new HashMap<String, String>());
+        final String mode = isFeedbackMode(modeOverride) ? modeOverride : config.scanFeedbackMode;
+        if ("off".equals(mode)) return;
+        final String soundMode = config.scanSound;
+        enqueueAudio(new Runnable() {
+            @Override
+            public void run() {
+                if ("voice".equals(mode)) {
+                    playVoiceBlocking("success".equals(result) ? "scan_ok.wav" : "scan_ng.wav");
+                } else {
+                    playToneBlocking("success".equals(result) ? soundMode : "error");
+                }
+            }
+        });
     }
 
     private static void playTone(final String mode) {
         if ("off".equals(mode)) return;
-        Thread toneThread = new Thread(new Runnable() {
+        enqueueAudio(new Runnable() {
             @Override
             public void run() {
-                ToneGenerator tone = null;
-                try {
-                    tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 85);
-                    if ("double".equals(mode)) {
-                        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 95);
-                        SystemClock.sleep(125L);
-                        tone.stopTone();
-                        tone.startTone(ToneGenerator.TONE_PROP_BEEP, 95);
-                        SystemClock.sleep(105L);
-                    } else if ("soft".equals(mode)) {
-                        tone.startTone(ToneGenerator.TONE_CDMA_PIP, 150);
-                        SystemClock.sleep(165L);
-                    } else {
-                        tone.startTone(ToneGenerator.TONE_PROP_ACK, 85);
-                        SystemClock.sleep(100L);
+                playToneBlocking(mode);
+            }
+        });
+    }
+
+    private static void enqueueAudio(Runnable task) {
+        synchronized (AUDIO_LOCK) {
+            while (AUDIO_QUEUE.size() >= 4) AUDIO_QUEUE.removeFirst();
+            AUDIO_QUEUE.addLast(task);
+            if (audioWorkerRunning) return;
+            audioWorkerRunning = true;
+        }
+        Thread audioThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                while (true) {
+                    Runnable next;
+                    synchronized (AUDIO_LOCK) {
+                        next = AUDIO_QUEUE.pollFirst();
+                        if (next == null) {
+                            audioWorkerRunning = false;
+                            return;
+                        }
                     }
-                } catch (Throwable error) {
-                    Log.w(TAG, "Could not play scan tone", error);
-                } finally {
-                    if (tone != null) tone.release();
+                    try {
+                        next.run();
+                    } catch (Throwable error) {
+                        Log.w(TAG, "Could not play scan feedback", error);
+                    }
                 }
             }
-        }, "label-scan-tone");
-        toneThread.setDaemon(true);
-        toneThread.start();
+        }, "label-scan-feedback");
+        audioThread.setDaemon(true);
+        audioThread.start();
+    }
+
+    private static void playToneBlocking(String mode) {
+        ToneGenerator tone = null;
+        try {
+            tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 85);
+            if ("error".equals(mode)) {
+                tone.startTone(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300);
+                SystemClock.sleep(325L);
+            } else if ("double".equals(mode)) {
+                tone.startTone(ToneGenerator.TONE_PROP_BEEP, 95);
+                SystemClock.sleep(125L);
+                tone.stopTone();
+                tone.startTone(ToneGenerator.TONE_PROP_BEEP, 95);
+                SystemClock.sleep(105L);
+            } else if ("soft".equals(mode)) {
+                tone.startTone(ToneGenerator.TONE_CDMA_PIP, 150);
+                SystemClock.sleep(165L);
+            } else {
+                tone.startTone(ToneGenerator.TONE_PROP_ACK, 85);
+                SystemClock.sleep(100L);
+            }
+        } finally {
+            if (tone != null) tone.release();
+        }
+    }
+
+    private static void playVoiceBlocking(String assetName) {
+        Context context = appContext;
+        if (context == null) return;
+        File cached = new File(context.getCacheDir(), assetName);
+        if (!cached.isFile() || cached.length() == 0L) {
+            try (InputStream input = context.getAssets().open(assetName);
+                 FileOutputStream output = new FileOutputStream(cached)) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) >= 0) output.write(buffer, 0, count);
+            } catch (Exception error) {
+                Log.w(TAG, "Could not cache voice asset " + assetName, error);
+                playToneBlocking("error");
+                return;
+            }
+        }
+        MediaPlayer player = new MediaPlayer();
+        try {
+            player.setAudioStreamType(AudioManager.STREAM_MUSIC);
+            player.setDataSource(cached.getAbsolutePath());
+            player.prepare();
+            player.start();
+            long deadline = SystemClock.elapsedRealtime() + Math.max(player.getDuration() + 500L, 1500L);
+            while (player.isPlaying() && SystemClock.elapsedRealtime() < deadline) {
+                SystemClock.sleep(20L);
+            }
+        } catch (Throwable error) {
+            Log.w(TAG, "Could not play voice asset " + assetName, error);
+            playToneBlocking("error");
+        } finally {
+            player.release();
+        }
     }
 
     private static String escapeHtml(String value) {
@@ -472,18 +584,21 @@ final class PdaBridgeServer {
         private final String testUrl;
         private final String productionUrl;
         private final String scanSound;
+        private final String scanFeedbackMode;
 
         private BridgeConfig(
             String environment,
             String developmentUrl,
             String testUrl,
             String productionUrl,
-            String scanSound) {
+            String scanSound,
+            String scanFeedbackMode) {
             this.environment = environment;
             this.developmentUrl = developmentUrl;
             this.testUrl = testUrl;
             this.productionUrl = productionUrl;
             this.scanSound = scanSound;
+            this.scanFeedbackMode = scanFeedbackMode;
         }
 
         private static BridgeConfig defaults() {
@@ -492,16 +607,19 @@ final class PdaBridgeServer {
                 DEFAULT_DEVELOPMENT_URL,
                 DEFAULT_TEST_URL,
                 DEFAULT_PRODUCTION_URL,
-                "short");
+                "short",
+                "tone");
         }
 
         private static BridgeConfig fromPreferences(SharedPreferences preferences) {
+            String scanSound = soundMode(preferences.getString("scanSound", "short"));
             return new BridgeConfig(
                 environment(preferences.getString("environment", "development")),
                 valueOrDefault(preferences.getString("developmentUrl", null), DEFAULT_DEVELOPMENT_URL),
                 valueOrDefault(preferences.getString("testUrl", null), DEFAULT_TEST_URL),
                 valueOrDefault(preferences.getString("productionUrl", null), DEFAULT_PRODUCTION_URL),
-                soundMode(preferences.getString("scanSound", "short")));
+                scanSound,
+                feedbackMode(preferences.getString("scanFeedbackMode", null), scanSound));
         }
 
         private static BridgeConfig fromParameters(Map<String, String> values, boolean allowDefaults) {
@@ -512,6 +630,7 @@ final class PdaBridgeServer {
             String testUrl = normalizeUrl(values.get("testUrl"));
             String productionUrl = normalizeUrl(values.get("productionUrl"));
             String scanSound = soundMode(values.get("scanSound"));
+            String scanFeedbackMode = feedbackMode(values.get("scanFeedbackMode"), scanSound);
             String legacyTarget = normalizeUrl(values.get("target"));
             if (allowDefaults) {
                 if (legacyTarget != null && developmentUrl == null) developmentUrl = legacyTarget;
@@ -520,7 +639,13 @@ final class PdaBridgeServer {
                 if (productionUrl == null) productionUrl = DEFAULT_PRODUCTION_URL;
             }
             if (developmentUrl == null || testUrl == null || productionUrl == null) return null;
-            return new BridgeConfig(environment, developmentUrl, testUrl, productionUrl, scanSound);
+            return new BridgeConfig(
+                environment,
+                developmentUrl,
+                testUrl,
+                productionUrl,
+                scanSound,
+                scanFeedbackMode);
         }
 
         private static String environment(String value) {
@@ -536,6 +661,11 @@ final class PdaBridgeServer {
 
         private static String soundMode(String value) {
             return isSoundMode(value) ? value : "short";
+        }
+
+        private static String feedbackMode(String value, String scanSound) {
+            if (isFeedbackMode(value)) return value;
+            return "off".equals(scanSound) ? "off" : "tone";
         }
 
         private static String valueOrDefault(String value, String fallback) {
@@ -555,6 +685,7 @@ final class PdaBridgeServer {
                 + "\",\"testUrl\":\"" + escapeJson(testUrl)
                 + "\",\"productionUrl\":\"" + escapeJson(productionUrl)
                 + "\",\"scanSound\":\"" + escapeJson(scanSound)
+                + "\",\"scanFeedbackMode\":\"" + escapeJson(scanFeedbackMode)
                 + "\",\"bridgeVersion\":\"" + PROTOCOL_VERSION
                 + "\",\"apkVersion\":\"" + escapeJson(appVersionName())
                 + "\",\"apkVersionCode\":" + appVersionCode() + "}";

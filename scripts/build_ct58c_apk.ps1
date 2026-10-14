@@ -29,6 +29,7 @@ $apktool = Join-Path $workspaceDir '.tools\apktool_3.0.2.jar'
 $keyStore = Join-Path $workspaceDir 'releases\test-signing\label-system-debug.keystore'
 $credentialsPath = Join-Path $workspaceDir 'releases\test-signing\signing.local.json'
 $bridgeSourceDir = Join-Path $workspaceDir 'android-bridge\src\com\xinyuan\labelbridge'
+$bridgeAssetDir = Join-Path $workspaceDir 'android-bridge\assets'
 
 $requiredPaths = @(
     $wechatCli,
@@ -44,7 +45,9 @@ $requiredPaths = @(
     $credentialsPath,
     (Join-Path $bridgeSourceDir 'PdaBridgeServer.java'),
     (Join-Path $bridgeSourceDir 'Ct58cScanReceiver.java'),
-    (Join-Path $bridgeSourceDir 'Ct58cBridgeInitializer.java')
+    (Join-Path $bridgeSourceDir 'Ct58cBridgeInitializer.java'),
+    (Join-Path $bridgeAssetDir 'scan_ok.wav'),
+    (Join-Path $bridgeAssetDir 'scan_ng.wav')
 )
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path)) {
@@ -170,10 +173,14 @@ $classFiles = Get-ChildItem -LiteralPath $classesDir -Recurse -File -Filter '*.c
 if ($LASTEXITCODE -ne 0) { throw 'Native bridge DEX compilation failed.' }
 
 Copy-Item -Force -LiteralPath (Join-Path $dexDir 'classes.dex') -Destination (Join-Path $injectDir 'classes3.dex')
+$injectAssetDir = Join-Path $injectDir 'assets'
+New-Item -ItemType Directory -Force -Path $injectAssetDir | Out-Null
+Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_ok.wav') -Destination $injectAssetDir
+Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_ng.wav') -Destination $injectAssetDir
 Copy-Item -Force -LiteralPath $rebuiltApk -Destination $unsignedApk
 Push-Location $injectDir
 try {
-    & $jar uf $unsignedApk 'classes3.dex'
+    & $jar uf $unsignedApk 'classes3.dex' 'assets'
     if ($LASTEXITCODE -ne 0) { throw 'Native bridge DEX injection failed.' }
 } finally {
     Pop-Location
@@ -196,6 +203,8 @@ if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
 
 $entries = & $jar tf $signedApk
 if ($entries -notcontains 'classes3.dex') { throw 'Final APK is missing classes3.dex.' }
+if ($entries -notcontains 'assets/scan_ok.wav') { throw 'Final APK is missing scan_ok.wav.' }
+if ($entries -notcontains 'assets/scan_ng.wav') { throw 'Final APK is missing scan_ng.wav.' }
 Copy-Item -Force -LiteralPath $signedApk -Destination $finalApk
 
 $file = Get-Item -LiteralPath $finalApk

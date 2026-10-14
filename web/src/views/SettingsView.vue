@@ -16,7 +16,7 @@ const allEntries = [
   { name: 'settings-users', label: '用户管理', icon: 'users' },
   { name: 'settings-label-code-rules', label: '标签编码规则', icon: 'barcode', adminOnly: true },
   { name: 'settings-scanner', label: '扫码测试', icon: 'scan' },
-  { name: 'settings-sound', label: '扫码提示音测试', icon: 'sound' },
+  { name: 'settings-sound', label: '扫码反馈', icon: 'sound' },
 ] as const
 
 const isAdmin = readSession()?.user.roles.some((role) => role.toLowerCase() === 'admin') === true
