@@ -214,6 +214,54 @@ public sealed class U8GatewayClient(
         }
     }
 
+    public async Task<GatewayDocumentResult> VerifyDocumentAsync(
+        string documentType,
+        string voucherCode,
+        GatewayDocumentRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var message = CreateRequest(
+                HttpMethod.Post,
+                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}/{Uri.EscapeDataString(voucherCode)}/verify");
+            message.Content = JsonContent.Create(request, options: JsonOptions);
+            using var response = await Client().SendAsync(message, cancellationToken);
+            var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<GatewayDocumentResult>>(
+                JsonOptions, cancellationToken);
+            if (response.IsSuccessStatusCode && envelope?.Success == true &&
+                envelope.Data is { Confirmed: true } result)
+                return result;
+
+            var code = envelope?.Code ?? "U8_DOCUMENT_APPROVAL_FAILED";
+            throw new GatewayWriteException(
+                (int)response.StatusCode,
+                code,
+                envelope?.Message ?? "U8 单据审核失败。",
+                envelope?.Data?.OutcomeKnown == false || IsUnknownResult(code, (int)response.StatusCode));
+        }
+        catch (GatewayWriteException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status504GatewayTimeout,
+                "U8_APPROVAL_RESULT_UNKNOWN",
+                "U8 审核请求超时，需要核对。",
+                true);
+        }
+        catch (HttpRequestException)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status503ServiceUnavailable,
+                "U8_APPROVAL_RESULT_UNKNOWN",
+                "U8 审核连接中断，需要核对。",
+                true);
+        }
+    }
+
     public async Task<ProxyResponse> ForwardGetAsync(
         string relativePathAndQuery,
         CancellationToken cancellationToken)

@@ -26,6 +26,7 @@ import { readSession } from '@/services/auth'
 import {
   getOutboundOperationGroup,
   listOutboundOperationGroups,
+  executeOutboundDocument,
   refreshOutboundDocumentGroup,
   uploadOutboundDocument,
 } from '@/services/outbound-document-upload'
@@ -252,9 +253,11 @@ async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
     message.value = uploaded.serverStatus === 'SUCCESS'
       ? erpNumbers.length ? `上传完成：${erpNumbers.join('、')}` : '上传完成'
       : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? '需要核对'
+        : uploaded.serverStatus === 'PENDING_APPROVAL'
+          ? uploaded.serverErrorMessage || '单据已上传，等待审核'
         : uploaded.serverErrorMessage || '上传失败'
     activeStatus.value = uploaded.serverStatus === 'FAILED' ? 'pending'
-      : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? 'attention' : 'completed'
+      : uploaded.uploadStatus === 'attention' ? 'attention' : 'completed'
     await refresh()
   } catch (error) {
     message.value = error instanceof Error ? error.message : '上传失败'
@@ -293,6 +296,26 @@ async function refreshServerDocument(document: StoredOutboundDocument): Promise<
     message.value = error instanceof Error ? error.message : '状态更新失败'
   } finally {
     processingId.value = ''
+  }
+}
+
+async function resumeApproval(document: StoredOutboundDocument): Promise<void> {
+  if (processingId.value) return
+  processingId.value = document.id
+  try {
+    const updated = await executeOutboundDocument(document, true)
+    const erpNumbers = erpDocumentNumbers(updated)
+    message.value = updated.serverStatus === 'SUCCESS'
+      ? erpNumbers.length ? `审核完成：${erpNumbers.join('、')}` : '审核完成'
+      : updated.serverStatus === 'NEEDS_RECONCILIATION' ? '需要核对'
+        : updated.serverErrorMessage || '审核失败'
+    activeStatus.value = updated.serverStatus === 'SUCCESS' ? 'completed' : 'attention'
+    await refresh()
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : '审核失败'
+  } finally {
+    processingId.value = ''
+    setTimeout(() => { message.value = '' }, 2200)
   }
 }
 
@@ -435,7 +458,7 @@ onBeforeRouteLeave((to) => {
           </dl>
 
           <p v-if="uploadError(document)" class="upload-error">
-            <strong>上传失败</strong>
+            <strong>{{ document.serverStatus === 'PENDING_APPROVAL' ? '审核失败' : '上传失败' }}</strong>
             <span v-if="document.serverErrorCode">{{ document.serverErrorCode }}</span>
             <em>{{ uploadError(document) }}</em>
           </p>
@@ -468,6 +491,12 @@ onBeforeRouteLeave((to) => {
             <button type="button" @click.stop="selectedDocument = document">查看</button>
           </div>
           <div v-else-if="!selectionMode" class="card-actions">
+            <button
+              v-if="document.serverStatus === 'PENDING_APPROVAL' && document.ownerUserId === currentUserId"
+              type="button"
+              :disabled="processingId === document.id"
+              @click.stop="resumeApproval(document)"
+            >继续审核</button>
             <button
               v-if="document.serverStatus === 'WRITING_ERP' || document.serverStatus === 'NEEDS_RECONCILIATION'"
               type="button"

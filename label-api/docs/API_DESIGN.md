@@ -83,6 +83,8 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | GET | `/operations/groups/{groupId}` | 查询拆单组 |
 | POST | `/operations/groups/{groupId}/validate` | 材料出库写入前校验；不调用 U8 写接口 |
 | POST | `/operations/groups/{groupId}/execute` | 创建人执行材料出库拆组；请求体可带 `autoApprove` |
+
+`autoApprove=true` 对九类单据统一生效。服务端先确认新增、回写 ERP 单号并提交本地库存事务，再以新增返回的版本审核；审核明确失败时业务组停在 `PENDING_APPROVAL`，可继续审核但不得重新新增，审核结果未知时进入 `NEEDS_RECONCILIATION`。
 | POST | `/operations/groups/{groupId}/heartbeat` | 续期业务锁 |
 | POST | `/operations/groups/{groupId}/cancel` | 取消未写 U8 的待处理组 |
 

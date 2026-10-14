@@ -16,12 +16,12 @@ public sealed class MaterialOutboundSubmissionService(
         bool autoApprove,
         CancellationToken cancellationToken)
     {
-        EnsureSubmissionAllowed(autoApprove);
+        EnsureSubmissionAllowed();
         MaterialOutboundPrepareResult? prepared = null;
         try
         {
             prepared = await materialOutbound.PrepareAsync(request, requestId, cancellationToken);
-            return await ExecutePreparedAsync(prepared, user, requestId);
+            return await ExecutePreparedAsync(prepared, user, requestId, autoApprove);
         }
         catch
         {
@@ -38,12 +38,12 @@ public sealed class MaterialOutboundSubmissionService(
         bool autoApprove,
         CancellationToken cancellationToken)
     {
-        EnsureSubmissionAllowed(autoApprove);
+        EnsureSubmissionAllowed();
         MaterialOutboundPrepareResult? prepared = null;
         try
         {
             prepared = await documents.PrepareAsync(documentType, request, requestId, cancellationToken);
-            return await ExecutePreparedAsync(prepared, user, requestId);
+            return await ExecutePreparedAsync(prepared, user, requestId, autoApprove);
         }
         catch
         {
@@ -52,24 +52,22 @@ public sealed class MaterialOutboundSubmissionService(
         }
     }
 
-    private void EnsureSubmissionAllowed(bool autoApprove)
+    private void EnsureSubmissionAllowed()
     {
         if (!options.CurrentValue.U8WritesEnabled)
             throw new ApiException(StatusCodes.Status409Conflict,
                 "U8_WRITE_DISABLED", "U8 写入未开放。");
-        if (autoApprove)
-            throw new ApiException(StatusCodes.Status409Conflict,
-                "AUTO_APPROVE_NOT_READY", "请先关闭上传自动审核。");
     }
 
     private async Task<OperationGroupResult> ExecutePreparedAsync(
         MaterialOutboundPrepareResult prepared,
         SessionUser user,
-        string requestId)
+        string requestId,
+        bool autoApprove)
     {
         // 操作一旦创建就由服务端完成状态收口，不受浏览器断开影响。
         var result = await execution.ExecuteAsync(
-            prepared.SubmissionGroupId, new ExecuteOperationGroupRequest(false),
+            prepared.SubmissionGroupId, new ExecuteOperationGroupRequest(autoApprove),
             user, requestId, CancellationToken.None);
         if (!string.Equals(result.Status, "PENDING", StringComparison.OrdinalIgnoreCase)) return result;
         await CancelPendingAsync(prepared, user, requestId);

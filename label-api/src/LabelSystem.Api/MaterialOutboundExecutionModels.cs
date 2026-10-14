@@ -29,6 +29,7 @@ public sealed record GatewayDocumentRequest(
 
 public sealed record GatewayDocumentResult(
     bool Confirmed,
+    bool? OutcomeKnown,
     string? Code,
     string? Message,
     string? VoucherId,
@@ -46,6 +47,9 @@ public sealed record MaterialOutboundExecutionOperation(
     string ErpDocumentType,
     string Status,
     string ErpStatus,
+    string? ErpDocumentNo,
+    string? ErpVersionAfter,
+    string ApprovalStatus,
     string SourceDocumentType,
     string SourceDocumentId,
     string SourceDocumentNo,

@@ -13,6 +13,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         const string sql = """
             SELECT op.id, roots.root_id, op.submission_group_id, op.client_request_id,
                    op.operator_id, op.operation_type, op.erp_document_type, op.status, op.erp_status,
+                   op.erp_document_no, op.erp_version_after, op.approval_status,
                    ISNULL(op.source_document_type,N''), ISNULL(op.source_document_id,N''), ISNULL(op.source_document_no,N''),
                    ISNULL(lines.warehouse_code,N''), op.device_id, op.device_model, op.reason,
                    op.archive_relative_path, op.archive_sha256,
@@ -63,29 +64,32 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                 builder = new OperationBuilder(
                     operationId, reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
                     operatorId, reader.GetString(5), reader.GetString(6), reader.GetString(7),
-                    reader.GetString(8), reader.GetString(9), reader.GetString(10),
-                    reader.GetString(11), reader.GetString(12),
-                    reader.IsDBNull(13) ? null : reader.GetString(13),
-                    reader.IsDBNull(14) ? null : reader.GetString(14),
-                    reader.IsDBNull(15) ? null : reader.GetString(15),
-                    reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
-                    reader.IsDBNull(17) ? string.Empty : reader.GetString(17));
+                    reader.GetString(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9),
+                    reader.IsDBNull(10) ? null : reader.GetString(10), reader.GetString(11),
+                    reader.GetString(12), reader.GetString(13), reader.GetString(14),
+                    reader.GetString(15),
+                    reader.IsDBNull(16) ? null : reader.GetString(16),
+                    reader.IsDBNull(17) ? null : reader.GetString(17),
+                    reader.IsDBNull(18) ? null : reader.GetString(18),
+                    reader.IsDBNull(19) ? string.Empty : reader.GetString(19),
+                    reader.IsDBNull(20) ? string.Empty : reader.GetString(20));
                 builders.Add(operationId, builder);
             }
-            if (reader.IsDBNull(18)) continue;
+            if (reader.IsDBNull(21)) continue;
             builder.Lines.Add(new MaterialOutboundExecutionLine(
-                reader.GetInt64(18), reader.GetInt32(19), reader.GetString(20),
-                reader.IsDBNull(21) ? null : reader.GetInt64(21),
-                reader.IsDBNull(22) ? null : reader.GetInt64(22),
-                reader.IsDBNull(23) ? null : reader.GetInt64(23), reader.GetString(24),
-                reader.IsDBNull(25) ? null : reader.GetInt32(25),
-                reader.IsDBNull(26) ? null : reader.GetInt32(26), reader.GetString(27),
-                reader.IsDBNull(28) ? null : reader.GetString(28), reader.GetString(29),
-                reader.GetDecimal(30), reader.GetDecimal(31), reader.GetString(32),
-                reader.IsDBNull(33) ? null : reader.GetString(33),
-                reader.IsDBNull(34) ? null : reader.GetString(34),
-                reader.IsDBNull(35) ? null : reader.GetString(35),
-                reader.IsDBNull(36) ? null : reader.GetString(36)));
+                reader.GetInt64(21), reader.GetInt32(22), reader.GetString(23),
+                reader.IsDBNull(24) ? null : reader.GetInt64(24),
+                reader.IsDBNull(25) ? null : reader.GetInt64(25),
+                reader.IsDBNull(26) ? null : reader.GetInt64(26), reader.GetString(27),
+                reader.IsDBNull(28) ? null : reader.GetInt32(28),
+                reader.IsDBNull(29) ? null : reader.GetInt32(29), reader.GetString(30),
+                reader.IsDBNull(31) ? null : reader.GetString(31), reader.GetString(32),
+                reader.GetDecimal(33), reader.GetDecimal(34), reader.GetString(35),
+                reader.IsDBNull(36) ? null : reader.GetString(36),
+                reader.IsDBNull(37) ? null : reader.GetString(37),
+                reader.IsDBNull(38) ? null : reader.GetString(38),
+                reader.IsDBNull(39) ? null : reader.GetString(39)));
         }
         if (builders.Count == 0)
             throw new ApiException(StatusCodes.Status404NotFound,
@@ -144,6 +148,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         MaterialOutboundExecutionOperation operation,
         GatewayDocumentResult result,
         bool redVoucher,
+        bool approvalRequired,
         IReadOnlyDictionary<int, (string? LineId, string? PositionId)> erpRows,
         string requestId,
         CancellationToken cancellationToken)
@@ -189,31 +194,119 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
 
         await using (var update = new SqlCommand("""
             UPDATE dbo.business_operation
-            SET status='SUCCESS',erp_status='SUCCESS',erp_document_id=@document_id,
+            SET status=@status,erp_status='SUCCESS',erp_document_id=@document_id,
                 erp_document_no=@document_no,erp_version_after=@version,
+                approval_status=@approval_status,
                 erp_confirmed_at=DATEADD(HOUR,8,SYSUTCDATETIME()),
                 lock_acquired_at=NULL,heartbeat_at=NULL,lock_expires_at=NULL,
                 error_code=NULL,error_message=NULL,
                 updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()),
-                completed_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+                completed_at=CASE WHEN @approval_required=1 THEN NULL ELSE DATEADD(HOUR,8,SYSUTCDATETIME()) END
             WHERE id=@id AND status='WRITING_ERP' AND erp_status='WRITING';
             """, connection, transaction))
         {
             update.Parameters.Add("@document_id", SqlDbType.NVarChar, 100).Value = result.VoucherId;
             update.Parameters.Add("@document_no", SqlDbType.NVarChar, 100).Value = result.VoucherCode;
             update.Parameters.Add("@version", SqlDbType.NVarChar, 100).Value = DbValue(result.Version, 100);
+            update.Parameters.Add("@status", SqlDbType.VarChar, 30).Value =
+                approvalRequired ? "PENDING_APPROVAL" : "SUCCESS";
+            update.Parameters.Add("@approval_status", SqlDbType.VarChar, 20).Value =
+                approvalRequired ? "PENDING" : "NOT_REQUIRED";
+            update.Parameters.Add("@approval_required", SqlDbType.Bit).Value = approvalRequired;
             update.Parameters.Add("@id", SqlDbType.BigInt).Value = operation.Id;
             if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
                 throw new InvalidOperationException("业务操作状态已变化。");
         }
         await InsertEventAsync(connection, transaction, operation.Id, "U8_CONFIRMED", "SUCCESS",
             requestId, $"U8 单据已确认：{result.VoucherCode}", cancellationToken);
+        if (approvalRequired)
+        {
+            await InsertEventAsync(connection, transaction, operation.Id, "APPROVAL_PENDING", "INFO",
+                requestId, "U8 单据等待自动审核。", cancellationToken);
+        }
+        else
+        {
+            await ReleaseGroupLocksWhenSuccessfulAsync(
+                connection, transaction, operation.SubmissionGroupId, operation.RootOperationId,
+                cancellationToken);
+            await SetDraftCompletedWhenTerminalAsync(
+                connection, transaction, operation.SubmissionGroupId, operation.OperatorId,
+                requestId, cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task CompleteApprovalAsync(
+        MaterialOutboundExecutionOperation operation,
+        GatewayDocumentResult result,
+        string approverName,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        if (!result.Confirmed || string.IsNullOrWhiteSpace(result.VoucherCode))
+            throw new InvalidOperationException("U8 审核结果未确认。");
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+        await using (var update = new SqlCommand("""
+            UPDATE dbo.business_operation
+            SET status='SUCCESS',approval_status='SUCCESS',approver_id=@approver_id,
+                approver_name_snapshot=@approver_name,approved_at=DATEADD(HOUR,8,SYSUTCDATETIME()),
+                erp_version_after=@version,error_code=NULL,error_message=NULL,
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()),completed_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE id=@id AND status='PENDING_APPROVAL' AND erp_status='SUCCESS'
+              AND erp_document_no=@document_no;
+            """, connection, transaction))
+        {
+            update.Parameters.Add("@approver_id", SqlDbType.NVarChar, 100).Value = operation.OperatorId;
+            update.Parameters.Add("@approver_name", SqlDbType.NVarChar, 100).Value = Limit(approverName, 100);
+            update.Parameters.Add("@version", SqlDbType.NVarChar, 100).Value = DbValue(result.Version, 100);
+            update.Parameters.Add("@id", SqlDbType.BigInt).Value = operation.Id;
+            update.Parameters.Add("@document_no", SqlDbType.NVarChar, 100).Value = result.VoucherCode;
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("待审核业务状态已变化。");
+        }
+        await InsertEventAsync(connection, transaction, operation.Id, "APPROVAL_CONFIRMED", "SUCCESS",
+            requestId, $"U8 单据已自动审核：{result.VoucherCode}", cancellationToken);
         await ReleaseGroupLocksWhenSuccessfulAsync(
             connection, transaction, operation.SubmissionGroupId, operation.RootOperationId,
             cancellationToken);
         await SetDraftCompletedWhenTerminalAsync(
             connection, transaction, operation.SubmissionGroupId, operation.OperatorId,
             requestId, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task MarkApprovalFailureAsync(
+        MaterialOutboundExecutionOperation operation,
+        string code,
+        string message,
+        bool resultUnknown,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+        await using (var update = new SqlCommand("""
+            UPDATE dbo.business_operation
+            SET status=CASE WHEN @unknown=1 THEN 'NEEDS_RECONCILIATION' ELSE 'PENDING_APPROVAL' END,
+                approval_status='FAILED',error_code=@code,error_message=@message,
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()),completed_at=NULL
+            WHERE id=@id AND status='PENDING_APPROVAL' AND erp_status='SUCCESS';
+            """, connection, transaction))
+        {
+            update.Parameters.Add("@unknown", SqlDbType.Bit).Value = resultUnknown;
+            update.Parameters.Add("@code", SqlDbType.VarChar, 100).Value = Limit(code, 100);
+            update.Parameters.Add("@message", SqlDbType.NVarChar, 2000).Value = Limit(message, 2000);
+            update.Parameters.Add("@id", SqlDbType.BigInt).Value = operation.Id;
+            await update.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await InsertEventAsync(connection, transaction, operation.Id,
+            resultUnknown ? "APPROVAL_RECONCILIATION" : "APPROVAL_FAILED",
+            resultUnknown ? "UNKNOWN" : "FAILED", requestId, message, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
 
@@ -679,6 +772,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
     private sealed class OperationBuilder(
         long id, long rootOperationId, string groupId, string clientRequestId,
         string operatorId, string operationType, string erpDocumentType, string status, string erpStatus,
+        string? erpDocumentNo, string? erpVersionAfter, string approvalStatus,
         string sourceDocumentType, string sourceDocumentId, string sourceDocumentNo,
         string warehouseCode, string? deviceId, string? deviceModel,
         string? reason, string archiveRelativePath, string archiveSha256)
@@ -687,7 +781,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
 
         public MaterialOutboundExecutionOperation Build() => new(
             id, rootOperationId, groupId, clientRequestId, operatorId, operationType,
-            erpDocumentType, status, erpStatus, sourceDocumentType,
+            erpDocumentType, status, erpStatus, erpDocumentNo, erpVersionAfter, approvalStatus, sourceDocumentType,
             sourceDocumentId, sourceDocumentNo, warehouseCode, deviceId, deviceModel,
             reason, archiveRelativePath, archiveSha256, Lines);
     }

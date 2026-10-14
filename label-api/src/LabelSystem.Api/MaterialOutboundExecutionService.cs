@@ -39,20 +39,23 @@ public sealed class MaterialOutboundExecutionService(
         if (!options.CurrentValue.U8WritesEnabled)
             throw new ApiException(StatusCodes.Status409Conflict,
                 "U8_WRITE_DISABLED", "U8 写入未开放。");
-        if (request.AutoApprove)
-            throw new ApiException(StatusCodes.Status409Conflict,
-                "AUTO_APPROVE_NOT_READY", "请先关闭上传自动审核。");
-
         var prepared = await PrepareGatewayRequestsAsync(groupId, user, cancellationToken);
-        foreach (var item in prepared)
-            await ValidateGatewayAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
 
         foreach (var item in prepared)
         {
             if (item.Operation.Status == "SUCCESS") continue;
+            if (item.Operation.Status == "PENDING_APPROVAL")
+            {
+                if (!request.AutoApprove)
+                    throw new ApiException(StatusCodes.Status409Conflict,
+                        "APPROVAL_PENDING", "单据等待审核。");
+                if (!await ApproveAsync(item, null, requestId, cancellationToken)) break;
+                continue;
+            }
             if (item.Operation.Status != "PENDING" || item.Operation.ErpStatus != "PENDING")
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "OPERATION_NOT_PENDING", "业务操作不能上传，需要先核对状态。");
+            await ValidateGatewayAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
             await executionRepository.BeginAsync(
                 item.Operation, options.CurrentValue.LockMinutes, requestId, cancellationToken);
             try
@@ -62,7 +65,10 @@ public sealed class MaterialOutboundExecutionService(
                 var rows = ReadErpRows(item.Operation.ErpDocumentType, result.Document);
                 EnsureErpRows(item.Operation, rows);
                 await executionRepository.CompleteAsync(
-                    item.Operation, result, item.RedVoucher, rows, requestId, cancellationToken);
+                    item.Operation, result, item.RedVoucher, request.AutoApprove,
+                    rows, requestId, cancellationToken);
+                if (request.AutoApprove &&
+                    !await ApproveAsync(item, result, requestId, cancellationToken)) break;
             }
             catch (GatewayWriteException error)
             {
@@ -80,6 +86,65 @@ public sealed class MaterialOutboundExecutionService(
             }
         }
         return await operations.GetGroupAsync(groupId, user.Id, false, cancellationToken);
+    }
+
+    private async Task<bool> ApproveAsync(
+        PreparedGatewayOperation item,
+        GatewayDocumentResult? created,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        var voucherCode = created?.VoucherCode ?? item.Operation.ErpDocumentNo;
+        var version = created?.Version ?? item.Operation.ErpVersionAfter;
+        if (string.IsNullOrWhiteSpace(voucherCode) || string.IsNullOrWhiteSpace(version))
+        {
+            await executionRepository.MarkApprovalFailureAsync(
+                item.Operation, "APPROVAL_TARGET_MISSING", "ERP 单据号或版本缺失，需要核对。",
+                true, requestId, cancellationToken);
+            return false;
+        }
+
+        var approvalRequestId = $"{item.Operation.ClientRequestId}:auto-audit";
+        var approvalRequest = new GatewayDocumentRequest(
+            approvalRequestId,
+            item.Operation.OperatorId,
+            item.Request.OperatorName,
+            item.Request.DeviceId,
+            item.Request.DeviceModel,
+            item.Request.ApkVersion,
+            item.Request.H5Version,
+            item.Request.BridgeVersion,
+            item.Operation.Reason,
+            version,
+            new Dictionary<string, object?>(),
+            [],
+            [],
+            new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, object?>>>(
+                StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
+        try
+        {
+            var result = await gateway.VerifyDocumentAsync(
+                item.Operation.ErpDocumentType, voucherCode, approvalRequest, cancellationToken);
+            await executionRepository.CompleteApprovalAsync(
+                item.Operation, result, item.Request.OperatorName,
+                requestId, cancellationToken);
+            return true;
+        }
+        catch (GatewayWriteException error)
+        {
+            await executionRepository.MarkApprovalFailureAsync(
+                item.Operation, error.Code, error.Message, error.ResultUnknown,
+                requestId, cancellationToken);
+            return false;
+        }
+        catch (Exception error)
+        {
+            await executionRepository.MarkApprovalFailureAsync(
+                item.Operation, "LOCAL_APPROVAL_COMMIT_UNKNOWN", error.Message, true,
+                requestId, cancellationToken);
+            return false;
+        }
     }
 
     private async Task<IReadOnlyList<PreparedGatewayOperation>> PrepareGatewayRequestsAsync(
