@@ -91,6 +91,7 @@ interface OutboundLine {
   requiresOverIssueQuantity?: boolean
   requiresBatch?: boolean
   returnRequirementId?: number
+  returnByLabel?: boolean
 }
 
 interface MaterialOutboundSubmissionLine {
@@ -648,7 +649,11 @@ function lineEditError(line: OutboundLine): string {
       : `${pageConfig.value.quantityLabel}必须大于0`
   }
   if (line.requiresBatch && !line.batchNo.trim()) return '请输入批号'
-  if (line.availableQty !== null && props.documentType !== 'inventory-count' && quantity > line.availableQty) {
+  if (
+    line.availableQty !== null && props.documentType !== 'inventory-count' &&
+    !(props.documentType === 'material-outbound' && documentDirection.value === 'RED') &&
+    quantity > line.availableQty
+  ) {
     return '本次处理数量不能超过标签当前数量'
   }
   if (
@@ -894,6 +899,10 @@ async function addBarcode(rawCode: string): Promise<void> {
   try {
     const lookup = await lookupInventoryObject(barcode, props.documentType)
     const isPalletScan = lookup.pallet !== null
+    if (
+      props.documentType === 'material-outbound' &&
+      documentDirection.value === 'RED' && isPalletScan
+    ) throw new Error('红字退料请扫描产品标签')
     const requiresWholePallet = ['transfer-order', 'location-adjustment'].includes(props.documentType)
     const found = [
       ...lookup.lines,
@@ -902,7 +911,11 @@ async function addBarcode(rawCode: string): Promise<void> {
         : []),
     ]
     if (!found.length) throw new Error('托盘内没有可处理标签')
-    if (found.some((item) => item.status !== 'ACTIVE')) {
+    const allowUsedReturnLabel = props.documentType === 'material-outbound' &&
+      documentDirection.value === 'RED' && !isPalletScan
+    if (found.some((item) => item.status !== 'ACTIVE' && !(
+      allowUsedReturnLabel && item.objectType === 'PRODUCT_LABEL' && item.status === 'USED'
+    ))) {
       throw new Error('标签当前不可用')
     }
     if (
@@ -962,7 +975,11 @@ async function addBarcode(rawCode: string): Promise<void> {
         skippedSatisfied += 1
         continue
       }
-      const requestedQty = requiresOverIssueQuantity
+      const returnByLabel = props.documentType === 'material-outbound' &&
+        documentDirection.value === 'RED' && item.objectType === 'PRODUCT_LABEL'
+      const requestedQty = returnByLabel
+        ? 0
+        : requiresOverIssueQuantity
         ? 0
         : useSourceRemainder
         ? Math.min(item.availableQty, remaining)
@@ -998,6 +1015,7 @@ async function addBarcode(rawCode: string): Promise<void> {
         },
         sourcePalletCode: item.objectType === 'PRODUCT_LABEL' ? item.palletCode : undefined,
         requiresOverIssueQuantity,
+        returnByLabel,
       })
     }
     if (!additions.length) {
@@ -1008,6 +1026,7 @@ async function addBarcode(rawCode: string): Promise<void> {
     if (
       documentPolicy.value.autoAddScannedDetail &&
       !additions.some((line) => line.requiresOverIssueQuantity) &&
+      !additions.some((line) => line.returnByLabel) &&
       !additions.some((line) => missingRequiredBodyField(line))
     ) {
       lines.value = [...lines.value, ...additions]
@@ -1527,6 +1546,7 @@ function validate(): string {
   ) return `${pageConfig.value.quantityLabel}不能小于0`
   if (
     props.documentType !== 'inventory-count' &&
+    !(props.documentType === 'material-outbound' && documentDirection.value === 'RED') &&
     lines.value.some(
       (line) => line.availableQty !== null && normalizeQty(line.requestedQty) > line.availableQty,
     )
@@ -2140,8 +2160,8 @@ onBeforeRouteLeave((to) => {
       </header>
 
       <div class="line-editor-content">
-        <div v-if="editingLine.requiresOverIssueQuantity" class="over-issue-editor-notice">
-          超领 · 输入本次数量
+        <div v-if="editingLine.requiresOverIssueQuantity || editingLine.returnByLabel" class="over-issue-editor-notice">
+          {{ editingLine.returnByLabel ? '退料 · 输入本次数量' : '超领 · 输入本次数量' }}
         </div>
         <dl v-if="readonlyEditorFields.length" class="editor-readonly-grid">
           <div v-for="field in readonlyEditorFields" :key="field.key">
@@ -2152,10 +2172,10 @@ onBeforeRouteLeave((to) => {
 
         <div class="editor-form-grid">
           <label
-            v-if="editingLine.requiresOverIssueQuantity && !quantityVisibleInEditor"
+            v-if="(editingLine.requiresOverIssueQuantity || editingLine.returnByLabel) && !quantityVisibleInEditor"
             class="field"
           >
-            <span><i>*</i>超领数量</span>
+            <span><i>*</i>{{ editingLine.returnByLabel ? '退料数量' : '超领数量' }}</span>
             <input
               :value="editingLine.requestedQty || ''"
               type="number"

@@ -249,6 +249,10 @@ public sealed class DocumentPrepareService(
                 throw new ApiException(StatusCodes.Status400BadRequest, "QUANTITY_INVALID", "明细数量无效。");
             if (line.ObjectType == "PALLET" && line.RequestedQty != 1)
                 throw new ApiException(StatusCodes.Status400BadRequest, "PALLET_QUANTITY_INVALID", "托盘数量必须为 1。");
+            if (definition.DocumentType == "material-outbound" &&
+                request.Header.DocumentDirection == "RED" && line.ObjectType == "PALLET")
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "PALLET_RETURN_NOT_SUPPORTED", "红字退料请使用产品标签或无标签明细。");
             if (!hasSource && !objects.Add($"{line.ObjectType}:{line.LabelCode.Trim()}"))
                 throw new ApiException(StatusCodes.Status400BadRequest, "OBJECT_DUPLICATED", "标签或托盘重复。");
         }

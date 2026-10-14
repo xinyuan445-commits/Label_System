@@ -92,6 +92,8 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 
 红字材料出库可在通用或生产订单专用提交接口的 `lines` 中使用 `objectType=UNLABELED_MATERIAL`，并提供 `materialCode`、`unitCode`、`requestedQty`、`batchNo`、`warehouseCode`、`locationCode`；参照生产订单时还必须携带完整需求行分配。该类型只允许 `material-outbound + RED`，且必须填写退料原因。有原单时正常数量不得超过需求行当前已领数量，`overQty` 必须为零。提交成功返回的业务组包含 `issuedLabels`；新标签初始为 `PENDING_PRINT`，只有确认实体标签已贴附后才变为 `ACTIVE`。确认接口要求业务组已经完成，重复确认同一已启用标签按幂等成功返回。
 
+红字材料出库也允许 `objectType=PRODUCT_LABEL` 引用状态为 `USED` 的已耗尽标签。服务端仍校验标签身份和占用，只取消“当前库存量必须覆盖本次数量”的蓝字限制；退料仓库、货位来自本次明细。U8 写入确认后原标签增加退料数量并恢复 `ACTIVE`。`PALLET` 不允许用于红字材料退料。
+
 H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API 在同一请求内完成校验、幂等建档、拆组、锁定和执行，不向用户保留普通 `PENDING` 步骤。写入总开关关闭、ERP 制单人缺失或建档前校验失败时直接返回错误，不创建业务操作、来源占用或标签锁；建档后的写入前校验失败会立即取消临时操作并释放锁。只有已经调用 U8 且结果不明确时保留 `NEEDS_RECONCILIATION` 审计和锁。旧 `/prepare` 路由只返回 `409 DIRECT_SUBMIT_REQUIRED`，不得再建立待处理组。
 
 普通用户调用 `POST /auth/management-access` 验证管理密码后，当前会话获得 10 分钟管理权限，可访问 `/admin/*`；该权限不改变用户角色，也不增加 `/functions` 返回的业务功能。管理密码仅在服务器外置配置保存哈希，客户端不保存。管理员角色不需要再次验证。

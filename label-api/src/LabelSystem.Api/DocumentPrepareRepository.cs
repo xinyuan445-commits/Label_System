@@ -50,6 +50,8 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             await ReserveSourceLinesAsync(connection, transaction, request, cancellationToken);
 
         var products = new Dictionary<string, ProductLabelSnapshot>(StringComparer.OrdinalIgnoreCase);
+        var allowUsedProductReturn = definition.DocumentType == "material-outbound" &&
+                                     request.Header.DocumentDirection == "RED";
         foreach (var code in request.Lines
                      .Where(line => line.ObjectType == "PRODUCT_LABEL")
                      .Select(line => line.LabelCode.Trim())
@@ -59,7 +61,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             var snapshot = await LabelSystemRepository.ReadProductLabelAsync(
                 connection, transaction, code, cancellationToken, true)
                 ?? throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", $"未找到标签：{code}");
-            EnsureAvailable(snapshot.Status, snapshot.LockedOperationId, code, false);
+            EnsureAvailable(
+                snapshot.Status, snapshot.LockedOperationId, code, false,
+                allowUsedProductReturn);
             products.Add(code, snapshot);
         }
 
@@ -76,7 +80,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             var snapshot = await LabelSystemRepository.ReadPalletAsync(
                 connection, transaction, code, cancellationToken, true)
                 ?? throw new ApiException(StatusCodes.Status404NotFound, "PALLET_NOT_FOUND", $"未找到托盘：{code}");
-            EnsureAvailable(snapshot.Line.Status, snapshot.LockedOperationId, code, true);
+            EnsureAvailable(snapshot.Line.Status, snapshot.LockedOperationId, code, true, false);
             pallets.Add(code, snapshot);
         }
 
@@ -160,9 +164,20 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     !string.Equals(product.PalletCode, line.SourcePalletCode?.Trim(), StringComparison.OrdinalIgnoreCase))
                     throw new ApiException(StatusCodes.Status409Conflict,
                         "PALLET_RELATION_CHANGED", $"标签托盘关系已变化：{line.LabelCode}");
+                var isRedMaterialReturn = definition.DocumentType == "material-outbound" &&
+                                          request.Header.DocumentDirection == "RED";
+                var warehouseCode = isRedMaterialReturn
+                    ? line.WarehouseCode?.Trim() ?? string.Empty
+                    : product.WarehouseCode;
+                var locationCode = isRedMaterialReturn
+                    ? line.LocationCode?.Trim() ?? string.Empty
+                    : product.LocationCode;
+                if (string.IsNullOrWhiteSpace(warehouseCode))
+                    throw new ApiException(StatusCodes.Status409Conflict,
+                        "LABEL_LOCATION_MISSING", $"标签没有退料仓库：{line.LabelCode}");
                 result.Add(new ResolvedLine(
                     line, product.Id, null, product.PalletId, product.CurrentQty,
-                    product.BatchNo, product.WarehouseCode, product.LocationCode));
+                    product.BatchNo, warehouseCode, locationCode));
             }
             else if (line.ObjectType == "PALLET")
             {
@@ -191,7 +206,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             if (group.Key.ObjectType == "UNLABELED_MATERIAL") continue;
             var total = group.Sum(line => line.Request.RequestedQty);
             var available = group.First().InventoryQty ?? 0m;
-            if (!definition.AllowZeroQuantity && total > available)
+            var isRedMaterialReturn = definition.DocumentType == "material-outbound" &&
+                                      request.Header.DocumentDirection == "RED";
+            if (!isRedMaterialReturn && !definition.AllowZeroQuantity && total > available)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "LABEL_QUANTITY_INSUFFICIENT", $"标签数量不足：{group.Key.Code}");
             if (definition.WholePalletMove && total != available)
@@ -201,9 +218,14 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         return result.ToArray();
     }
 
-    private static void EnsureAvailable(string status, long? lockedOperationId, string code, bool pallet)
+    private static void EnsureAvailable(
+        string status,
+        long? lockedOperationId,
+        string code,
+        bool pallet,
+        bool allowUsedProductReturn)
     {
-        if (status != "ACTIVE")
+        if (status != "ACTIVE" && !(allowUsedProductReturn && !pallet && status == "USED"))
             throw new ApiException(StatusCodes.Status409Conflict,
                 pallet ? "PALLET_NOT_ACTIVE" : "LABEL_NOT_ACTIVE", $"{(pallet ? "托盘" : "标签")}不可用：{code}");
         if (lockedOperationId.HasValue)

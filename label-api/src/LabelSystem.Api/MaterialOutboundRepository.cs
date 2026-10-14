@@ -55,7 +55,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
             var snapshot = await LabelSystemRepository.ReadProductLabelAsync(
                 connection, transaction, code, cancellationToken, true)
                 ?? throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", $"未找到标签：{code}");
-            if (snapshot.Status != "ACTIVE")
+            if (snapshot.Status != "ACTIVE" && !(request.DocumentDirection == "RED" && snapshot.Status == "USED"))
                 throw new ApiException(StatusCodes.Status409Conflict, "LABEL_NOT_ACTIVE", $"标签不可用：{code}");
             if (snapshot.LockedOperationId.HasValue)
                 throw new ApiException(StatusCodes.Status409Conflict, "LABEL_LOCKED", $"标签处理中：{code}");
@@ -82,8 +82,10 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
             palletSnapshots[code] = snapshot;
         }
 
-        var resolved = ResolveLines(request.Lines, productSnapshots, palletSnapshots, allowPalletizedDirectUse);
-        ValidateObjectQuantities(resolved);
+        var resolved = ResolveLines(
+            request.Lines, productSnapshots, palletSnapshots,
+            allowPalletizedDirectUse, request.DocumentDirection);
+        ValidateObjectQuantities(resolved, request.DocumentDirection);
 
         var now = BusinessClock.NowDatabase;
         var lockExpiresAt = now.AddMinutes(Math.Clamp(options.LockMinutes, 1, 120));
@@ -570,7 +572,8 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         IReadOnlyList<MaterialOutboundAllocationRequest> lines,
         IReadOnlyDictionary<string, ProductLabelSnapshot> products,
         IReadOnlyDictionary<string, PalletSnapshot> pallets,
-        bool allowPalletizedDirectUse)
+        bool allowPalletizedDirectUse,
+        string documentDirection)
     {
         var result = new List<ResolvedLine>(lines.Count);
         foreach (var line in lines)
@@ -582,7 +585,13 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                     throw new ApiException(StatusCodes.Status409Conflict, "LABEL_MATERIAL_MISMATCH", $"标签料号不一致：{line.LabelCode}");
                 if (!string.Equals(product.UnitCode, line.UnitCode, StringComparison.OrdinalIgnoreCase))
                     throw new ApiException(StatusCodes.Status409Conflict, "LABEL_UNIT_MISMATCH", $"标签单位不一致：{line.LabelCode}");
-                if (string.IsNullOrWhiteSpace(product.WarehouseCode))
+                var warehouseCode = documentDirection == "RED"
+                    ? line.WarehouseCode?.Trim() ?? string.Empty
+                    : product.WarehouseCode;
+                var locationCode = documentDirection == "RED"
+                    ? line.LocationCode?.Trim() ?? string.Empty
+                    : product.LocationCode;
+                if (string.IsNullOrWhiteSpace(warehouseCode))
                     throw new ApiException(StatusCodes.Status409Conflict, "LABEL_LOCATION_MISSING", $"标签没有当前仓库：{line.LabelCode}");
                 if (product.PalletId.HasValue)
                 {
@@ -594,7 +603,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                 }
                 result.Add(new ResolvedLine(
                     line, product.Id, null, product.PalletId, product.CurrentQty,
-                    product.BatchNo, product.WarehouseCode, product.LocationCode));
+                    product.BatchNo, warehouseCode, locationCode));
             }
             else if (line.ObjectType == "PALLET")
             {
@@ -621,7 +630,9 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         return result.ToArray();
     }
 
-    private static void ValidateObjectQuantities(IReadOnlyList<ResolvedLine> lines)
+    private static void ValidateObjectQuantities(
+        IReadOnlyList<ResolvedLine> lines,
+        string documentDirection)
     {
         foreach (var group in lines.GroupBy(line => (
                      ObjectType: line.Request.ObjectType,
@@ -630,7 +641,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
             if (group.Key.ObjectType == "UNLABELED_MATERIAL") continue;
             var requested = group.Sum(line => line.Request.RequestedQty);
             var available = group.First().InventoryQty ?? 0m;
-            if (requested > available)
+            if (documentDirection != "RED" && requested > available)
                 throw new ApiException(StatusCodes.Status409Conflict, "LABEL_QUANTITY_INSUFFICIENT", $"标签数量不足：{group.Key.LabelCode}");
             if (group.Key.ObjectType == "PALLET" && requested != 1)
                 throw new ApiException(StatusCodes.Status409Conflict, "PALLET_QUANTITY_INVALID", "托盘数量必须为 1。");

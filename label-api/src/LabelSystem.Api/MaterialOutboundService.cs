@@ -191,6 +191,9 @@ public sealed class MaterialOutboundService(
             if (line.ObjectType == "UNLABELED_MATERIAL" && request.DocumentDirection != "RED")
                 throw new ApiException(StatusCodes.Status400BadRequest,
                     "UNLABELED_RETURN_NOT_SUPPORTED", "无标签录入只用于红字材料出库单。");
+            if (line.ObjectType == "PALLET" && request.DocumentDirection == "RED")
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "PALLET_RETURN_NOT_SUPPORTED", "红字退料请使用产品标签或无标签明细。");
             if (line.ObjectType == "PALLET" && line.RequestedQty != 1)
                 throw new ApiException(StatusCodes.Status400BadRequest, "PALLET_QUANTITY_INVALID", "托盘数量必须为 1。");
         }
