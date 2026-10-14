@@ -1,7 +1,8 @@
 param(
     [string]$ProjectDir = (Join-Path $PSScriptRoot '..\label_system'),
     [string]$OutputDir = (Join-Path $PSScriptRoot '..\releases\ct58c-test'),
-    [string]$PackageName = 'com.tencent.weauth'
+    [string]$PackageName = 'com.tencent.weauth',
+    [string]$BaseApkPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -79,20 +80,28 @@ $finalApk = Join-Path $outputDir "label-system-$version-ct58c.apk"
 New-Item -ItemType Directory -Force -Path `
     $baseDir, $classesDir, $dexDir, $injectDir, $outputDir | Out-Null
 
-& $wechatCli build-apk `
-    --project $projectDir `
-    --keyPass $keyPassword `
-    --storePass $storePassword `
-    --keyAlias $keyAlias `
-    --keyStore $keyStore `
-    --useAab false `
-    --desc 'CT58C native bridge test' `
-    --output $baseDir `
-    --lang zh
+if ($BaseApkPath) {
+    $resolvedBaseApkPath = [IO.Path]::GetFullPath($BaseApkPath)
+    if (-not (Test-Path -LiteralPath $resolvedBaseApkPath -PathType Leaf)) {
+        throw "Base APK not found: $resolvedBaseApkPath"
+    }
+    $baseApk = Get-Item -LiteralPath $resolvedBaseApkPath
+} else {
+    & $wechatCli build-apk `
+        --project $projectDir `
+        --keyPass $keyPassword `
+        --storePass $storePassword `
+        --keyAlias $keyAlias `
+        --keyStore $keyStore `
+        --useAab false `
+        --desc 'CT58C native bridge test' `
+        --output $baseDir `
+        --lang zh
 
-$baseApk = Get-ChildItem -LiteralPath $baseDir -File -Filter '*.apk' |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
+    $baseApk = Get-ChildItem -LiteralPath $baseDir -File -Filter '*.apk' |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+}
 if (-not $baseApk) {
     throw 'WeChat DevTools did not produce a base APK.'
 }

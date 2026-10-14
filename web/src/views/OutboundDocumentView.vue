@@ -184,6 +184,7 @@ const showLeaveConfirm = ref(false)
 let allowNavigation = false
 let baselineSnapshot = ''
 let stopScanListener: (() => void) | null = null
+let stopBackListener: (() => void) | null = null
 let messageTimer: ReturnType<typeof setTimeout> | null = null
 const resolvingBarcodes = new Set<string>()
 const rdStyleOptions = ref<RdStyleOption[]>([])
@@ -195,6 +196,7 @@ const currencyOptions = ref<CurrencyOption[]>([])
 const referenceDataLoading = ref(false)
 const finishing = ref(false)
 const completionError = ref('')
+const showMaterialPicker = ref(false)
 const showManualReturn = ref(false)
 const manualMaterialQuery = ref('')
 const manualMaterialResults = ref<MaterialOption[]>([])
@@ -341,8 +343,18 @@ const totalQty = computed(() =>
 )
 const showHeaderForm = computed(() => currentStep.value === 1)
 const showScanContent = computed(() => currentStep.value === 2)
+const isUnreferencedManualReturn = computed(() =>
+  props.documentType === 'material-outbound' &&
+  documentDirection.value === 'RED' &&
+  selectedSourceLines.value.length === 0,
+)
+const showScanDetailAction = computed(() =>
+  selectedSourceLines.value.length > 0 || isUnreferencedManualReturn.value,
+)
 const sourceDetailButtonLabel = computed(() =>
-  props.documentType === 'material-outbound'
+  isUnreferencedManualReturn.value
+    ? '选择物料'
+    : props.documentType === 'material-outbound'
     ? documentDirection.value === 'RED' ? '退料明细' : '领料明细'
     : '源单明细',
 )
@@ -1063,14 +1075,27 @@ async function addBarcode(rawCode: string): Promise<void> {
 }
 
 function handleScan(event: PdaScanEvent): void {
-  if (currentStep.value !== 2 || editingLine.value || showManualReturn.value) return
+  if (currentStep.value !== 2 || editingLine.value || showMaterialPicker.value || showManualReturn.value) return
   void addBarcode(event.barcode)
+}
+
+function openMaterialPicker(): void {
+  manualMaterialQuery.value = ''
+  manualMaterialResults.value = []
+  showMaterialPicker.value = true
+}
+
+function closeMaterialPicker(): void {
+  showMaterialPicker.value = false
+  manualMaterialQuery.value = ''
+  manualMaterialResults.value = []
 }
 
 function prepareManualReturn(
   material: MaterialOption,
   requirement: MaterialRequirementLine | null = null,
 ): void {
+  showMaterialPicker.value = false
   manualEditingLineId.value = null
   manualRequirementId.value = requirement?.requirementId ?? null
   manualMaterialResults.value = []
@@ -1523,6 +1548,14 @@ async function openSourceDetails(): Promise<void> {
   })
 }
 
+async function openScanDetailAction(): Promise<void> {
+  if (isUnreferencedManualReturn.value) {
+    openMaterialPicker()
+    return
+  }
+  await openSourceDetails()
+}
+
 function validateHeader(): string {
   const missing = documentFields.value.find(
     (field) => field.area === 'header' && fieldRequired(field.key) && isBlank(headerValue(field.key)),
@@ -1718,6 +1751,26 @@ async function discardAndLeave(): Promise<void> {
 }
 
 async function leaveDocument(): Promise<void> {
+  if (showLeaveConfirm.value) {
+    showLeaveConfirm.value = false
+    return
+  }
+  if (showMaterialPicker.value) {
+    closeMaterialPicker()
+    return
+  }
+  if (showManualReturn.value) {
+    closeManualReturn()
+    return
+  }
+  if (editingLine.value) {
+    cancelLineConfirmation()
+    return
+  }
+  if (pendingOverIssueMaterial.value) {
+    cancelOverIssue()
+    return
+  }
   if (currentStep.value === 2) {
     returnToHeaderStep()
     return
@@ -1745,6 +1798,9 @@ watch(
 )
 
 onMounted(async () => {
+  stopBackListener = bridge.subscribeBack(() => {
+    void leaveDocument()
+  })
   baselineSnapshot = snapshotDraft()
   await loadRequestedDraft()
   const sourceSelection = consumeSourceDocumentSelection(props.documentType)
@@ -1779,6 +1835,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopScanListener?.()
+  stopBackListener?.()
   if (messageTimer) clearTimeout(messageTimer)
 })
 
@@ -2029,35 +2086,6 @@ onBeforeRouteLeave((to) => {
           />
           <button type="button" @click="simulateOrAdd">添加</button>
         </div>
-        <div
-          v-if="documentType === 'material-outbound' && documentDirection === 'RED' && !selectedSourceLines.length"
-          class="manual-return-search"
-        >
-          <div class="material-search-row">
-            <input
-              v-model="manualMaterialQuery"
-              autocomplete="off"
-              enterkeyhint="search"
-              placeholder="无标签退料：料号或名称"
-              @keyup.enter="queryManualMaterials"
-            />
-            <button type="button" :disabled="manualMaterialLoading" @click="queryManualMaterials">
-              {{ manualMaterialLoading ? '查询中' : '查询' }}
-            </button>
-          </div>
-          <div v-if="manualMaterialResults.length" class="material-search-results">
-            <button
-              v-for="material in manualMaterialResults"
-              :key="material.code"
-              type="button"
-              @click="selectManualMaterial(material)"
-            >
-              <strong>{{ material.code }}</strong>
-              <span>{{ material.name }}</span>
-              <small v-if="material.specification">{{ material.specification }}</small>
-            </button>
-          </div>
-        </div>
       </section>
 
       <section v-if="showScanContent" class="line-section">
@@ -2129,7 +2157,7 @@ onBeforeRouteLeave((to) => {
         'header-actions': currentStep === 1,
         'with-reset': currentStep === 1 && hasDraftContent(),
         'scan-actions': currentStep === 2,
-        'with-source-details': currentStep === 2 && selectedSourceLines.length,
+        'with-source-details': currentStep === 2 && showScanDetailAction,
       }"
     >
       <div class="summary">
@@ -2157,10 +2185,10 @@ onBeforeRouteLeave((to) => {
         重置
       </button>
       <button
-        v-if="currentStep === 2 && selectedSourceLines.length"
+        v-if="currentStep === 2 && showScanDetailAction"
         class="source-footer-action"
         type="button"
-        @click="openSourceDetails"
+        @click="openScanDetailAction"
       >
         {{ sourceDetailButtonLabel }}
       </button>
@@ -2273,6 +2301,41 @@ onBeforeRouteLeave((to) => {
           {{ editingExistingLineId ? '保存' : pendingScanLines.length ? '确认并继续' : '确认添加' }}
         </button>
       </footer>
+    </div>
+
+    <div v-if="showMaterialPicker" class="line-editor-page" role="dialog" aria-modal="true" aria-label="选择物料">
+      <header class="line-editor-header manual-return-header">
+        <button type="button" aria-label="返回" @click="closeMaterialPicker">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <div class="editor-title-heading"><h2>选择物料</h2></div>
+      </header>
+      <div class="line-editor-content material-picker-content">
+        <div class="material-search-row">
+          <input
+            v-model="manualMaterialQuery"
+            autocomplete="off"
+            enterkeyhint="search"
+            placeholder="料号或描述"
+            @keyup.enter="queryManualMaterials"
+          />
+          <button type="button" :disabled="manualMaterialLoading" @click="queryManualMaterials">
+            {{ manualMaterialLoading ? '查询中' : '查询' }}
+          </button>
+        </div>
+        <div v-if="manualMaterialResults.length" class="material-search-results">
+          <button
+            v-for="material in manualMaterialResults"
+            :key="material.code"
+            type="button"
+            @click="selectManualMaterial(material)"
+          >
+            <strong>{{ material.code }}</strong>
+            <span>{{ material.name }}</span>
+            <small v-if="material.specification">{{ material.specification }}</small>
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="showManualReturn" class="line-editor-page" role="dialog" aria-modal="true" aria-label="退料明细">
@@ -2652,13 +2715,6 @@ h1 {
   color: #fff;
   font-size: 14px;
   font-weight: 700;
-}
-
-.manual-return-search {
-  display: grid;
-  gap: 8px;
-  padding-top: 13px;
-  border-top: 1px solid #e7edf4;
 }
 
 .line-section {
@@ -3478,6 +3534,12 @@ h1 {
 .manual-return-content {
   display: grid;
   gap: 14px;
+}
+
+.material-picker-content {
+  display: grid;
+  align-content: start;
+  gap: 12px;
 }
 
 .material-search-row {

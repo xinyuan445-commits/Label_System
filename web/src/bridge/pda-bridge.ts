@@ -1,12 +1,12 @@
 import { getRuntimeConfig } from '@/services/runtime-config'
 import { createUniqueId } from '@/utils/unique-id'
 
-import type { MockPdaBridge, PdaBridge, PdaScanEvent, ScanListener } from './types'
+import type { BackListener, MockPdaBridge, PdaBridge, PdaScanEvent, ScanListener } from './types'
 
-interface NativeScanMessage {
+interface NativeMessage {
   source: 'label-system-pda'
-  type: 'scan'
-  payload: PdaScanEvent
+  type: 'scan' | 'system-back'
+  payload?: PdaScanEvent
 }
 
 const nativeBridgeOrigin = 'http://127.0.0.1:18765'
@@ -31,6 +31,7 @@ class NativeMessageBridge implements PdaBridge {
   readonly mode = 'native'
   readonly protocolVersion: string
   private readonly listeners = new Set<ScanListener>()
+  private readonly backListeners = new Set<BackListener>()
 
   constructor(protocolVersion: string) {
     this.protocolVersion = protocolVersion
@@ -40,6 +41,24 @@ class NativeMessageBridge implements PdaBridge {
   subscribeScan(listener: ScanListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  subscribeBack(listener: BackListener): () => void {
+    const shouldEnable = this.backListeners.size === 0
+    this.backListeners.add(listener)
+    if (shouldEnable) this.setBackHandlerEnabled(true)
+    return () => {
+      this.backListeners.delete(listener)
+      if (this.backListeners.size === 0) this.setBackHandlerEnabled(false)
+    }
+  }
+
+  private setBackHandlerEnabled(enabled: boolean): void {
+    window.parent.postMessage({
+      source: 'label-system-h5',
+      type: 'system-back-handler',
+      payload: { enabled },
+    }, nativeBridgeOrigin)
   }
 
   private readonly handleMessage = (message: MessageEvent<unknown>): void => {
@@ -52,12 +71,19 @@ class NativeMessageBridge implements PdaBridge {
       return
     }
 
-    const data = message.data as Partial<NativeScanMessage>
-    if (data.source !== 'label-system-pda' || data.type !== 'scan' || !isPdaScanEvent(data.payload)) {
+    const data = message.data as Partial<NativeMessage>
+    if (data.source !== 'label-system-pda') {
       return
     }
 
-    this.listeners.forEach((listener) => listener(data.payload as PdaScanEvent))
+    if (data.type === 'system-back') {
+      this.backListeners.forEach((listener) => listener())
+      return
+    }
+
+    if (data.type === 'scan' && isPdaScanEvent(data.payload)) {
+      this.listeners.forEach((listener) => listener(data.payload as PdaScanEvent))
+    }
   }
 }
 
@@ -73,6 +99,10 @@ class BrowserMockBridge implements MockPdaBridge {
   subscribeScan(listener: ScanListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  subscribeBack(_listener: BackListener): () => void {
+    return () => undefined
   }
 
   simulateScan(barcode: string): void {
@@ -104,6 +134,10 @@ class UnavailableBridge implements PdaBridge {
   }
 
   subscribeScan(_listener: ScanListener): () => void {
+    return () => undefined
+  }
+
+  subscribeBack(_listener: BackListener): () => void {
     return () => undefined
   }
 }

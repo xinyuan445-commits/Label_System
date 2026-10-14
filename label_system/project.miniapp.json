@@ -1,8 +1,8 @@
 {
   "miniVersion": "v2",
   "name": "标签管理系统",
-  "version": "0.5.1",
-  "versionCode": 107,
+  "version": "0.5.2",
+  "versionCode": 108,
   "i18nFilePath": "i18n",
   "mini-ohos": {
     "sdkVersion": "0.5.1"

@@ -8,11 +8,13 @@ export interface PdaScanEvent {
 }
 
 export type ScanListener = (event: PdaScanEvent) => void
+export type BackListener = () => void
 
 export interface PdaBridge {
   readonly mode: 'mock' | 'native' | 'unavailable'
   readonly protocolVersion: string
   subscribeScan(listener: ScanListener): () => void
+  subscribeBack(listener: BackListener): () => void
 }
 
 export interface MockPdaBridge extends PdaBridge {
