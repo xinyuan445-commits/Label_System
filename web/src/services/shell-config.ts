@@ -32,8 +32,8 @@ const defaultConfig: ShellConfig = {
   scanSound: 'short',
   scanFeedbackMode: 'tone',
   bridgeVersion: 'pda-bridge-v1',
-  apkVersion: '0.5.0',
-  apkVersionCode: 106,
+  apkVersion: '0.5.1',
+  apkVersionCode: 107,
 }
 
 function isEnvironment(value: unknown): value is ShellEnvironment {
@@ -211,9 +211,9 @@ function playBrowserFeedback(mode: ScanFeedbackMode, result: ScanFeedbackResult)
   if (mode === 'voice') {
     if (!('speechSynthesis' in window)) return
     window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(result === 'success' ? 'O K' : 'N G')
-    utterance.lang = 'en-US'
-    utterance.rate = 1.25
+    const utterance = new SpeechSynthesisUtterance(result === 'success' ? '成功' : '错误')
+    utterance.lang = 'zh-CN'
+    utterance.rate = 1.4
     window.speechSynthesis.speak(utterance)
     return
   }
@@ -222,15 +222,23 @@ function playBrowserFeedback(mode: ScanFeedbackMode, result: ScanFeedbackResult)
     return
   }
   const context = new window.AudioContext()
-  const oscillator = context.createOscillator()
-  const gain = context.createGain()
-  oscillator.frequency.value = 360
-  gain.gain.value = 0.25
-  oscillator.connect(gain)
-  gain.connect(context.destination)
-  oscillator.start()
-  oscillator.stop(context.currentTime + 0.32)
-  window.setTimeout(() => void context.close(), 500)
+  const play = (startAt: number): void => {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.frequency.value = 360
+    gain.gain.setValueAtTime(0.0001, startAt)
+    gain.gain.exponentialRampToValueAtTime(0.28, startAt + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + 0.1)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(startAt)
+    oscillator.stop(startAt + 0.12)
+  }
+  const now = context.currentTime
+  play(now)
+  play(now + 0.17)
+  play(now + 0.34)
+  window.setTimeout(() => void context.close(), 650)
 }
 
 export function playScanFeedback(result: ScanFeedbackResult): void {

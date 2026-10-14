@@ -46,8 +46,8 @@ $requiredPaths = @(
     (Join-Path $bridgeSourceDir 'PdaBridgeServer.java'),
     (Join-Path $bridgeSourceDir 'Ct58cScanReceiver.java'),
     (Join-Path $bridgeSourceDir 'Ct58cBridgeInitializer.java'),
-    (Join-Path $bridgeAssetDir 'scan_ok.wav'),
-    (Join-Path $bridgeAssetDir 'scan_ng.wav')
+    (Join-Path $bridgeAssetDir 'scan_success_zh_female.wav'),
+    (Join-Path $bridgeAssetDir 'scan_error_zh_female.wav')
 )
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path)) {
@@ -175,8 +175,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Native bridge DEX compilation failed.' }
 Copy-Item -Force -LiteralPath (Join-Path $dexDir 'classes.dex') -Destination (Join-Path $injectDir 'classes3.dex')
 $injectAssetDir = Join-Path $injectDir 'assets'
 New-Item -ItemType Directory -Force -Path $injectAssetDir | Out-Null
-Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_ok.wav') -Destination $injectAssetDir
-Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_ng.wav') -Destination $injectAssetDir
+Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_success_zh_female.wav') -Destination $injectAssetDir
+Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_error_zh_female.wav') -Destination $injectAssetDir
 Copy-Item -Force -LiteralPath $rebuiltApk -Destination $unsignedApk
 Push-Location $injectDir
 try {
@@ -203,8 +203,8 @@ if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
 
 $entries = & $jar tf $signedApk
 if ($entries -notcontains 'classes3.dex') { throw 'Final APK is missing classes3.dex.' }
-if ($entries -notcontains 'assets/scan_ok.wav') { throw 'Final APK is missing scan_ok.wav.' }
-if ($entries -notcontains 'assets/scan_ng.wav') { throw 'Final APK is missing scan_ng.wav.' }
+if ($entries -notcontains 'assets/scan_success_zh_female.wav') { throw 'Final APK is missing scan_success_zh_female.wav.' }
+if ($entries -notcontains 'assets/scan_error_zh_female.wav') { throw 'Final APK is missing scan_error_zh_female.wav.' }
 Copy-Item -Force -LiteralPath $signedApk -Destination $finalApk
 
 $file = Get-Item -LiteralPath $finalApk

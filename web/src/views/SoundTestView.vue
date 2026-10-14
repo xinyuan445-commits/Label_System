@@ -71,8 +71,8 @@ onMounted(async () => {
         <button v-for="item in options" :key="item.value" type="button" :class="{ selected: config.scanFeedbackMode === item.value }" :disabled="busy" @click="selectFeedback(item.value)">{{ item.label }}</button>
       </div>
       <div class="previews">
-        <button type="button" :disabled="busy || config.scanFeedbackMode === 'off'" @click="preview('success')">试听 OK</button>
-        <button type="button" :disabled="busy || config.scanFeedbackMode === 'off'" @click="preview('error')">试听 NG</button>
+        <button type="button" :disabled="busy || config.scanFeedbackMode === 'off'" @click="preview('success')">试听成功</button>
+        <button type="button" :disabled="busy || config.scanFeedbackMode === 'off'" @click="preview('error')">试听错误</button>
       </div>
     </section>
     <div v-else class="loading">加载中</div>

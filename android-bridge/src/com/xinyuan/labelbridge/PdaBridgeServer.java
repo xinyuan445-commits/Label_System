@@ -450,14 +450,17 @@ final class PdaBridgeServer {
         BridgeConfig config = getConfig(new HashMap<String, String>());
         final String mode = isFeedbackMode(modeOverride) ? modeOverride : config.scanFeedbackMode;
         if ("off".equals(mode)) return;
-        final String soundMode = config.scanSound;
         enqueueAudio(new Runnable() {
             @Override
             public void run() {
                 if ("voice".equals(mode)) {
-                    playVoiceBlocking("success".equals(result) ? "scan_ok.wav" : "scan_ng.wav");
+                    playVoiceBlocking(
+                        "success".equals(result)
+                            ? "scan_success_zh_female.wav"
+                            : "scan_error_zh_female.wav",
+                        result);
                 } else {
-                    playToneBlocking("success".equals(result) ? soundMode : "error");
+                    playToneBlocking("success".equals(result) ? "feedback-success" : "feedback-error");
                 }
             }
         });
@@ -508,9 +511,16 @@ final class PdaBridgeServer {
         ToneGenerator tone = null;
         try {
             tone = new ToneGenerator(AudioManager.STREAM_MUSIC, 85);
-            if ("error".equals(mode)) {
-                tone.startTone(ToneGenerator.TONE_CDMA_ABBR_ALERT, 300);
-                SystemClock.sleep(325L);
+            if ("feedback-error".equals(mode) || "error".equals(mode)) {
+                for (int index = 0; index < 3; index++) {
+                    tone.startTone(ToneGenerator.TONE_PROP_NACK, 105);
+                    SystemClock.sleep(120L);
+                    tone.stopTone();
+                    if (index < 2) SystemClock.sleep(55L);
+                }
+            } else if ("feedback-success".equals(mode)) {
+                tone.startTone(ToneGenerator.TONE_PROP_ACK, 90);
+                SystemClock.sleep(105L);
             } else if ("double".equals(mode)) {
                 tone.startTone(ToneGenerator.TONE_PROP_BEEP, 95);
                 SystemClock.sleep(125L);
@@ -529,7 +539,7 @@ final class PdaBridgeServer {
         }
     }
 
-    private static void playVoiceBlocking(String assetName) {
+    private static void playVoiceBlocking(String assetName, String result) {
         Context context = appContext;
         if (context == null) return;
         File cached = new File(context.getCacheDir(), assetName);
@@ -541,7 +551,7 @@ final class PdaBridgeServer {
                 while ((count = input.read(buffer)) >= 0) output.write(buffer, 0, count);
             } catch (Exception error) {
                 Log.w(TAG, "Could not cache voice asset " + assetName, error);
-                playToneBlocking("error");
+                playToneBlocking("success".equals(result) ? "feedback-success" : "feedback-error");
                 return;
             }
         }
