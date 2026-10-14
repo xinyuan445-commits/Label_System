@@ -13,6 +13,12 @@ namespace U8Gateway.UserpcoBridge
         public string VoucherId { get; set; }
     }
 
+    public sealed class UserpcoStateResult
+    {
+        public bool Succeeded { get; set; }
+        public string Error { get; set; }
+    }
+
     public static class UserpcoWriter
     {
         public static UserpcoInsertResult Insert(
@@ -57,6 +63,72 @@ namespace U8Gateway.UserpcoBridge
             finally
             {
                 Release(message);
+                Release(connection);
+            }
+        }
+
+        public static UserpcoStateResult ChangeState(
+            object voucher,
+            string voucherType,
+            object voucherId,
+            bool verify)
+        {
+            if (voucher == null) throw new ArgumentNullException(nameof(voucher));
+
+            string error = string.Empty;
+            Connection connection = null;
+            object timestamp = null;
+            IXMLDOMDocument2 message = null;
+            bool check = true;
+            bool beforeCheckStock = true;
+            bool list = false;
+            VBA.Collection makeWheres = null;
+            string webXml = string.Empty;
+            Scripting.Dictionary generatedVoucherIds = null;
+            try
+            {
+                bool succeeded;
+                if (verify)
+                {
+                    succeeded = ((VoucherCO)voucher).Verify(
+                        voucherType,
+                        voucherId,
+                        ref error,
+                        ref connection,
+                        ref timestamp,
+                        ref message,
+                        ref check,
+                        ref beforeCheckStock,
+                        ref list,
+                        ref makeWheres,
+                        ref webXml,
+                        ref generatedVoucherIds);
+                }
+                else
+                {
+                    succeeded = ((VoucherCO)voucher).UnVerify(
+                        voucherType,
+                        voucherId,
+                        ref error,
+                        ref connection,
+                        ref timestamp,
+                        ref message,
+                        ref check,
+                        ref beforeCheckStock,
+                        ref list);
+                }
+                return new UserpcoStateResult
+                {
+                    Succeeded = succeeded,
+                    Error = error
+                };
+            }
+            finally
+            {
+                Release(generatedVoucherIds);
+                Release(makeWheres);
+                Release(message);
+                Release(timestamp);
                 Release(connection);
             }
         }

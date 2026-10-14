@@ -612,17 +612,20 @@ namespace U8Gateway.U8.Documents
             }
 
             string nativeMessage = null;
+            bool nativeRejected = false;
             Exception nativeException = null;
             try
             {
                 if (string.Equals(execution.Profile.Component, "USERPCO",
                     StringComparison.OrdinalIgnoreCase))
                 {
-                    nativeMessage = ChangeInventoryState(
+                    NativeStateChangeResult native = ChangeInventoryState(
                         options.U8,
                         execution.Profile,
                         voucherId.Value,
                         execution.Operation);
+                    nativeMessage = native.Message;
+                    nativeRejected = !native.Succeeded;
                 }
                 else if (string.Equals(execution.Profile.Component, "VoucherCO_PU",
                     StringComparison.OrdinalIgnoreCase))
@@ -675,11 +678,20 @@ namespace U8Gateway.U8.Documents
             }
             if (nativeException != null)
             {
+                string detail = InnermostMessage(nativeException);
                 throw new InvalidOperationException(
                     confirmed
-                        ? "U8 状态已变化，但 CO 返回异常，需要人工核对。"
-                        : "U8 操作返回异常且回查未确认。",
+                        ? "U8 状态已变化，但 CO 返回异常，需要人工核对：" + detail
+                        : "U8 操作返回异常且回查未确认：" + detail,
                     nativeException);
+            }
+            if (nativeRejected)
+            {
+                return Failure(
+                    verifying ? "U8_VERIFY_REJECTED" :
+                    unverifying ? "U8_UNVERIFY_REJECTED" : "U8_DELETE_REJECTED",
+                    Empty(nativeMessage, "U8 拒绝执行该操作。"),
+                    execution.VoucherCode);
             }
             return Failure(
                 "U8_WRITE_NOT_CONFIRMED",
@@ -688,7 +700,7 @@ namespace U8Gateway.U8.Documents
                 false);
         }
 
-        private static string ChangeInventoryState(
+        private static NativeStateChangeResult ChangeInventoryState(
             U8ConnectionOptions options,
             U8DocumentProfile profile,
             long voucherId,
@@ -708,19 +720,30 @@ namespace U8Gateway.U8.Documents
                 string error = string.Empty;
                 if (!native.IniLogin(login, ref error))
                 {
-                    throw new InvalidOperationException(Empty(error, "USERPCO 初始化失败。"));
+                    return NativeStateChangeResult.Rejected(
+                        Empty(error, "USERPCO 初始化失败。"));
                 }
                 object id = voucherId;
                 bool succeeded;
                 if (string.Equals(operation, DocumentOperationCodes.Verify,
                     StringComparison.OrdinalIgnoreCase))
                 {
-                    succeeded = native.Verify(profile.ComponentDocumentType, id, ref error);
+                    UserpcoStateResult result = UserpcoWriter.ChangeState(
+                        voucher,
+                        profile.ComponentDocumentType,
+                        id,
+                        true);
+                    return new NativeStateChangeResult(result.Succeeded, result.Error);
                 }
                 else if (string.Equals(operation, DocumentOperationCodes.Unverify,
                     StringComparison.OrdinalIgnoreCase))
                 {
-                    succeeded = native.UnVerify(profile.ComponentDocumentType, id, ref error);
+                    UserpcoStateResult result = UserpcoWriter.ChangeState(
+                        voucher,
+                        profile.ComponentDocumentType,
+                        id,
+                        false);
+                    return new NativeStateChangeResult(result.Succeeded, result.Error);
                 }
                 else
                 {
@@ -738,13 +761,13 @@ namespace U8Gateway.U8.Documents
                         string.Empty);
                     if (!loaded)
                     {
-                        throw new InvalidOperationException(
+                        return NativeStateChangeResult.Rejected(
                             Empty(error, "删除前加载 U8 单据失败。"));
                     }
                     object timestamp = FirstAttribute(Xml(head), "ufts");
                     if (timestamp == null)
                     {
-                        throw new InvalidOperationException("U8 单据缺少并发时间戳。");
+                        return NativeStateChangeResult.Rejected("U8 单据缺少并发时间戳。");
                     }
                     succeeded = native.Delete(
                         profile.ComponentDocumentType,
@@ -755,9 +778,10 @@ namespace U8Gateway.U8.Documents
                 }
                 if (!succeeded)
                 {
-                    throw new InvalidOperationException(Empty(error, "USERPCO 操作失败。"));
+                    return NativeStateChangeResult.Rejected(
+                        Empty(error, "USERPCO 操作失败。"));
                 }
-                return error;
+                return NativeStateChangeResult.Accepted(error);
             }
             finally
             {
@@ -769,6 +793,16 @@ namespace U8Gateway.U8.Documents
                 Release(voucher);
                 Release(login);
             }
+        }
+
+        private static string InnermostMessage(Exception exception)
+        {
+            Exception current = exception;
+            while (current.InnerException != null)
+            {
+                current = current.InnerException;
+            }
+            return Empty(current.Message, exception.Message);
         }
 
         private static string FirstAttribute(string xml, string name)
@@ -1518,6 +1552,28 @@ namespace U8Gateway.U8.Documents
             public bool Exists { get; set; }
             public bool Verified { get; set; }
             public string Version { get; set; }
+        }
+
+        private sealed class NativeStateChangeResult
+        {
+            public NativeStateChangeResult(bool succeeded, string message)
+            {
+                Succeeded = succeeded;
+                Message = message;
+            }
+
+            public bool Succeeded { get; }
+            public string Message { get; }
+
+            public static NativeStateChangeResult Accepted(string message)
+            {
+                return new NativeStateChangeResult(true, message);
+            }
+
+            public static NativeStateChangeResult Rejected(string message)
+            {
+                return new NativeStateChangeResult(false, message);
+            }
         }
 
     }

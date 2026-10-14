@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 
@@ -104,10 +106,13 @@ public sealed class MaterialOutboundExecutionService(
             return false;
         }
 
-        var approvalRequestId = $"{item.Operation.ClientRequestId}:auto-audit";
+        var approvalAttempt = await executionRepository.GetNextApprovalAttemptAsync(
+            item.Operation.Id, cancellationToken);
+        var approvalRequestId = ApprovalRequestId(
+            item.Operation.ClientRequestId, approvalAttempt);
         var approvalRequest = new GatewayDocumentRequest(
             approvalRequestId,
-            item.Operation.OperatorId,
+            item.Request.OperatorId,
             item.Request.OperatorName,
             item.Request.DeviceId,
             item.Request.DeviceModel,
@@ -314,6 +319,17 @@ public sealed class MaterialOutboundExecutionService(
         }
         throw new ApiException(StatusCodes.Status409Conflict,
             "ARCHIVE_LINE_MISMATCH", "操作凭证与业务明细不一致，需要核对。");
+    }
+
+    private static string ApprovalRequestId(string clientRequestId, int attempt)
+    {
+        var value = attempt == 1
+            ? $"{clientRequestId}:auto-audit"
+            : $"{clientRequestId}:auto-audit:{attempt}";
+        if (value.Length <= 64) return value;
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))
+            .ToLowerInvariant();
+        return $"audit-{hash[..58]}";
     }
 
     private static NormalizedRequest Normalize(JsonElement payload)

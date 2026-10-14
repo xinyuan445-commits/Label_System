@@ -278,6 +278,22 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public async Task<int> GetNextApprovalAttemptAsync(
+        long operationId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand("""
+            SELECT COUNT(*)+1
+            FROM dbo.business_operation_event
+            WHERE operation_id=@id
+              AND event_type IN ('APPROVAL_FAILED','APPROVAL_RECONCILIATION');
+            """, connection);
+        command.Parameters.Add("@id", SqlDbType.BigInt).Value = operationId;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
     public async Task MarkApprovalFailureAsync(
         MaterialOutboundExecutionOperation operation,
         string code,
