@@ -201,7 +201,10 @@ namespace U8Gateway.U8.Documents
                 }
 
                 head = ParseXml(
-                    SetFirstRowAttribute(packet.HeaderXml, "ccode", voucherCode.Trim()),
+                    SetFirstRowAttribute(
+                        packet.HeaderXml,
+                        CodeColumn(execution.Profile.DocumentType),
+                        voucherCode.Trim()),
                     "表头");
                 body = ParseXml(packet.BodyXml, "表体");
                 position = new DOMDocument26Class();

@@ -990,14 +990,30 @@ public sealed class MaterialOutboundExecutionRepository(
         CancellationToken cancellationToken)
     {
         await using var active = new SqlCommand("""
-            SELECT COUNT(*) FROM dbo.business_operation
-            WHERE submission_group_id=@group_id
-              AND status IN ('DRAFT','PENDING','WRITING_ERP','PENDING_APPROVAL','NEEDS_RECONCILIATION');
+            SELECT COUNT_BIG(1),
+                   SUM(CASE WHEN status IN
+                       ('DRAFT','PENDING','WRITING_ERP','PENDING_APPROVAL','NEEDS_RECONCILIATION')
+                       THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN status='FAILED' THEN 1 ELSE 0 END)
+            FROM dbo.business_operation
+            WHERE submission_group_id=@group_id;
             """, connection, transaction);
         active.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = groupId;
-        if (Convert.ToInt32(await active.ExecuteScalarAsync(cancellationToken)) != 0) return;
+        long total;
+        long activeCount;
+        long failedCount;
+        await using (var reader = await active.ExecuteReaderAsync(cancellationToken))
+        {
+            if (!await reader.ReadAsync(cancellationToken)) return;
+            total = reader.GetInt64(0);
+            activeCount = reader.IsDBNull(1) ? 0 : reader.GetInt32(1);
+            failedCount = reader.IsDBNull(2) ? 0 : reader.GetInt32(2);
+        }
+        if (total == 0 || activeCount != 0) return;
         await DocumentDraftLifecycle.SetStatusAsync(
-            connection, transaction, groupId, "COMPLETED", userId, requestId, cancellationToken);
+            connection, transaction, groupId,
+            total == failedCount ? "DRAFT" : "COMPLETED",
+            userId, requestId, cancellationToken);
     }
 
     private static async Task InsertEventAsync(
