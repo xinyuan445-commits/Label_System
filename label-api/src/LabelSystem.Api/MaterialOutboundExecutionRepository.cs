@@ -155,6 +155,56 @@ public sealed class MaterialOutboundExecutionRepository(
         await transaction.CommitAsync(cancellationToken);
     }
 
+    public async Task BeginReconciliationAsync(
+        MaterialOutboundExecutionOperation operation,
+        int lockMinutes,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+        await using (var command = new SqlCommand("""
+            UPDATE dbo.business_operation
+            SET status='WRITING_ERP',erp_status='WRITING',
+                heartbeat_at=DATEADD(HOUR,8,SYSUTCDATETIME()),
+                lock_expires_at=DATEADD(MINUTE,@minutes,DATEADD(HOUR,8,SYSUTCDATETIME())),
+                error_code=NULL,error_message=NULL,
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE id=@id AND submission_group_id=@group_id AND operator_id=@user_id
+              AND status='NEEDS_RECONCILIATION' AND erp_status='UNKNOWN';
+            """, connection, transaction))
+        {
+            command.Parameters.Add("@minutes", SqlDbType.Int).Value = Math.Clamp(lockMinutes, 1, 120);
+            command.Parameters.Add("@id", SqlDbType.BigInt).Value = operation.Id;
+            command.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = operation.SubmissionGroupId;
+            command.Parameters.Add("@user_id", SqlDbType.NVarChar, 100).Value = operation.OperatorId;
+            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new ApiException(StatusCodes.Status409Conflict,
+                    "OPERATION_NOT_RECONCILABLE", "业务操作当前不能核对。");
+        }
+        foreach (var line in operation.Lines)
+        {
+            if (line.ObjectType == "UNLABELED_MATERIAL") continue;
+            var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
+            var id = line.LabelId ?? line.PalletId ?? 0;
+            await using var lockCheck = new SqlCommand(
+                $"SELECT locked_operation_id FROM dbo.{table} WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;",
+                connection, transaction);
+            lockCheck.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+            var lockedBy = await lockCheck.ExecuteScalarAsync(cancellationToken);
+            if (lockedBy is null || lockedBy == DBNull.Value ||
+                Convert.ToInt64(lockedBy) != operation.RootOperationId)
+                throw new ApiException(StatusCodes.Status409Conflict,
+                    "INVENTORY_LOCK_CHANGED", "标签占用状态已变化，需要人工核对。");
+        }
+        await InsertEventAsync(connection, transaction, operation.Id,
+            "RECONCILIATION_STARTED", "INFO", requestId,
+            "使用原幂等编号核对 U8 结果。", cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public async Task CompleteAsync(
         MaterialOutboundExecutionOperation operation,
         GatewayDocumentResult result,
@@ -421,14 +471,14 @@ public sealed class MaterialOutboundExecutionRepository(
         CancellationToken cancellationToken)
     {
         const string ruleSql = """
-            SELECT TOP (1) version.id, version.spec_json
-            FROM dbo.label_code_rule rule WITH (UPDLOCK,HOLDLOCK)
-            INNER JOIN dbo.label_code_rule_version version WITH (UPDLOCK,HOLDLOCK)
-                ON version.rule_id=rule.id AND version.version_status='ACTIVE'
-            WHERE rule.is_enabled=1
-              AND rule.object_type IN ('PRODUCT_LABEL','INVENTORY_OBJECT')
-            ORDER BY CASE WHEN rule.object_type='PRODUCT_LABEL' THEN 0 ELSE 1 END,
-                     rule.priority,rule.id;
+            SELECT TOP (1) [version].id, [version].spec_json
+            FROM dbo.label_code_rule AS [rule] WITH (UPDLOCK,HOLDLOCK)
+            INNER JOIN dbo.label_code_rule_version AS [version] WITH (UPDLOCK,HOLDLOCK)
+                ON [version].rule_id=[rule].id AND [version].version_status='ACTIVE'
+            WHERE [rule].is_enabled=1
+              AND [rule].object_type IN ('PRODUCT_LABEL','INVENTORY_OBJECT')
+            ORDER BY CASE WHEN [rule].object_type='PRODUCT_LABEL' THEN 0 ELSE 1 END,
+                     [rule].priority,[rule].id;
             """;
         long ruleVersionId;
         string specJson;

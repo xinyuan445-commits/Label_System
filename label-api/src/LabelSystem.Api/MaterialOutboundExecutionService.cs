@@ -54,16 +54,40 @@ public sealed class MaterialOutboundExecutionService(
                 if (!await ApproveAsync(item, null, requestId, cancellationToken)) break;
                 continue;
             }
-            if (item.Operation.Status != "PENDING" || item.Operation.ErpStatus != "PENDING")
+            var reconciling = item.Operation.Status == "NEEDS_RECONCILIATION" &&
+                              item.Operation.ErpStatus == "UNKNOWN";
+            var pending = item.Operation.Status == "PENDING" &&
+                          item.Operation.ErpStatus == "PENDING";
+            if (!pending && !reconciling)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "OPERATION_NOT_PENDING", "业务操作不能上传，需要先核对状态。");
-            await ValidateGatewayAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
-            await executionRepository.BeginAsync(
-                item.Operation, options.CurrentValue.LockMinutes, requestId, cancellationToken);
+            if (reconciling)
+            {
+                await executionRepository.BeginReconciliationAsync(
+                    item.Operation, options.CurrentValue.LockMinutes, requestId, cancellationToken);
+            }
+            else
+            {
+                await ValidateGatewayAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
+                await executionRepository.BeginAsync(
+                    item.Operation, options.CurrentValue.LockMinutes, requestId, cancellationToken);
+            }
             try
             {
                 var result = await gateway.CreateDocumentAsync(
                     item.Operation.ErpDocumentType, item.Request, cancellationToken);
+                if (result.Document is not { ValueKind: JsonValueKind.Object } &&
+                    !string.IsNullOrWhiteSpace(result.VoucherCode))
+                {
+                    var queried = await gateway.GetDocumentAsync(
+                        item.Operation.ErpDocumentType, result.VoucherCode, cancellationToken);
+                    result = queried with
+                    {
+                        VoucherId = result.VoucherId ?? queried.VoucherId,
+                        VoucherCode = result.VoucherCode ?? queried.VoucherCode,
+                        Version = result.Version ?? queried.Version
+                    };
+                }
                 var rows = ReadErpRows(item.Operation.ErpDocumentType, result.Document);
                 EnsureErpRows(item.Operation, rows);
                 await executionRepository.CompleteAsync(

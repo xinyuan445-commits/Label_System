@@ -235,6 +235,58 @@ public sealed class U8GatewayClient(
         }
     }
 
+    public async Task<GatewayDocumentResult> GetDocumentAsync(
+        string documentType,
+        string voucherCode,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var message = CreateRequest(
+                HttpMethod.Get,
+                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}/{Uri.EscapeDataString(voucherCode)}");
+            using var response = await Client().SendAsync(message, cancellationToken);
+            var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<GatewayDocumentResult>>(
+                JsonOptions, cancellationToken);
+            if (response.IsSuccessStatusCode && envelope?.Success == true &&
+                envelope.Data is { Confirmed: true } result)
+                return result;
+            throw new GatewayWriteException(
+                (int)response.StatusCode,
+                envelope?.Code ?? "U8_DOCUMENT_QUERY_FAILED",
+                envelope?.Message ?? "U8 单据回查失败。",
+                true);
+        }
+        catch (GatewayWriteException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status504GatewayTimeout,
+                "U8_DOCUMENT_QUERY_TIMEOUT",
+                "U8 单据回查超时，需要核对。",
+                true);
+        }
+        catch (HttpRequestException)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status503ServiceUnavailable,
+                "U8_GATEWAY_UNAVAILABLE",
+                "U8 服务暂时不可用。",
+                true);
+        }
+        catch (JsonException)
+        {
+            throw new GatewayWriteException(
+                StatusCodes.Status502BadGateway,
+                "U8_GATEWAY_RESPONSE_INVALID",
+                "U8 服务返回异常。",
+                true);
+        }
+    }
+
     public async Task<GatewayDocumentResult> VerifyDocumentAsync(
         string documentType,
         string voucherCode,
