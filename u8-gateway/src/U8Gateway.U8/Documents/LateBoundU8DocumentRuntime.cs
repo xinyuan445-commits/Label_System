@@ -723,7 +723,7 @@ namespace U8Gateway.U8.Documents
                     return NativeStateChangeResult.Rejected(
                         Empty(error, "USERPCO 初始化失败。"));
                 }
-                object id = voucherId;
+                object id = checked((int)voucherId);
                 bool succeeded;
                 if (string.Equals(operation, DocumentOperationCodes.Verify,
                     StringComparison.OrdinalIgnoreCase))

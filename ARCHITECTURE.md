@@ -1357,6 +1357,7 @@ APK 上线前还必须满足：
 ### 2026-10-14 自动审核失败边界修正
 
 - 决定：库存类审核和弃审改由 `U8Gateway.UserpcoBridge` 按 USERPCO 完整参数签名调用，避免动态调用遗漏可选引用参数。
+- 决定：USERPCO 的 Variant 单据 ID 按 U8 当前 32 位主键范围封送为 `Int32`，禁止直接传递 VB6 Automation 不支持的 .NET `Int64`。
 - 决定：U8 返回 `false` 且回查状态未变化时属于明确拒绝，保留 U8 原始消息并返回 `U8_VERIFY_REJECTED` / `U8_UNVERIFY_REJECTED`；只有 COM 异常或调用后状态无法确认时进入待核对。
 - 决定：继续审核使用递增的审核幂等编号；新增幂等编号保持不变，因此任何审核重试都不会再次新增 ERP 单据。
 - 影响：Gateway 更新为 `0.5.3`，Business API 更新为 `0.8.6`；数据库结构、H5 和 APK 不变。
