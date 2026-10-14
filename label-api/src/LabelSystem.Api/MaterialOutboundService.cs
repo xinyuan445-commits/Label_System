@@ -6,6 +6,7 @@ namespace LabelSystem.Api;
 public sealed class MaterialOutboundService(
     LabelSystemRepository settings,
     MaterialOutboundRepository operations,
+    ManualReturnValidationService manualReturns,
     U8GatewayClient u8,
     OperationArchiveService archive,
     IOptionsMonitor<LabelSystemOptions> options)
@@ -33,10 +34,21 @@ public sealed class MaterialOutboundService(
             "reason_required", null, false, cancellationToken);
         if (reasonRequired && string.IsNullOrWhiteSpace(request.Reason))
             throw new ApiException(StatusCodes.Status400BadRequest, "REASON_REQUIRED", "请输入原因。");
+        var manual = request.Lines.Where(line => line.ObjectType == "UNLABELED_MATERIAL").ToArray();
+        if (manual.Length > 0 && string.IsNullOrWhiteSpace(request.Reason))
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "RETURN_REASON_REQUIRED", "请输入退料原因。");
+        await manualReturns.ValidateAsync(
+            manual.Select(line => new ManualReturnValidationLine(
+                line.MaterialCode, line.UnitCode, line.RequestedQty,
+                line.BatchNo, line.WarehouseCode, line.LocationCode)).ToArray(),
+            manual.FirstOrDefault()?.SourceDocumentNo ?? request.ClientRequestId,
+            cancellationToken);
 
         var requirements = await u8.GetMaterialRequirementsAsync(
             request.Lines.Select(line => line.SourceLineId).Distinct().ToArray(), cancellationToken);
-        await ValidateRequirementsAsync(request.Lines, requirements, cancellationToken);
+        await ValidateRequirementsAsync(
+            request.Lines, requirements, request.DocumentDirection, cancellationToken);
 
         var payloadJson = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var payloadHash = Hashing.Sha256(payloadJson);
@@ -59,6 +71,7 @@ public sealed class MaterialOutboundService(
     private async Task ValidateRequirementsAsync(
         IReadOnlyList<MaterialOutboundAllocationRequest> lines,
         IReadOnlyList<MaterialRequirementLine> requirements,
+        string documentDirection,
         CancellationToken cancellationToken)
     {
         var byId = requirements.ToDictionary(line => line.RequirementId);
@@ -79,10 +92,21 @@ public sealed class MaterialOutboundService(
         foreach (var group in lines.GroupBy(line => line.RequirementId))
         {
             var normal = group.Sum(line => line.NormalQty);
-            var available = byId[group.Key].RemainingQuantity;
+            var available = documentDirection == "RED"
+                ? byId[group.Key].IssuedQuantity
+                : byId[group.Key].RemainingQuantity;
             if (normal - available > QuantityTolerance)
                 throw new ApiException(StatusCodes.Status409Conflict,
-                    "NORMAL_ISSUE_EXCEEDED", "领料数量超过可领数量。");
+                    documentDirection == "RED" ? "RETURN_QUANTITY_EXCEEDED" : "NORMAL_ISSUE_EXCEEDED",
+                    documentDirection == "RED" ? "退料数量超过原单已领数量。" : "领料数量超过可领数量。");
+        }
+
+        if (documentDirection == "RED")
+        {
+            if (lines.Any(line => line.OverQty > 0))
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "RETURN_OVER_ISSUE_INVALID", "红字退料不能使用超领数量。");
+            return;
         }
 
         var allowOverIssue = await settings.GetBooleanSettingAsync(
@@ -151,7 +175,7 @@ public sealed class MaterialOutboundService(
             DocumentAdditionalFields.Validate(line.AdditionalFields);
             DocumentAdditionalFields.ValidateRequired(
                 line.AdditionalFields, requiredFields, "body.", MappedBodyFields);
-            if (line.ObjectType is not ("PRODUCT_LABEL" or "PALLET") ||
+            if (line.ObjectType is not ("PRODUCT_LABEL" or "PALLET" or "UNLABELED_MATERIAL") ||
                 string.IsNullOrWhiteSpace(line.LabelCode) ||
                 line.LabelCode.Length > 100 ||
                 !string.Equals(line.SourceType, "production-order", StringComparison.OrdinalIgnoreCase) ||
@@ -164,6 +188,9 @@ public sealed class MaterialOutboundService(
             {
                 throw new ApiException(StatusCodes.Status400BadRequest, "LINE_INVALID", "明细内容无效。");
             }
+            if (line.ObjectType == "UNLABELED_MATERIAL" && request.DocumentDirection != "RED")
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "UNLABELED_RETURN_NOT_SUPPORTED", "无标签录入只用于红字材料出库单。");
             if (line.ObjectType == "PALLET" && line.RequestedQty != 1)
                 throw new ApiException(StatusCodes.Status400BadRequest, "PALLET_QUANTITY_INVALID", "托盘数量必须为 1。");
         }

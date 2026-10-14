@@ -11,10 +11,13 @@ import {
 
 interface SubmissionLine {
   labelCode: string
-  objectType: 'PRODUCT_LABEL' | 'PALLET'
+  objectType: 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
   sourcePalletCode?: string
   materialCode: string
+  materialName?: string
+  batchNo?: string
   unitCode: string
+  locationCode?: string
   requirementId: number
   sourceLineId: number
   sourceLineNo: number | null
@@ -27,6 +30,7 @@ interface SubmissionLine {
 interface SubmissionGroup {
   sourceDocumentId: number
   sourceDocumentNo: string
+  warehouseCode: string
   lines: SubmissionLine[]
 }
 
@@ -120,6 +124,10 @@ function createPrepareLines(payload: MaterialOutboundPayload) {
     overQty: line.overQty,
     remark: payload.remark || null,
     additionalFields: line.fieldValues ?? {},
+    materialName: line.materialName || null,
+    batchNo: line.batchNo || null,
+    warehouseCode: group.warehouseCode || null,
+    locationCode: line.locationCode || null,
   })))
 }
 

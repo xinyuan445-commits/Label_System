@@ -10,7 +10,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         long? LabelId,
         long? PalletId,
         long? SourcePalletId,
-        decimal InventoryQty,
+        decimal? InventoryQty,
         string BatchNo,
         string WarehouseCode,
         string LocationCode);
@@ -596,7 +596,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                     line, product.Id, null, product.PalletId, product.CurrentQty,
                     product.BatchNo, product.WarehouseCode, product.LocationCode));
             }
-            else
+            else if (line.ObjectType == "PALLET")
             {
                 var pallet = pallets[line.LabelCode.Trim()];
                 if (!string.Equals(pallet.Line.MaterialCode, line.MaterialCode, StringComparison.OrdinalIgnoreCase))
@@ -609,6 +609,14 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                     line, null, pallet.Id, null, pallet.Line.AvailableQty,
                     pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode));
             }
+            else
+            {
+                result.Add(new ResolvedLine(
+                    line, null, null, null, null,
+                    line.BatchNo?.Trim() ?? string.Empty,
+                    line.WarehouseCode?.Trim() ?? string.Empty,
+                    line.LocationCode?.Trim() ?? string.Empty));
+            }
         }
         return result.ToArray();
     }
@@ -619,8 +627,9 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                      ObjectType: line.Request.ObjectType,
                      LabelCode: line.Request.LabelCode.ToUpperInvariant())))
         {
+            if (group.Key.ObjectType == "UNLABELED_MATERIAL") continue;
             var requested = group.Sum(line => line.Request.RequestedQty);
-            var available = group.First().InventoryQty;
+            var available = group.First().InventoryQty ?? 0m;
             if (requested > available)
                 throw new ApiException(StatusCodes.Status409Conflict, "LABEL_QUANTITY_INSUFFICIENT", $"标签数量不足：{group.Key.LabelCode}");
             if (group.Key.ObjectType == "PALLET" && requested != 1)
@@ -752,12 +761,21 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
             command.Parameters.Add("@label_id", SqlDbType.BigInt).Value = line.LabelId.HasValue ? line.LabelId.Value : DBNull.Value;
             command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = line.PalletId.HasValue ? line.PalletId.Value : DBNull.Value;
             command.Parameters.Add("@selection_source", SqlDbType.VarChar, 20).Value =
-                line.SourcePalletId.HasValue || line.PalletId.HasValue ? "PALLET_SCAN" : "LABEL_SCAN";
+                line.LabelId.HasValue
+                    ? line.SourcePalletId.HasValue ? "PALLET_SCAN" : "LABEL_SCAN"
+                    : line.PalletId.HasValue ? "PALLET_SCAN" : DBNull.Value;
             command.Parameters.Add("@source_pallet_id", SqlDbType.BigInt).Value =
                 line.SourcePalletId.HasValue ? line.SourcePalletId.Value : DBNull.Value;
-            command.Parameters.Add("@inventory_qty", SqlDbType.Decimal).Value = line.InventoryQty;
-            command.Parameters["@inventory_qty"].Precision = 18;
-            command.Parameters["@inventory_qty"].Scale = 6;
+            if (line.InventoryQty.HasValue)
+            {
+                command.Parameters.Add("@inventory_qty", SqlDbType.Decimal).Value = line.InventoryQty.Value;
+                command.Parameters["@inventory_qty"].Precision = 18;
+                command.Parameters["@inventory_qty"].Scale = 6;
+            }
+            else
+            {
+                command.Parameters.Add("@inventory_qty", SqlDbType.Decimal).Value = DBNull.Value;
+            }
             command.Parameters.Add("@source_line_id", SqlDbType.NVarChar, 100).Value = line.Request.SourceLineId.ToString();
             command.Parameters.Add("@source_line_no", SqlDbType.NVarChar, 50).Value =
                 line.Request.SourceLineNo.HasValue ? line.Request.SourceLineNo.Value.ToString() : DBNull.Value;

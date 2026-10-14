@@ -80,6 +80,7 @@ export function allocateMaterialScans(
   requirements: MaterialRequirementLine[],
   allowOverIssue: boolean,
   overIssueTargets: Record<string, number>,
+  quantityBasis: 'remaining' | 'issued' = 'remaining',
 ): Record<string, AllocatedMaterialScanLine> {
   const result: Record<string, AllocatedMaterialScanLine> = {}
   const requirementGroups = new Map<string, MaterialRequirementLine[]>()
@@ -99,7 +100,10 @@ export function allocateMaterialScans(
 
   const remaining = new Map<number, number>()
   for (const requirement of requirements) {
-    remaining.set(requirement.requirementId, qty(requirement.remainingQuantity))
+    remaining.set(
+      requirement.requirementId,
+      qty(quantityBasis === 'issued' ? requirement.issuedQuantity : requirement.remainingQuantity),
+    )
   }
 
   for (const line of lines) {

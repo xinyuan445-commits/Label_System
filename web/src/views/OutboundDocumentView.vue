@@ -261,8 +261,9 @@ const allocationByLine = computed(() =>
     ? allocateMaterialScans(
         lines.value,
         materialRequirements.value,
-        documentPolicy.value.allowOverIssue,
+        documentDirection.value === 'BLUE' && documentPolicy.value.allowOverIssue,
         overIssueTargets.value,
+        documentDirection.value === 'RED' ? 'issued' : 'remaining',
       )
     : {},
 )
@@ -279,7 +280,7 @@ function materialProgressFor(line: OutboundLine) {
 }
 
 function materialPickingComplete(line: OutboundLine): boolean {
-  if (!selectedSourceLines.value.length) return false
+  if (documentDirection.value !== 'BLUE' || !selectedSourceLines.value.length) return false
   const progress = materialProgressFor(line)
   return Boolean(progress && progress.remainingQty > 0 &&
     progress.scannedQty >= progress.remainingQty && progress.unallocatedQty <= 0)
@@ -289,7 +290,8 @@ function lineOverIssueQty(line: OutboundLine): number {
   return (allocationByLine.value[line.id]?.allocations ?? [])
     .reduce((total, allocation) => total + Number(allocation.overQty), 0)
 }
-const unresolvedOverIssueLines = computed(() => documentPolicy.value.allowOverIssue
+const unresolvedOverIssueLines = computed(() =>
+  documentDirection.value === 'BLUE' && documentPolicy.value.allowOverIssue
   ? lines.value.filter((line) => allocationByLine.value[line.id]?.requiresOverIssueTarget)
   : [],
 )
@@ -317,7 +319,9 @@ const totalQty = computed(() =>
 const showHeaderForm = computed(() => currentStep.value === 1)
 const showScanContent = computed(() => currentStep.value === 2)
 const sourceDetailButtonLabel = computed(() =>
-  props.documentType === 'material-outbound' ? '领料明细' : '源单明细',
+  props.documentType === 'material-outbound'
+    ? documentDirection.value === 'RED' ? '退料明细' : '领料明细'
+    : '源单明细',
 )
 const returnRouteName = computed(() =>
   route.query.origin === 'all-functions' ? 'all-functions' : 'home',
@@ -488,7 +492,10 @@ function locationNameFor(warehouse: string, code: string, snapshotName = ''): st
 
 function bodyDisplayValue(line: OutboundLine, key: string): string | number {
   const value = bodyValue(line, key)
-  if (key === 'body.objectType') return value === 'PALLET' ? '托盘' : '标签'
+  if (key === 'body.objectType') {
+    if (value === 'PALLET') return '托盘'
+    return value === 'UNLABELED_MATERIAL' ? '无标签物料' : '标签'
+  }
   if (key === 'body.materialName') return materialNameFor(line) || '--'
   if (key === 'body.unitCode') return line.unitName || line.unitCode || '--'
   if (key === 'body.warehouseCode') {
@@ -572,6 +579,32 @@ function updateOverIssueQuantity(event: Event): void {
   editingLine.value.requestedQty = raw === '' ? 0 : Number(raw)
 }
 
+function keepEditorInputVisible(event: FocusEvent): void {
+  const input = event.currentTarget as HTMLElement | null
+  if (!input) return
+  const reveal = () => {
+    const editor = input.closest<HTMLElement>('.line-editor-page')
+    if (!editor) return
+    const viewport = window.visualViewport
+    if (!viewport) {
+      input.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      return
+    }
+    const viewportTop = viewport?.offsetTop ?? 0
+    const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight)
+    const rect = input.getBoundingClientRect()
+    const visibleTop = viewportTop + 76
+    const visibleBottom = viewportBottom - 104
+    if (rect.bottom > visibleBottom) {
+      editor.scrollTop += rect.bottom - visibleBottom + 18
+    } else if (rect.top < visibleTop) {
+      editor.scrollTop -= visibleTop - rect.top + 12
+    }
+  }
+  window.setTimeout(reveal, 80)
+  window.setTimeout(reveal, 320)
+}
+
 function updateEditorWarehouse(value: string): void {
   updateEditorField('body.warehouseCode', value)
   const valid = new Set(editorLocationSelectOptions.value.map((item) => item.value))
@@ -624,7 +657,7 @@ function lineEditError(line: OutboundLine): string {
     !materialRequirements.value.some((item) =>
       item.materialCode.localeCompare(line.materialCode, undefined, { sensitivity: 'accent' }) === 0,
     )
-  ) return '该物料不在领料范围'
+  ) return documentDirection.value === 'RED' ? '该物料不在退料范围' : '该物料不在领料范围'
   if (
     props.documentType !== 'material-outbound' && selectedSourceLines.value.length > 0 &&
     !selectedSourceLines.value.some((item) =>
@@ -823,7 +856,10 @@ function remainingDemandByMaterial(): Map<string, number> {
   const remaining = new Map<string, number>()
   for (const requirement of materialRequirements.value) {
     const key = materialKey(requirement.materialCode)
-    remaining.set(key, normalizeQty((remaining.get(key) ?? 0) + requirement.remainingQuantity))
+    const available = documentDirection.value === 'RED'
+      ? requirement.issuedQuantity
+      : requirement.remainingQuantity
+    remaining.set(key, normalizeQty((remaining.get(key) ?? 0) + available))
   }
   for (const line of lines.value) {
     const key = materialKey(line.materialCode)
@@ -880,7 +916,7 @@ async function addBarcode(rawCode: string): Promise<void> {
         ),
       )
     ) {
-      notify('该物料不在领料范围', 'error')
+      notify(documentDirection.value === 'RED' ? '该物料不在退料范围' : '该物料不在领料范围', 'error')
       playScanFeedback('error')
       return
     }
@@ -905,7 +941,8 @@ async function addBarcode(rawCode: string): Promise<void> {
     const sourceRemaining = remainingDemandByMaterial()
     const useSourceRemainder = props.documentType === 'material-outbound' &&
       selectedSourceLines.value.length > 0
-    const allowOverIssue = useSourceRemainder && documentPolicy.value.allowOverIssue
+    const allowOverIssue = useSourceRemainder && documentDirection.value === 'BLUE' &&
+      documentPolicy.value.allowOverIssue
     const additions: OutboundLine[] = []
     let skippedSatisfied = 0
     for (const item of found) {
@@ -955,7 +992,9 @@ async function addBarcode(rawCode: string): Promise<void> {
       })
     }
     if (!additions.length) {
-      throw new Error(skippedSatisfied ? '该物料已拣足' : '没有可添加的标签')
+      throw new Error(skippedSatisfied
+        ? documentDirection.value === 'RED' ? '该物料没有可退数量' : '该物料已拣足'
+        : '没有可添加的标签')
     }
     if (
       documentPolicy.value.autoAddScannedDetail &&
@@ -987,11 +1026,10 @@ function handleScan(event: PdaScanEvent): void {
   void addBarcode(event.barcode)
 }
 
-function openManualReturn(): void {
+function prepareManualReturn(material: MaterialOption): void {
   manualEditingLineId.value = null
-  manualMaterialQuery.value = ''
   manualMaterialResults.value = []
-  manualMaterial.value = null
+  manualMaterial.value = material
   manualBatchNo.value = ''
   manualQuantity.value = null
   manualWarehouseCode.value = warehouseCode.value
@@ -1028,6 +1066,13 @@ function openLineEditor(line: OutboundLine): void {
 function closeManualReturn(): void {
   showManualReturn.value = false
   manualEditingLineId.value = null
+  manualMaterialQuery.value = ''
+  manualMaterialResults.value = []
+  manualMaterial.value = null
+  manualBatchNo.value = ''
+  manualQuantity.value = null
+  manualWarehouseCode.value = ''
+  manualLocationCode.value = ''
 }
 
 async function queryManualMaterials(): Promise<void> {
@@ -1036,9 +1081,11 @@ async function queryManualMaterials(): Promise<void> {
     const results = await searchMaterials(manualMaterialQuery.value)
     manualMaterialResults.value = selectedSourceLines.value.length
       ? results.filter((item) => materialRequirements.value.some((requirement) =>
-          materialKey(requirement.materialCode) === materialKey(item.code),
+          materialKey(requirement.materialCode) === materialKey(item.code) &&
+          (documentDirection.value !== 'RED' || requirement.issuedQuantity > 0),
         ))
       : results
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     if (!manualMaterialResults.value.length) notify('未找到物料', 'info')
   } catch (error) {
     notify(error instanceof Error ? error.message : '物料查询失败', 'error')
@@ -1048,9 +1095,8 @@ async function queryManualMaterials(): Promise<void> {
 }
 
 function selectManualMaterial(material: MaterialOption): void {
-  manualMaterial.value = material
   manualMaterialQuery.value = `${material.code} ${material.name}`
-  manualMaterialResults.value = []
+  prepareManualReturn(material)
 }
 
 function handleManualWarehouseChange(): void {
@@ -1472,6 +1518,7 @@ function validate(): string {
       selectedSourceLines.value.length > 0 &&
       materialSummaries.value.some((item) => item.unallocatedQty > 0)
     ) {
+      if (documentDirection.value === 'RED') return '退料数量超过原单已领数量'
       return documentPolicy.value.allowOverIssue ? '请选择超领产品' : '存在超过可领数量的物料'
     }
     if (documentSettings.value.globalOperation.reasonRequired && !remark.value.trim()) {
@@ -1892,12 +1939,35 @@ onBeforeRouteLeave((to) => {
           />
           <button type="button" @click="simulateOrAdd">添加</button>
         </div>
-        <button
-          v-if="documentType === 'material-outbound' && documentDirection === 'RED' && !selectedSourceLines.length"
-          class="manual-return-button"
-          type="button"
-          @click="openManualReturn"
-        >无标签退料</button>
+        <div
+          v-if="documentType === 'material-outbound' && documentDirection === 'RED'"
+          class="manual-return-search"
+        >
+          <div class="material-search-row">
+            <input
+              v-model="manualMaterialQuery"
+              autocomplete="off"
+              enterkeyhint="search"
+              placeholder="无标签退料：料号或名称"
+              @keyup.enter="queryManualMaterials"
+            />
+            <button type="button" :disabled="manualMaterialLoading" @click="queryManualMaterials">
+              {{ manualMaterialLoading ? '查询中' : '查询' }}
+            </button>
+          </div>
+          <div v-if="manualMaterialResults.length" class="material-search-results">
+            <button
+              v-for="material in manualMaterialResults"
+              :key="material.code"
+              type="button"
+              @click="selectManualMaterial(material)"
+            >
+              <strong>{{ material.code }}</strong>
+              <span>{{ material.name }}</span>
+              <small v-if="material.specification">{{ material.specification }}</small>
+            </button>
+          </div>
+        </div>
       </section>
 
       <section v-if="showScanContent" class="line-section">
@@ -1935,17 +2005,17 @@ onBeforeRouteLeave((to) => {
               <div v-if="line.unitCode"><dt>单位</dt><dd>{{ line.unitName || line.unitCode }}</dd></div>
               <div v-if="line.objectType !== 'UNLABELED_MATERIAL'"><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
               <div class="line-used-qty"><dt>{{ line.objectType === 'UNLABELED_MATERIAL' ? '退料数量' : '本标签使用' }}</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
-              <template v-if="selectedSourceLines.length && materialProgressFor(line)">
+              <template v-if="documentDirection === 'BLUE' && selectedSourceLines.length && materialProgressFor(line)">
                 <div><dt>需拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.remainingQty ?? 0) }}</dd></div>
                 <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.scannedQty ?? 0) }}</dd></div>
               </template>
             </dl>
-            <span v-if="lineOverIssueQty(line) > 0.000001" class="line-over-issue-stamp">
+            <span v-if="documentDirection === 'BLUE' && lineOverIssueQty(line) > 0.000001" class="line-over-issue-stamp">
               超领 {{ formatQty(lineOverIssueQty(line)) }}
             </span>
             <span v-if="materialPickingComplete(line)" class="picking-complete-stamp">拣货完成</span>
             <button
-              v-if="allocationByLine[line.id]?.requiresOverIssueTarget"
+              v-if="documentDirection === 'BLUE' && allocationByLine[line.id]?.requiresOverIssueTarget"
               class="pending-over-issue"
               type="button"
               @click.stop="showOverIssueTarget(line.id)"
@@ -2051,6 +2121,7 @@ onBeforeRouteLeave((to) => {
               type="number"
               inputmode="decimal"
               autocomplete="off"
+              @focus="keepEditorInputVisible"
               @input="updateOverIssueQuantity"
             />
           </label>
@@ -2097,6 +2168,7 @@ onBeforeRouteLeave((to) => {
               :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
               :readonly="field.key === 'body.quantity' && ['transfer-order', 'location-adjustment'].includes(documentType)"
               autocomplete="off"
+              @focus="keepEditorInputVisible"
               @input="updateEditorInput(field, $event)"
             />
           </label>
@@ -2111,38 +2183,14 @@ onBeforeRouteLeave((to) => {
       </footer>
     </div>
 
-    <div v-if="showManualReturn" class="line-editor-page" role="dialog" aria-modal="true" aria-label="无标签退料">
+    <div v-if="showManualReturn" class="line-editor-page" role="dialog" aria-modal="true" aria-label="退料明细">
       <header class="line-editor-header manual-return-header">
         <button type="button" aria-label="取消" @click="closeManualReturn">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
         </button>
-        <div class="editor-title-heading"><h2>无标签退料</h2></div>
+        <div class="editor-title-heading"><h2>退料明细</h2></div>
       </header>
       <div class="line-editor-content manual-return-content">
-        <div class="material-search-row">
-          <input
-            v-model="manualMaterialQuery"
-            autocomplete="off"
-            enterkeyhint="search"
-            placeholder="料号或名称"
-            @keyup.enter="queryManualMaterials"
-          />
-          <button type="button" :disabled="manualMaterialLoading" @click="queryManualMaterials">
-            {{ manualMaterialLoading ? '查询中' : '查询' }}
-          </button>
-        </div>
-        <div v-if="manualMaterialResults.length" class="material-search-results">
-          <button
-            v-for="material in manualMaterialResults"
-            :key="material.code"
-            type="button"
-            @click="selectManualMaterial(material)"
-          >
-            <strong>{{ material.code }}</strong>
-            <span>{{ material.name }}</span>
-            <small v-if="material.specification">{{ material.specification }}</small>
-          </button>
-        </div>
         <div v-if="manualMaterial" class="manual-material-selected">
           <strong>{{ manualMaterial.code }}</strong>
           <span>{{ manualMaterial.name }}</span>
@@ -2150,11 +2198,11 @@ onBeforeRouteLeave((to) => {
         <div class="editor-form-grid">
           <label class="field">
             <span><i>*</i>退料数量</span>
-            <input v-model.number="manualQuantity" type="number" inputmode="decimal" autocomplete="off" />
+            <input v-model.number="manualQuantity" type="number" inputmode="decimal" autocomplete="off" @focus="keepEditorInputVisible" />
           </label>
           <label class="field">
             <span><i v-if="manualMaterial?.requiresBatch">*</i>批号</span>
-            <input v-model="manualBatchNo" autocomplete="off" />
+            <input v-model="manualBatchNo" autocomplete="off" @focus="keepEditorInputVisible" />
           </label>
           <label class="field">
             <span><i>*</i>仓库</span>
@@ -2514,14 +2562,11 @@ h1 {
   font-weight: 700;
 }
 
-.manual-return-button {
-  height: 42px;
-  border: 1px solid #9dbce1;
-  border-radius: 10px;
-  background: #f4f8fd;
-  color: #2368c4;
-  font-size: 14px;
-  font-weight: 750;
+.manual-return-search {
+  display: grid;
+  gap: 8px;
+  padding-top: 13px;
+  border-top: 1px solid #e7edf4;
 }
 
 .line-section {
@@ -2918,8 +2963,15 @@ h1 {
   z-index: 55;
   inset: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding: calc(var(--app-header-height) + 16px) 0 126px;
   padding: var(--app-header-height) 0 86px;
   background: #f3f6fa;
+}
+
+.line-editor-page input {
+  scroll-margin-top: calc(var(--app-header-height) + 16px);
+  scroll-margin-bottom: 126px;
 }
 
 .line-editor-header {

@@ -32,6 +32,7 @@ builder.Services.AddScoped<UserDataScopeService>();
 builder.Services.AddScoped<DocumentDraftRepository>();
 builder.Services.AddSingleton<LabelCodeRuleEngine>();
 builder.Services.AddScoped<LabelCodeRuleRepository>();
+builder.Services.AddScoped<ManualReturnValidationService>();
 builder.Services.AddSingleton<OperationArchiveService>();
 builder.Services.AddHostedService<DocumentDraftCleanupService>();
 builder.Services.AddHttpClient(nameof(U8GatewayClient), client => client.Timeout = TimeSpan.FromSeconds(120));

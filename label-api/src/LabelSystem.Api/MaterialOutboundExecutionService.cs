@@ -310,7 +310,10 @@ public sealed class MaterialOutboundExecutionService(
         {
             if (used.Contains(index)) continue;
             var candidate = candidates[index];
-            if (!string.Equals(candidate.LabelCode, target.LabelCode, StringComparison.OrdinalIgnoreCase) ||
+            var labelMatches = target.ObjectType == "UNLABELED_MATERIAL"
+                ? candidate.ObjectType == "UNLABELED_MATERIAL"
+                : string.Equals(candidate.LabelCode, target.LabelCode, StringComparison.OrdinalIgnoreCase);
+            if (!labelMatches ||
                 !string.Equals(candidate.MaterialCode, target.MaterialCode, StringComparison.OrdinalIgnoreCase) ||
                 candidate.SourceLineId != target.SourceLineId ||
                 candidate.RequestedQty != target.RequestedQty) continue;
@@ -349,7 +352,7 @@ public sealed class MaterialOutboundExecutionService(
                 !string.IsNullOrWhiteSpace(generic.Header.SourceType),
                 generic.Header.AdditionalFields,
                 generic.Lines.Select(line => new NormalizedLine(
-                    line.LabelCode, line.MaterialCode, line.RequestedQty,
+                    line.ObjectType, line.LabelCode, line.MaterialCode, line.RequestedQty,
                     line.SourceLineId, null, line.AdditionalFields)).ToArray());
         }
         var material = payload.Deserialize<MaterialOutboundPrepareRequest>(JsonOptions)
@@ -365,7 +368,7 @@ public sealed class MaterialOutboundExecutionService(
             true,
             material.AdditionalFields,
             material.Lines.Select(line => new NormalizedLine(
-                line.LabelCode, line.MaterialCode, line.RequestedQty,
+                line.ObjectType, line.LabelCode, line.MaterialCode, line.RequestedQty,
                 line.SourceLineId, line.RequirementId, line.AdditionalFields)).ToArray());
     }
 
@@ -532,6 +535,7 @@ public sealed class MaterialOutboundExecutionService(
         IReadOnlyList<NormalizedLine> Lines);
 
     private sealed record NormalizedLine(
+        string ObjectType,
         string LabelCode,
         string MaterialCode,
         decimal RequestedQty,

@@ -90,7 +90,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 
 `autoApprove=true` 对九类单据统一生效。服务端先确认新增、回写 ERP 单号并提交本地库存事务，再以新增返回的版本审核；审核明确失败时业务组停在 `PENDING_APPROVAL`，可继续审核但不得重新新增，审核结果未知时进入 `NEEDS_RECONCILIATION`。首次审核沿用固定 `:auto-audit` 幂等后缀；明确失败后的继续审核按失败事件数追加递增序号，既不重放新增，也不会被上一次审核的幂等结果覆盖。
 
-无源单红字材料出库可在通用提交接口的 `lines` 中使用 `objectType=UNLABELED_MATERIAL`，并提供 `materialCode`、`unitCode`、`requestedQty`、`batchNo`、`warehouseCode`、`locationCode`。该类型只允许 `material-outbound + RED`，且必须填写退料原因。提交成功返回的业务组包含 `issuedLabels`；新标签初始为 `PENDING_PRINT`，只有确认实体标签已贴附后才变为 `ACTIVE`。确认接口要求业务组已经完成，重复确认同一已启用标签按幂等成功返回。
+红字材料出库可在通用或生产订单专用提交接口的 `lines` 中使用 `objectType=UNLABELED_MATERIAL`，并提供 `materialCode`、`unitCode`、`requestedQty`、`batchNo`、`warehouseCode`、`locationCode`；参照生产订单时还必须携带完整需求行分配。该类型只允许 `material-outbound + RED`，且必须填写退料原因。有原单时正常数量不得超过需求行当前已领数量，`overQty` 必须为零。提交成功返回的业务组包含 `issuedLabels`；新标签初始为 `PENDING_PRINT`，只有确认实体标签已贴附后才变为 `ACTIVE`。确认接口要求业务组已经完成，重复确认同一已启用标签按幂等成功返回。
 
 H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API 在同一请求内完成校验、幂等建档、拆组、锁定和执行，不向用户保留普通 `PENDING` 步骤。写入总开关关闭、ERP 制单人缺失或建档前校验失败时直接返回错误，不创建业务操作、来源占用或标签锁；建档后的写入前校验失败会立即取消临时操作并释放锁。只有已经调用 U8 且结果不明确时保留 `NEEDS_RECONCILIATION` 审计和锁。旧 `/prepare` 路由只返回 `409 DIRECT_SUBMIT_REQUIRED`，不得再建立待处理组。
 

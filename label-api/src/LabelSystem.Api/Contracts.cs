@@ -307,7 +307,11 @@ public sealed record MaterialOutboundAllocationRequest(
     decimal NormalQty,
     decimal OverQty,
     string? Remark,
-    JsonElement? AdditionalFields)
+    JsonElement? AdditionalFields,
+    string? MaterialName = null,
+    string? BatchNo = null,
+    string? WarehouseCode = null,
+    string? LocationCode = null)
 {
     public decimal RequestedQty => NormalQty + OverQty;
 }
