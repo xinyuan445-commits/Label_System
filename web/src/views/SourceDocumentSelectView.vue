@@ -3,7 +3,10 @@ import { computed, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import DateField from '@/components/DateField.vue'
-import { returnToParentDocument } from '@/services/document-subpage-navigation'
+import {
+  returnToParentDocument,
+  useDocumentSystemBack,
+} from '@/services/document-subpage-navigation'
 import {
   getBusinessDocumentConfig,
   isBusinessDocumentType,
@@ -231,6 +234,8 @@ async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
   await returnToParentDocument(router, route, outboundDocumentType.value)
 }
+
+useDocumentSystemBack(returnToDocument)
 
 onBeforeRouteLeave((to) => {
   if (allowDocumentReturn) {

@@ -7,7 +7,10 @@ import {
   isBusinessDocumentType,
   type BusinessDocumentType,
 } from '@/services/business-document-config'
-import { returnToParentDocument } from '@/services/document-subpage-navigation'
+import {
+  returnToParentDocument,
+  useDocumentSystemBack,
+} from '@/services/document-subpage-navigation'
 import {
   ensureDocumentPolicy,
   fetchBusinessDocumentSettings,
@@ -74,6 +77,8 @@ async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
   await returnToParentDocument(router, route, documentType.value)
 }
+
+useDocumentSystemBack(returnToDocument)
 
 onBeforeRouteLeave((to) => {
   if (allowDocumentReturn) {

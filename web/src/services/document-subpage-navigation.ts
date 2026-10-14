@@ -4,8 +4,25 @@ import type {
   RouteLocationNormalizedLoaded,
   Router,
 } from 'vue-router'
+import { onBeforeUnmount, onMounted } from 'vue'
+
+import { getPdaBridge } from '@/bridge/pda-bridge'
 
 const documentReturnMarker = 'documentReturn'
+
+export function useDocumentSystemBack(handler: () => void | Promise<void>): void {
+  let stopListening: (() => void) | null = null
+
+  onMounted(() => {
+    stopListening = getPdaBridge().subscribeBack(() => {
+      void handler()
+    })
+  })
+
+  onBeforeUnmount(() => {
+    stopListening?.()
+  })
+}
 
 export function markDocumentSubpage(query: LocationQuery): LocationQueryRaw {
   return { ...query, [documentReturnMarker]: '1' }

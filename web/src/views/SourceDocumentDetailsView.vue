@@ -7,7 +7,10 @@ import {
   isBusinessDocumentType,
 } from '@/services/business-document-config'
 import type { SourceQuantityAllocation } from '@/services/material-outbound-allocation'
-import { returnToParentDocument } from '@/services/document-subpage-navigation'
+import {
+  returnToParentDocument,
+  useDocumentSystemBack,
+} from '@/services/document-subpage-navigation'
 import { readOutboundDocumentWorkingState } from '@/services/outbound-document-drafts'
 import type {
   MaterialRequirementLine,
@@ -115,6 +118,8 @@ async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
   await returnToParentDocument(router, route, documentType.value)
 }
+
+useDocumentSystemBack(returnToDocument)
 
 async function selectReturnRequirement(line: MaterialRequirementLine): Promise<void> {
   if (returnableQuantity(line) <= 0.000001) return

@@ -7,7 +7,10 @@ import {
   isBusinessDocumentType,
   type BusinessDocumentType,
 } from '@/services/business-document-config'
-import { returnToParentDocument } from '@/services/document-subpage-navigation'
+import {
+  returnToParentDocument,
+  useDocumentSystemBack,
+} from '@/services/document-subpage-navigation'
 import {
   getBusinessDocumentFieldGroups,
   type DocumentFieldArea,
@@ -70,6 +73,8 @@ async function returnToDocument(): Promise<void> {
   allowReturn = true
   await returnToParentDocument(router, route, documentType.value)
 }
+
+useDocumentSystemBack(returnToDocument)
 
 async function saveAndReturn(): Promise<void> {
   if (saving.value) return

@@ -32,6 +32,7 @@ class NativeMessageBridge implements PdaBridge {
   readonly protocolVersion: string
   private readonly listeners = new Set<ScanListener>()
   private readonly backListeners = new Set<BackListener>()
+  private backDisableTimer: ReturnType<typeof window.setTimeout> | null = null
 
   constructor(protocolVersion: string) {
     this.protocolVersion = protocolVersion
@@ -45,11 +46,22 @@ class NativeMessageBridge implements PdaBridge {
 
   subscribeBack(listener: BackListener): () => void {
     const shouldEnable = this.backListeners.size === 0
+    if (this.backDisableTimer !== null) {
+      window.clearTimeout(this.backDisableTimer)
+      this.backDisableTimer = null
+    }
     this.backListeners.add(listener)
     if (shouldEnable) this.setBackHandlerEnabled(true)
+    let active = true
     return () => {
+      if (!active) return
+      active = false
       this.backListeners.delete(listener)
-      if (this.backListeners.size === 0) this.setBackHandlerEnabled(false)
+      if (this.backListeners.size !== 0) return
+      this.backDisableTimer = window.setTimeout(() => {
+        this.backDisableTimer = null
+        if (this.backListeners.size === 0) this.setBackHandlerEnabled(false)
+      }, 300)
     }
   }
 

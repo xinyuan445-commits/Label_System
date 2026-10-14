@@ -6,7 +6,10 @@ import {
   getBusinessDocumentConfig,
   isBusinessDocumentType,
 } from '@/services/business-document-config'
-import { returnToParentDocument } from '@/services/document-subpage-navigation'
+import {
+  returnToParentDocument,
+  useDocumentSystemBack,
+} from '@/services/document-subpage-navigation'
 import {
   clearOutboundDocumentWorkingState,
   deleteLocalDocumentRecords,
@@ -258,6 +261,8 @@ async function returnToDocument(): Promise<void> {
   allowDocumentReturn = true
   await returnToParentDocument(router, route, documentType.value)
 }
+
+useDocumentSystemBack(returnToDocument)
 
 async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
   if (!canUpload(document)) {
