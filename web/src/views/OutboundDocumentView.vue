@@ -400,7 +400,9 @@ const editorLocationSelectOptions = computed<SearchSelectOption[]>(() =>
 )
 const editorTargetLocationSelectOptions = computed<SearchSelectOption[]>(() => {
   const selectedWarehouse = String(
-    editingLine.value?.fieldValues['body.targetWarehouseCode'] ?? targetWarehouseCode.value,
+    editingLine.value?.fieldValues['body.targetWarehouseCode'] ||
+      targetWarehouseCode.value ||
+      editingLine.value?.warehouseCode || '',
   )
   return warehousePositionOptions.value.filter((item) =>
     item.positionCode && (!selectedWarehouse || item.warehouseCode === selectedWarehouse),
@@ -461,20 +463,26 @@ function formatQty(value: number | null): string {
 }
 
 function fieldVisible(key: string): boolean {
-  if (props.documentType === 'transfer-order') {
-    if (['header.warehouseCode', 'header.targetWarehouseCode', 'header.targetLocationCode'].includes(key)) {
+  if (['transfer-order', 'location-adjustment'].includes(props.documentType)) {
+    const hiddenHeaders = props.documentType === 'transfer-order'
+      ? ['header.warehouseCode', 'header.targetWarehouseCode', 'header.targetLocationCode']
+      : ['header.warehouseCode', 'header.sourceLocationCode', 'header.targetLocationCode']
+    if (hiddenHeaders.includes(key)) {
       return false
     }
-    if ([
+    const lineFields = props.documentType === 'transfer-order' ? [
       'body.warehouseCode', 'body.locationCode',
       'body.targetWarehouseCode', 'body.targetLocationCode',
-    ].includes(key)) return true
+    ] : ['body.warehouseCode', 'body.locationCode', 'body.targetLocationCode']
+    if (lineFields.includes(key)) return true
   }
   return documentFieldSettings.value[key]?.visible ?? false
 }
 
 function fieldRequired(key: string): boolean {
   if (props.documentType === 'transfer-order' && key === 'body.targetWarehouseCode') return true
+  if (props.documentType === 'location-adjustment' &&
+      ['body.locationCode', 'body.targetLocationCode'].includes(key)) return true
   return documentFieldSettings.value[key]?.required ?? false
 }
 
@@ -557,7 +565,9 @@ function bodyDisplayValue(line: OutboundLine, key: string): string | number {
   }
   if (key === 'body.targetLocationCode') {
     const code = String(value ?? '')
-    const targetWarehouse = String(bodyValue(line, 'body.targetWarehouseCode') ?? '')
+    const configuredTargetWarehouse = String(bodyValue(line, 'body.targetWarehouseCode') ?? '')
+    const targetWarehouse = configuredTargetWarehouse ||
+      (props.documentType === 'location-adjustment' ? line.warehouseCode : '')
     return code ? locationNameFor(targetWarehouse, code) : '--'
   }
   return isBlank(value) ? '--' : String(value)
@@ -729,6 +739,13 @@ function lineEditError(line: OutboundLine): string {
         !warehousePositionOptions.value.some((item) =>
           item.warehouseCode === targetWarehouse && item.positionCode === targetLocation,
         )) return '调入货位不属于调入仓库'
+  }
+  if (props.documentType === 'location-adjustment') {
+    const targetLocation = String(bodyValue(line, 'body.targetLocationCode') ?? '')
+    if (targetLocation === line.locationCode) return '目标货位不能与原货位相同'
+    if (targetLocation && !warehousePositionOptions.value.some((item) =>
+      item.warehouseCode === line.warehouseCode && item.positionCode === targetLocation,
+    )) return '目标货位不属于当前仓库'
   }
   if (
     props.documentType === 'material-outbound' && selectedSourceLines.value.length > 0 &&

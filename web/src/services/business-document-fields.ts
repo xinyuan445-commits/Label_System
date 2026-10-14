@@ -64,7 +64,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
       'header.partnerCode', config.partnerLabel, 'header', 'text', true, config.partnerRequired,
     ))
   }
-  if (config.warehouseLabel && documentType !== 'transfer-order') {
+  if (config.warehouseLabel && !['transfer-order', 'location-adjustment'].includes(documentType)) {
     fields.push(field(
       'header.warehouseCode', config.warehouseLabel, 'header', 'text', true, config.warehouseRequired,
     ))
@@ -75,13 +75,13 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
       config.targetWarehouseRequired,
     ))
   }
-  if (config.sourceLocationLabel) {
+  if (config.sourceLocationLabel && documentType !== 'location-adjustment') {
     fields.push(field(
       'header.sourceLocationCode', config.sourceLocationLabel, 'header', 'text', true,
       config.sourceLocationRequired,
     ))
   }
-  if (config.targetLocationLabel && documentType !== 'transfer-order') {
+  if (config.targetLocationLabel && !['transfer-order', 'location-adjustment'].includes(documentType)) {
     fields.push(field(
       'header.targetLocationCode', config.targetLocationLabel, 'header', 'text', true,
       config.targetLocationRequired,
@@ -201,7 +201,10 @@ function bodyBasicGroup(documentType: BusinessDocumentType): DocumentFieldGroup 
     field('body.batchNo', '批号', 'body', 'text', true),
     field('body.unitCode', '计量单位', 'body', 'text', true, true),
     field('body.warehouseCode', documentType === 'transfer-order' ? '调出仓库' : '仓库', 'body', 'text', true, true),
-    field('body.locationCode', '货位', 'body', 'text', true),
+    field(
+      'body.locationCode', documentType === 'location-adjustment' ? '原货位' : '货位',
+      'body', 'text', true, documentType === 'location-adjustment',
+    ),
   ]
   if (config.targetWarehouseLabel) {
     fields.push(field(
@@ -212,7 +215,8 @@ function bodyBasicGroup(documentType: BusinessDocumentType): DocumentFieldGroup 
   if (config.targetLocationLabel) {
     fields.push(field(
       'body.targetLocationCode', config.targetLocationLabel, 'body', 'text',
-      documentType === 'transfer-order', false,
+      ['transfer-order', 'location-adjustment'].includes(documentType),
+      documentType === 'location-adjustment',
     ))
   }
   fields.push(

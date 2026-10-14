@@ -97,11 +97,30 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 throw new ApiException(StatusCodes.Status400BadRequest,
                     "WAREHOUSE_UNCHANGED", $"调出仓库和调入仓库不能相同：{unchanged.Request.LabelCode}");
         }
+        if (definition.DocumentType == "location-adjustment")
+        {
+            var sourceMissing = resolved.FirstOrDefault(line => string.IsNullOrWhiteSpace(line.LocationCode));
+            if (sourceMissing is not null)
+                throw new ApiException(StatusCodes.Status409Conflict,
+                    "LABEL_LOCATION_MISSING", $"标签没有当前货位：{sourceMissing.Request.LabelCode}");
+            var targetMissing = resolved.FirstOrDefault(line => string.IsNullOrWhiteSpace(line.TargetLocationCode));
+            if (targetMissing is not null)
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "TARGET_LOCATION_REQUIRED", $"请选择目标货位：{targetMissing.Request.LabelCode}");
+            var unchanged = resolved.FirstOrDefault(line =>
+                string.Equals(line.LocationCode, line.TargetLocationCode,
+                    StringComparison.OrdinalIgnoreCase));
+            if (unchanged is not null)
+                throw new ApiException(StatusCodes.Status400BadRequest,
+                    "LOCATION_UNCHANGED", $"目标货位不能与原货位相同：{unchanged.Request.LabelCode}");
+            await ValidateLocationAdjustmentTargetsAsync(
+                connection, transaction, resolved, cancellationToken);
+        }
         if (definition.WholePalletMove)
         {
             await ValidateWholePalletMovesAsync(connection, transaction, request.Lines, products, pallets, cancellationToken);
-            if (definition.DocumentType == "transfer-order")
-                ValidatePalletTransferTargets(resolved, pallets.Values);
+            if (definition.DocumentType is "transfer-order" or "location-adjustment")
+                ValidatePalletMoveTargets(resolved, pallets.Values, definition.DocumentType);
         }
 
         var now = BusinessClock.NowDatabase;
@@ -204,7 +223,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 result.Add(new ResolvedLine(
                     line, product.Id, null, product.PalletId, product.CurrentQty,
                     product.BatchNo, warehouseCode, locationCode,
-                    ResolveTargetWarehouse(request, definition, line),
+                    ResolveTargetWarehouse(request, definition, line, product.WarehouseCode),
                     ResolveTargetLocation(request, line)));
             }
             else if (line.ObjectType == "PALLET")
@@ -215,7 +234,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 result.Add(new ResolvedLine(
                     line, null, pallet.Id, null, pallet.Line.AvailableQty,
                     pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode,
-                    ResolveTargetWarehouse(request, definition, line),
+                    ResolveTargetWarehouse(request, definition, line, pallet.Line.WarehouseCode),
                     ResolveTargetLocation(request, line)));
             }
             else
@@ -225,7 +244,8 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     line.BatchNo?.Trim() ?? string.Empty,
                     line.WarehouseCode?.Trim() ?? string.Empty,
                     line.LocationCode?.Trim() ?? string.Empty,
-                    ResolveTargetWarehouse(request, definition, line),
+                    ResolveTargetWarehouse(
+                        request, definition, line, line.WarehouseCode?.Trim() ?? string.Empty),
                     ResolveTargetLocation(request, line)));
             }
         }
@@ -287,9 +307,32 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         if (!string.IsNullOrWhiteSpace(request.Header.SourceLocationCode) &&
             !string.Equals(actualLocation, request.Header.SourceLocationCode.Trim(), StringComparison.OrdinalIgnoreCase))
             throw new ApiException(StatusCodes.Status409Conflict, "LOCATION_CHANGED", $"当前货位不一致：{code}");
-        if (definition.DocumentType == "location-adjustment" &&
-            string.Equals(actualLocation, request.Header.TargetLocationCode?.Trim(), StringComparison.OrdinalIgnoreCase))
-            throw new ApiException(StatusCodes.Status409Conflict, "LOCATION_UNCHANGED", $"目标货位未变化：{code}");
+    }
+
+    private static async Task ValidateLocationAdjustmentTargetsAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        IReadOnlyList<ResolvedLine> lines,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT TOP (1) 1
+            FROM dbo.u8_position_cache
+            WHERE warehouse_code=@warehouse AND position_code=@position AND is_active=1;
+            """;
+        foreach (var target in lines
+                     .Select(line => new { line.WarehouseCode, line.TargetLocationCode })
+                     .Distinct()
+                     .OrderBy(item => item.WarehouseCode, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(item => item.TargetLocationCode, StringComparer.OrdinalIgnoreCase))
+        {
+            await using var command = new SqlCommand(sql, connection, transaction);
+            command.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value = target.WarehouseCode;
+            command.Parameters.Add("@position", SqlDbType.NVarChar, 100).Value = target.TargetLocationCode;
+            if (await command.ExecuteScalarAsync(cancellationToken) is null)
+                throw new ApiException(StatusCodes.Status409Conflict,
+                    "TARGET_LOCATION_CHANGED", "目标货位不属于当前仓库，请重新选择。");
+        }
     }
 
     private static async Task ReserveSourceLinesAsync(
@@ -368,9 +411,10 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         }
     }
 
-    private static void ValidatePalletTransferTargets(
+    private static void ValidatePalletMoveTargets(
         IReadOnlyList<ResolvedLine> lines,
-        IEnumerable<PalletSnapshot> pallets)
+        IEnumerable<PalletSnapshot> pallets,
+        string documentType)
     {
         foreach (var pallet in pallets)
         {
@@ -382,7 +426,10 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                                    !string.Equals(line.TargetLocationCode, palletLine.TargetLocationCode,
                                       StringComparison.OrdinalIgnoreCase))))
                 throw new ApiException(StatusCodes.Status409Conflict,
-                    "WHOLE_PALLET_TARGET_MISMATCH", $"托盘 {pallet.Line.LabelCode} 必须整体调入同一位置。");
+                    "WHOLE_PALLET_TARGET_MISMATCH",
+                    documentType == "location-adjustment"
+                        ? $"托盘 {pallet.Line.LabelCode} 必须整体调整到同一货位。"
+                        : $"托盘 {pallet.Line.LabelCode} 必须整体调入同一位置。");
         }
     }
 
@@ -618,12 +665,15 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
     private static string ResolveTargetWarehouse(
         DocumentPrepareRequest request,
         DocumentPrepareDefinition definition,
-        DocumentPrepareLine line)
+        DocumentPrepareLine line,
+        string currentWarehouse)
     {
         var value = line.TargetWarehouseCode ??
                     AdditionalText(line.AdditionalFields, "targetWarehouseCode") ??
                     request.Header.TargetWarehouseCode;
-        if (definition.DocumentType is "purchase-inbound" or "location-adjustment")
+        if (definition.DocumentType == "location-adjustment")
+            value ??= currentWarehouse;
+        else if (definition.DocumentType == "purchase-inbound")
             value ??= request.Header.WarehouseCode;
         return value?.Trim() ?? string.Empty;
     }

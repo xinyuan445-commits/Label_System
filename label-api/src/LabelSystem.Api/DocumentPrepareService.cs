@@ -49,7 +49,7 @@ public sealed class DocumentPrepareService(
                 false, false, false, true, false, true, false, false, false, false),
             ["location-adjustment"] = new(
                 "location-adjustment", "货位调整", "LOCATION_ADJUSTMENT", "location-adjustment", "LA",
-                true, false, true, false, false, true, false, false, false, true),
+                false, false, false, false, false, true, false, false, true, false),
             ["inventory-count"] = new(
                 "inventory-count", "盘点单", "INVENTORY_COUNT", "inventory-count", "IC",
                 true, false, false, true, false, false, true, false, false, true),
@@ -180,14 +180,14 @@ public sealed class DocumentPrepareService(
         Require(request.Header.PartnerCode,
             IsRequired(requiredFields, "header.partnerCode", RequiresPartner(definition.DocumentType)),
             "PARTNER_REQUIRED", "请输入往来单位。");
-        var lineLevelTransfer = definition.DocumentType == "transfer-order";
-        Require(request.Header.WarehouseCode, !lineLevelTransfer && IsRequired(requiredFields, "header.warehouseCode", definition.RequireWarehouse), "WAREHOUSE_REQUIRED", "请输入仓库。");
-        Require(request.Header.TargetWarehouseCode, !lineLevelTransfer && IsRequired(requiredFields, "header.targetWarehouseCode", definition.RequireTargetWarehouse),
+        var lineLevelPosition = definition.DocumentType is "transfer-order" or "location-adjustment";
+        Require(request.Header.WarehouseCode, !lineLevelPosition && IsRequired(requiredFields, "header.warehouseCode", definition.RequireWarehouse), "WAREHOUSE_REQUIRED", "请输入仓库。");
+        Require(request.Header.TargetWarehouseCode, !lineLevelPosition && IsRequired(requiredFields, "header.targetWarehouseCode", definition.RequireTargetWarehouse),
             "TARGET_WAREHOUSE_REQUIRED", "请输入调入仓库。");
-        Require(request.Header.TargetLocationCode, !lineLevelTransfer && IsRequired(requiredFields, "header.targetLocationCode", definition.RequireTargetLocation),
+        Require(request.Header.TargetLocationCode, !lineLevelPosition && IsRequired(requiredFields, "header.targetLocationCode", definition.RequireTargetLocation),
             "TARGET_LOCATION_REQUIRED", "请输入目标货位。");
         Require(request.Header.SourceLocationCode,
-            IsRequired(requiredFields, "header.sourceLocationCode", false),
+            !lineLevelPosition && IsRequired(requiredFields, "header.sourceLocationCode", false),
             "SOURCE_LOCATION_REQUIRED", "请输入原货位。");
         Require(request.Header.DepartmentCode, IsRequired(requiredFields, "header.departmentCode", definition.RequireDepartment), "DEPARTMENT_REQUIRED", "请输入部门。");
         Require(request.Header.CategoryCode, IsRequired(requiredFields, "header.categoryCode", definition.RequireCategory), "CATEGORY_REQUIRED", "请输入业务类别。");
@@ -222,7 +222,9 @@ public sealed class DocumentPrepareService(
                 "BATCH_REQUIRED", "请输入批号。");
             Require(line.WarehouseCode, IsRequired(requiredFields, "body.warehouseCode", false),
                 "WAREHOUSE_REQUIRED", "请选择仓库。");
-            Require(line.LocationCode, IsRequired(requiredFields, "body.locationCode", false),
+            Require(line.LocationCode,
+                definition.DocumentType == "location-adjustment" ||
+                IsRequired(requiredFields, "body.locationCode", false),
                 "LOCATION_REQUIRED", "请选择货位。");
             var targetWarehouse = line.TargetWarehouseCode ??
                                   AdditionalText(line.AdditionalFields, "targetWarehouseCode") ??
@@ -234,8 +236,9 @@ public sealed class DocumentPrepareService(
                 definition.DocumentType == "transfer-order" || IsRequired(requiredFields, "body.targetWarehouseCode", false),
                 "TARGET_WAREHOUSE_REQUIRED", "请选择调入仓库。");
             Require(targetLocation,
+                definition.DocumentType == "location-adjustment" ||
                 IsRequired(requiredFields, "body.targetLocationCode", false),
-                "TARGET_LOCATION_REQUIRED", "请选择调入货位。");
+                "TARGET_LOCATION_REQUIRED", "请选择目标货位。");
             if (definition.DocumentType == "transfer-order" &&
                 string.Equals(line.WarehouseCode?.Trim(), targetWarehouse?.Trim(), StringComparison.OrdinalIgnoreCase))
                 throw new ApiException(StatusCodes.Status400BadRequest,
