@@ -2,7 +2,7 @@
   "environment": "development",
   "apiBaseUrl": "http://172.16.1.159:9890",
   "sourceDocumentApiBaseUrl": "http://172.16.1.159:9890",
-  "h5Version": "0.2.0-dev.55",
+  "h5Version": "0.2.0-dev.56",
   "bridgeProtocol": "pda-bridge-v1",
   "enableMockLogin": false,
   "enableMockBusinessUploads": false,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch, type CSSProperties } from 'vue'
 
 export interface SearchSelectOption {
   value: string
@@ -25,9 +25,11 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const trigger = ref<HTMLButtonElement | null>(null)
 const searchInput = ref<HTMLInputElement | null>(null)
 const open = ref(false)
 const keyword = ref('')
+const compactPanelStyle = ref<CSSProperties>({})
 
 const selected = computed(() => props.options.find((item) => item.value === props.modelValue))
 const displayValue = computed(() => {
@@ -57,6 +59,29 @@ async function showOptions(): Promise<void> {
   if (props.searchable) {
     await nextTick()
     searchInput.value?.focus()
+    return
+  }
+  await nextTick()
+  positionCompactPanel()
+}
+
+function positionCompactPanel(): void {
+  const rect = trigger.value?.getBoundingClientRect()
+  if (!rect) return
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight
+  const panelWidth = Math.min(Math.max(rect.width, 160), viewportWidth - 24)
+  const panelHeight = Math.min(Math.max(props.options.length * 48, 48), 280)
+  const left = Math.min(Math.max(rect.left, 12), viewportWidth - panelWidth - 12)
+  const roomBelow = viewportHeight - rect.bottom - 12
+  const top = roomBelow >= panelHeight
+    ? rect.bottom + 6
+    : Math.max(12, rect.top - panelHeight - 6)
+  compactPanelStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${panelWidth}px`,
+    maxHeight: `${Math.min(280, viewportHeight - 24)}px`,
   }
 }
 
@@ -75,6 +100,7 @@ function close(): void {
 <template>
   <div class="search-select" :class="{ disabled }">
     <button
+      ref="trigger"
       class="search-select-trigger"
       type="button"
       :disabled="disabled"
@@ -86,11 +112,10 @@ function close(): void {
     <button v-if="clearable && modelValue && !disabled" class="search-select-clear" type="button" aria-label="清除" @click.stop="choose({ value: '', label: '' })">×</button>
 
     <Teleport to="body">
-      <div v-if="open" class="search-select-mask" :class="{ compact: !searchable }" @click.self="close">
-        <section class="search-select-sheet" :class="{ compact: !searchable }" role="dialog" aria-modal="true" :aria-label="dialogLabel">
+      <div v-if="open && searchable" class="search-select-mask" @click.self="close">
+        <section class="search-select-sheet" role="dialog" aria-modal="true" :aria-label="dialogLabel">
           <header>
             <input
-              v-if="searchable"
               ref="searchInput"
               v-model="keyword"
               type="search"
@@ -99,7 +124,6 @@ function close(): void {
               placeholder="输入编号或名称"
               @keydown.esc="close"
             />
-            <strong v-else>{{ dialogLabel }}</strong>
             <button type="button" @click="close">关闭</button>
           </header>
           <div class="search-select-options">
@@ -118,16 +142,36 @@ function close(): void {
         </section>
       </div>
     </Teleport>
+
+    <Teleport to="body">
+      <div v-if="open && !searchable" class="compact-select-layer" @click.self="close">
+        <section
+          class="compact-select-popover"
+          :style="compactPanelStyle"
+          role="listbox"
+          :aria-label="dialogLabel"
+        >
+          <button
+            v-for="option in filteredOptions"
+            :key="option.value"
+            type="button"
+            :class="{ selected: option.value === modelValue }"
+            @click="choose(option)"
+          >
+            <template v-if="labelOnly"><span>{{ option.label || option.value }}</span></template>
+            <template v-else><strong>{{ option.value }}</strong><span>{{ option.label }}</span></template>
+          </button>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <style scoped>
 .search-select{position:relative;min-width:0}.search-select-trigger{width:100%;height:44px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 38px 0 11px;border:1px solid #d4deea;border-radius:10px;background:#fff;color:#17233d;font-size:14px;text-align:left}.search-select-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.search-select-trigger span.placeholder{color:#8a97a8}.search-select-trigger i{position:absolute;right:13px;color:#77869a;font-style:normal}.search-select-clear{position:absolute;z-index:2;top:5px;right:5px;width:34px;height:34px;border:0;border-radius:8px;background:#f2f5f8;color:#77869a;font-size:20px}.search-select.disabled .search-select-trigger{background:#f2f4f7;color:#8a94a2}.search-select-mask{position:fixed;z-index:120;inset:0;display:flex;align-items:flex-start;justify-content:center;padding:calc(env(safe-area-inset-top) + 12px) 12px 12px;background:rgba(18,31,48,.44)}.search-select-sheet{width:min(100%,620px);height:min(72dvh,560px);display:flex;flex-direction:column;overflow:hidden;border-radius:16px;background:#fff;box-shadow:0 18px 46px rgba(16,31,51,.3)}.search-select-sheet header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;padding:12px;border-bottom:1px solid #e7edf4}.search-select-sheet input{width:100%;height:44px;padding:0 11px;border:1px solid #bfcfe1;border-radius:10px;color:#17233d;font-size:16px;outline:none}.search-select-sheet input:focus{border-color:#3378cf;box-shadow:0 0 0 3px rgba(51,120,207,.1)}.search-select-sheet header button{padding:0 13px;border:0;border-radius:10px;background:#edf4fd;color:#2368c4;font-weight:700}.search-select-options{min-height:0;flex:1;overflow-y:auto;overscroll-behavior:contain}.search-select-options>button{width:100%;min-height:48px;display:flex;align-items:center;gap:8px;padding:9px 13px;border:0;border-bottom:1px solid #edf1f5;background:#fff;color:#42566d;text-align:left}.search-select-options>button:last-of-type{border-bottom:0}.search-select-options>button.selected{background:#edf4fd;color:#2368c4}.search-select-options strong{flex:0 0 auto;font:700 13px ui-monospace,SFMono-Regular,Consolas,monospace}.search-select-options span{overflow:hidden;font-size:14px;text-overflow:ellipsis;white-space:nowrap}.search-select-empty{min-height:56px;display:grid;place-items:center;color:#8b98a8;font-size:13px}
-.search-select-sheet.compact{height:auto;max-height:min(72dvh,560px)}
-.search-select-mask.compact{align-items:flex-end;padding-bottom:calc(env(safe-area-inset-bottom) + 12px)}
-.search-select-sheet.compact header{align-items:center}
-.search-select-sheet.compact header strong{padding-left:2px;color:#253b58;font-size:15px}
-.search-select-sheet.compact header button{height:40px}
+.compact-select-layer{position:fixed;z-index:120;inset:0;background:transparent}
+.compact-select-popover{position:fixed;overflow-y:auto;border:1px solid #d4deea;border-radius:10px;background:#fff;box-shadow:0 10px 28px rgba(16,31,51,.22)}
+.compact-select-popover>button{width:100%;min-height:48px;display:flex;align-items:center;gap:8px;padding:9px 13px;border:0;border-bottom:1px solid #edf1f5;background:#fff;color:#42566d;text-align:left}
+.compact-select-popover>button:last-child{border-bottom:0}.compact-select-popover>button.selected{background:#edf4fd;color:#2368c4}.compact-select-popover strong{flex:0 0 auto;font:700 13px ui-monospace,SFMono-Regular,Consolas,monospace}.compact-select-popover span{overflow:hidden;font-size:14px;text-overflow:ellipsis;white-space:nowrap}
 @media(max-height:620px){.search-select-sheet{height:calc(100dvh - env(safe-area-inset-top) - 24px)}}
-@media(max-height:620px){.search-select-sheet.compact{height:auto}}
 </style>
