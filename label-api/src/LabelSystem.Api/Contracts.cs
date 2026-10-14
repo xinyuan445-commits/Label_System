@@ -375,7 +375,12 @@ public sealed record DocumentPrepareLine(
     int? SourceLineId,
     int? SourceLineNo,
     string? SourceProductCode,
-    JsonElement? AdditionalFields);
+    JsonElement? AdditionalFields,
+    string? MaterialName = null,
+    string? BatchNo = null,
+    string? WarehouseCode = null,
+    string? LocationCode = null,
+    bool RequiresBatch = false);
 
 public sealed record SourceDocumentLine(
     string SourceType,
@@ -406,7 +411,19 @@ public sealed record OperationGroupResult(
     DateTimeOffset? CompletedAt,
     string? ErrorCode,
     string? ErrorMessage,
-    IReadOnlyList<PreparedOperation> Operations);
+    IReadOnlyList<PreparedOperation> Operations,
+    IReadOnlyList<IssuedLabelItem>? IssuedLabels = null);
+
+public sealed record IssuedLabelItem(
+    string Code,
+    string MaterialCode,
+    string? MaterialName,
+    string? BatchNo,
+    string UnitCode,
+    decimal Quantity,
+    string WarehouseCode,
+    string? LocationCode,
+    string Status);
 
 public sealed record OperationGroupListResult(
     int Skip,
@@ -485,6 +502,13 @@ public sealed record DepartmentCacheItem(
     string Code,
     string Name,
     DateTimeOffset UpdatedAt);
+
+public sealed record MaterialSourceItem(
+    string Code,
+    string Name,
+    string Specification,
+    string UnitCode,
+    bool RequiresBatch);
 
 public sealed record DocumentTypeSourceItem(
     string Code,

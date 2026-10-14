@@ -309,7 +309,10 @@ internal static class DocumentGatewayRequestBuilder
         {
             if (used.Contains(index)) continue;
             var candidate = candidates[index];
-            if (!string.Equals(candidate.LabelCode, target.LabelCode, StringComparison.OrdinalIgnoreCase) ||
+            var labelMatches = target.ObjectType == "UNLABELED_MATERIAL"
+                ? candidate.ObjectType == "UNLABELED_MATERIAL"
+                : string.Equals(candidate.LabelCode, target.LabelCode, StringComparison.OrdinalIgnoreCase);
+            if (!labelMatches ||
                 !string.Equals(candidate.MaterialCode, target.MaterialCode, StringComparison.OrdinalIgnoreCase) ||
                 candidate.SourceLineId != target.SourceLineId || candidate.RequestedQty != target.RequestedQty) continue;
             used.Add(index);

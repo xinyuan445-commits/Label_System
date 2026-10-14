@@ -47,6 +47,14 @@ export interface CurrencyOption {
   updatedAt: string
 }
 
+export interface MaterialOption {
+  code: string
+  name: string
+  specification: string
+  unitCode: string
+  requiresBatch: boolean
+}
+
 export async function fetchRdStyles(
   direction?: 'IN' | 'OUT',
   functionCode?: string,
@@ -76,4 +84,9 @@ export async function fetchSalesTypes(): Promise<DocumentTypeOption[]> {
 
 export async function fetchCurrencies(): Promise<CurrencyOption[]> {
   return apiRequest<CurrencyOption[]>('/api/v1/reference-data/currencies')
+}
+
+export async function searchMaterials(keyword: string): Promise<MaterialOption[]> {
+  const query = new URLSearchParams({ keyword: keyword.trim(), limit: '50' })
+  return apiRequest<MaterialOption[]>(`/api/v1/reference-data/materials?${query.toString()}`)
 }

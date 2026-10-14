@@ -62,6 +62,17 @@ export interface OperationGroupSnapshot {
   errorCode?: string | null
   errorMessage?: string | null
   operations: PreparedOperation[]
+  issuedLabels?: Array<{
+    code: string
+    materialCode: string
+    materialName?: string | null
+    batchNo?: string | null
+    unitCode: string
+    quantity: number
+    warehouseCode: string
+    locationCode?: string | null
+    status: string
+  }>
 }
 
 export interface OutboundDocumentSummary {
@@ -90,6 +101,7 @@ export interface StoredOutboundDocument {
   serverErrorMessage?: string | null
   u8WriteEnabled?: boolean
   preparedOperations?: PreparedOperation[]
+  issuedLabels?: OperationGroupSnapshot['issuedLabels']
   summary: OutboundDocumentSummary
   payload: unknown
   ownerUserId: string
@@ -197,6 +209,7 @@ function normalizedDocument(document: Partial<StoredOutboundDocument>): StoredOu
     serverErrorMessage: document.serverErrorMessage,
     u8WriteEnabled: document.u8WriteEnabled,
     preparedOperations: document.preparedOperations,
+    issuedLabels: document.issuedLabels ?? [],
     summary: document.summary,
     payload: document.payload ?? {},
     ownerUserId: document.ownerUserId ?? owner?.id ?? 'unknown',
@@ -352,6 +365,7 @@ export async function markOutboundDocumentSubmitted(
       lockExpiresAt: result.lockExpiresAt, serverCheckedAt: now,
       serverErrorCode: result.errorCode, serverErrorMessage: result.errorMessage,
       u8WriteEnabled: true, preparedOperations: result.operations,
+      issuedLabels: result.issuedLabels ?? existing.issuedLabels ?? [],
       clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '' }
   })
 }
@@ -379,6 +393,7 @@ export async function updateOutboundDocumentGroup(
       serverStatus: result.status, lockExpiresAt: result.lockExpiresAt,
       serverErrorCode: result.errorCode, serverErrorMessage: result.errorMessage,
       serverCheckedAt: now, preparedOperations: result.operations,
+      issuedLabels: result.issuedLabels ?? existing.issuedLabels ?? [],
       clientRevision: existing.clientRevision + 1, syncStatus: 'pending', syncError: '' }
   })
 }

@@ -2,7 +2,7 @@
 
 ## 测试账套写入
 
-`0.5.5` 使用独立 `U8Gateway.UserpcoBridge` 隔离库存 USERPCO 所需的系统 ADODB 7.0 与采购、销售组件使用的旧 ADODB 互操作版本，新增继续按完整 13 参数签名调用 `VoucherCO.Insert`，审核和弃审也按完整签名调用 `Verify` / `UnVerify`。状态操作先用 USERPCO `Load` 读取组件格式的 `ufts`，再作为并发时间戳传入审核、弃审或删除；不能直接把 SQL 返回的 `0x...` 版本文本传给 VB6 组件。U8 明确拒绝会保留原始业务错误并作为可重试失败返回；只有调用异常且回查不能确认时才进入核对。测试账套 888 的九类新增、审核和弃审保持开放，修改和删除仍关闭。服务器写入总开关同时受 `test` 环境、`UFDATA_888_2021` 数据库和 888 账套限制。
+`0.5.6` 在 `0.5.5` 的 USERPCO 写入和状态时间戳修正基础上，增加参数化只读物料查询。库存新增继续按完整 13 参数签名调用 `VoucherCO.Insert`，审核和弃审按完整签名调用 `Verify` / `UnVerify`；状态操作先用 USERPCO `Load` 读取组件格式的 `ufts`。测试账套 888 的九类新增、审核和弃审保持开放，修改和删除仍关闭。服务器写入总开关同时受 `test` 环境、`UFDATA_888_2021` 数据库和 888 账套限制。
 状态：9 类单据字段结构已建立；除委外到货外，8 类单据已通过测试账套运行时读取验证。当前开放仅用于 888 联调，禁止用于生产账套。
 
 `u8-gateway` 是标签系统全新建设的 U8 IIS 集成服务。它不复用
@@ -62,7 +62,7 @@ u8-gateway/
 
 源单查询支持生产订单、采购订单、采购到货、销售订单、发货单和委外订单：`GET /api/v1/source-documents` 返回当前可用明细行，`POST /api/v1/source-documents/lines` 重新读取整张来源单据；生产订单另由 `POST /api/v1/source-documents/material-requirements` 返回子件计划量、累计已领量和剩余量。所有查询使用固定表和参数，不接受客户端表名或字段名，不写 U8。六类源单搜索和整单明细读取已在测试账套通过只读验证；委外到货单本身仍没有历史样例，不能据此开放写入。
 
-基础资料接口只读查询 U8：`GET /api/v1/reference-data/rd-styles` 读取 `Rd_Style`，`GET /api/v1/reference-data/warehouse-positions` 读取未停用仓库及其仓位，`GET /api/v1/reference-data/departments` 读取未停用部门，`GET /api/v1/reference-data/document-master-data` 读取采购类型、销售类型、币种及最新汇率。测试账套已验证返回 52 条类别、45 个仓库、475 个仓位、50 个部门、16 个采购类型、11 个销售类型和 4 个币种；缓存由 Business API 负责，H5 不直接调用这些接口。
+基础资料接口只读查询 U8：`GET /api/v1/reference-data/rd-styles` 读取 `Rd_Style`，`GET /api/v1/reference-data/warehouse-positions` 读取未停用仓库及其仓位，`GET /api/v1/reference-data/departments` 读取未停用部门，`GET /api/v1/reference-data/materials` 按编号或名称实时查询在用物料，`GET /api/v1/reference-data/document-master-data` 读取采购类型、销售类型、币种及最新汇率。测试账套已验证物料查询返回库存单位和批次管理标志；缓存由 Business API 负责，H5 不直接调用 Gateway。
 
 `tools/CodecSmokeTest` 用于验证 XML 往返、合同装载、能力开关、操作映射和适配器登记；`tools/NativeReadSmokeTest` 用于在 U8 服务器上验证实际读取；`tools/OperationJournalSmokeTest` 用于验证凭证摘要、脱敏、并发追加和并发幂等；`tools/WriteSafetySmokeTest` 验证错误环境、数据库或账套不能进入写适配器。这些自动测试都不会写账套。
 

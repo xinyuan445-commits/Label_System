@@ -26,11 +26,13 @@ import {
   fetchRdStyles,
   fetchSalesTypes,
   fetchWarehousePositions,
+  searchMaterials,
   type CurrencyOption,
   type DepartmentOption,
   type DocumentTypeOption,
   type RdStyleOption,
   type WarehousePositionOption,
+  type MaterialOption,
 } from '@/services/reference-data'
 import {
   allocateMaterialScans,
@@ -59,7 +61,7 @@ import { createUniqueId } from '@/utils/unique-id'
 import { readSession } from '@/services/auth'
 import { playScanFeedback } from '@/services/shell-config'
 
-type LineObjectType = 'PRODUCT_LABEL' | 'PALLET'
+type LineObjectType = 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
 const materialOutboundSourceCategoryCode = '202'
 
 interface Props {
@@ -86,6 +88,7 @@ interface OutboundLine {
   sourceAllocations?: SourceQuantityAllocation[]
   unallocatedQty?: number
   requiresOverIssueQuantity?: boolean
+  requiresBatch?: boolean
 }
 
 interface MaterialOutboundSubmissionLine {
@@ -189,6 +192,16 @@ const currencyOptions = ref<CurrencyOption[]>([])
 const referenceDataLoading = ref(false)
 const finishing = ref(false)
 const completionError = ref('')
+const showManualReturn = ref(false)
+const manualMaterialQuery = ref('')
+const manualMaterialResults = ref<MaterialOption[]>([])
+const manualMaterialLoading = ref(false)
+const manualMaterial = ref<MaterialOption | null>(null)
+const manualBatchNo = ref('')
+const manualQuantity = ref<number | null>(null)
+const manualWarehouseCode = ref('')
+const manualLocationCode = ref('')
+const manualEditingLineId = ref<string | null>(null)
 
 const handledHeaderFieldKeys = new Set([
   'header.documentDate',
@@ -350,6 +363,11 @@ const editorTargetLocationSelectOptions = computed<SearchSelectOption[]>(() => {
     item.positionCode && (!selectedWarehouse || item.warehouseCode === selectedWarehouse),
   ).map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' }))
 })
+const manualLocationSelectOptions = computed<SearchSelectOption[]>(() =>
+  warehousePositionOptions.value.filter((item) =>
+    item.positionCode && (!manualWarehouseCode.value || item.warehouseCode === manualWarehouseCode.value),
+  ).map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
+)
 const departmentSelectOptions = computed<SearchSelectOption[]>(() =>
   departmentOptions.value.map((item) => ({ value: item.code, label: item.name })),
 )
@@ -579,6 +597,7 @@ function lineEditError(line: OutboundLine): string {
       ? `${pageConfig.value.quantityLabel}不能小于0`
       : `${pageConfig.value.quantityLabel}必须大于0`
   }
+  if (line.requiresBatch && !line.batchNo.trim()) return '请输入批号'
   if (line.availableQty !== null && props.documentType !== 'inventory-count' && quantity > line.availableQty) {
     return '本次处理数量不能超过标签当前数量'
   }
@@ -956,8 +975,119 @@ async function addBarcode(rawCode: string): Promise<void> {
 }
 
 function handleScan(event: PdaScanEvent): void {
-  if (currentStep.value !== 2 || editingLine.value) return
+  if (currentStep.value !== 2 || editingLine.value || showManualReturn.value) return
   void addBarcode(event.barcode)
+}
+
+function openManualReturn(): void {
+  manualEditingLineId.value = null
+  manualMaterialQuery.value = ''
+  manualMaterialResults.value = []
+  manualMaterial.value = null
+  manualBatchNo.value = ''
+  manualQuantity.value = null
+  manualWarehouseCode.value = warehouseCode.value
+  manualLocationCode.value = sourceLocationCode.value
+  showManualReturn.value = true
+}
+
+function openExistingManualReturn(line: OutboundLine): void {
+  manualEditingLineId.value = line.id
+  manualMaterial.value = {
+    code: line.materialCode,
+    name: line.materialName,
+    specification: '',
+    unitCode: line.unitCode,
+    requiresBatch: line.requiresBatch === true,
+  }
+  manualMaterialQuery.value = `${line.materialCode} ${line.materialName}`.trim()
+  manualMaterialResults.value = []
+  manualBatchNo.value = line.batchNo
+  manualQuantity.value = line.requestedQty
+  manualWarehouseCode.value = line.warehouseCode
+  manualLocationCode.value = line.locationCode
+  showManualReturn.value = true
+}
+
+function openLineEditor(line: OutboundLine): void {
+  if (line.objectType === 'UNLABELED_MATERIAL') {
+    openExistingManualReturn(line)
+    return
+  }
+  openExistingLineEditor(line)
+}
+
+function closeManualReturn(): void {
+  showManualReturn.value = false
+  manualEditingLineId.value = null
+}
+
+async function queryManualMaterials(): Promise<void> {
+  manualMaterialLoading.value = true
+  try {
+    const results = await searchMaterials(manualMaterialQuery.value)
+    manualMaterialResults.value = selectedSourceLines.value.length
+      ? results.filter((item) => materialRequirements.value.some((requirement) =>
+          materialKey(requirement.materialCode) === materialKey(item.code),
+        ))
+      : results
+    if (!manualMaterialResults.value.length) notify('未找到物料', 'info')
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '物料查询失败', 'error')
+  } finally {
+    manualMaterialLoading.value = false
+  }
+}
+
+function selectManualMaterial(material: MaterialOption): void {
+  manualMaterial.value = material
+  manualMaterialQuery.value = `${material.code} ${material.name}`
+  manualMaterialResults.value = []
+}
+
+function handleManualWarehouseChange(): void {
+  const valid = new Set(manualLocationSelectOptions.value.map((item) => item.value))
+  if (manualLocationCode.value && !valid.has(manualLocationCode.value)) {
+    manualLocationCode.value = ''
+  }
+}
+
+function confirmManualReturn(): void {
+  const material = manualMaterial.value
+  if (!material) return notify('请选择物料', 'error')
+  const quantity = Number(manualQuantity.value)
+  if (!Number.isFinite(quantity) || quantity <= 0) return notify('退料数量必须大于0', 'error')
+  if (material.requiresBatch && !manualBatchNo.value.trim()) return notify('请输入批号', 'error')
+  if (!manualWarehouseCode.value) return notify('请选择仓库', 'error')
+  const positions = warehousePositionOptions.value.filter((item) =>
+    item.warehouseCode === manualWarehouseCode.value && item.positionCode,
+  )
+  if (positions.length && !manualLocationCode.value) return notify('请选择货位', 'error')
+  const savedLine: OutboundLine = {
+    id: createLineId(),
+    labelCode: `NEW:${createUniqueId('return')}`,
+    objectType: 'UNLABELED_MATERIAL',
+    materialCode: material.code,
+    materialName: material.name,
+    batchNo: manualBatchNo.value.trim(),
+    unitCode: material.unitCode,
+    warehouseCode: manualWarehouseCode.value,
+    warehouseName: warehouseNameFor(manualWarehouseCode.value),
+    locationCode: manualLocationCode.value,
+    locationName: locationNameFor(manualWarehouseCode.value, manualLocationCode.value),
+    availableQty: null,
+    requestedQty: quantity,
+    fieldValues: {},
+    requiresBatch: material.requiresBatch,
+  }
+  if (manualEditingLineId.value) {
+    savedLine.id = manualEditingLineId.value
+    lines.value = lines.value.map((line) => line.id === manualEditingLineId.value ? savedLine : line)
+  } else {
+    lines.value = [...lines.value, savedLine]
+  }
+  closeManualReturn()
+  notify('已添加', 'success')
 }
 
 function simulateOrAdd(): void {
@@ -1285,13 +1415,18 @@ function validateHeader(): string {
 function validate(): string {
   const headerError = validateHeader()
   if (headerError) return headerError
-  if (!lines.value.length) return '请扫描标签或托盘'
+  if (!lines.value.length) return '请添加明细'
+  if (lines.value.some((line) => line.objectType === 'UNLABELED_MATERIAL') &&
+      (props.documentType !== 'material-outbound' || documentDirection.value !== 'RED')) {
+    return '无标签明细只用于红字材料出库单'
+  }
   const requiredBodyFields = documentFields.value.filter(
     (field) => field.area === 'body' && fieldRequired(field.key),
   )
   for (const line of lines.value) {
     const missing = requiredBodyFields.find((field) => isBlank(bodyValue(line, field.key)))
     if (missing) return `请填写${missing.label}`
+    if (line.requiresBatch && !line.batchNo.trim()) return `请输入批号：${line.materialCode}`
   }
   if (
     props.documentType !== 'inventory-count' &&
@@ -1333,6 +1468,9 @@ function validate(): string {
     }
     if (documentSettings.value.globalOperation.reasonRequired && !remark.value.trim()) {
       return '请输入原因'
+    }
+    if (lines.value.some((line) => line.objectType === 'UNLABELED_MATERIAL') && !remark.value.trim()) {
+      return '请输入退料原因'
     }
   }
   return ''
@@ -1741,6 +1879,12 @@ onBeforeRouteLeave((to) => {
           />
           <button type="button" @click="simulateOrAdd">添加</button>
         </div>
+        <button
+          v-if="documentType === 'material-outbound' && documentDirection === 'RED' && !selectedSourceLines.length"
+          class="manual-return-button"
+          type="button"
+          @click="openManualReturn"
+        >无标签退料</button>
       </section>
 
       <section v-if="showScanContent" class="line-section">
@@ -1756,8 +1900,8 @@ onBeforeRouteLeave((to) => {
             class="line-card"
             role="button"
             tabindex="0"
-            @click="openExistingLineEditor(line)"
-            @keydown.enter.prevent="openExistingLineEditor(line)"
+            @click="openLineEditor(line)"
+            @keydown.enter.prevent="openLineEditor(line)"
           >
             <div class="line-heading">
               <div class="code-wrap">
@@ -1776,8 +1920,8 @@ onBeforeRouteLeave((to) => {
               <div><dt>仓库</dt><dd>{{ warehouseNameFor(line.warehouseCode, line.warehouseName) }}</dd></div>
               <div v-if="line.locationCode"><dt>货位</dt><dd>{{ locationNameFor(line.warehouseCode, line.locationCode, line.locationName) }}</dd></div>
               <div v-if="line.unitCode"><dt>单位</dt><dd>{{ line.unitName || line.unitCode }}</dd></div>
-              <div><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
-              <div class="line-used-qty"><dt>本标签使用</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
+              <div v-if="line.objectType !== 'UNLABELED_MATERIAL'"><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
+              <div class="line-used-qty"><dt>{{ line.objectType === 'UNLABELED_MATERIAL' ? '退料数量' : '本标签使用' }}</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
               <template v-if="selectedSourceLines.length && materialProgressFor(line)">
                 <div><dt>需拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.remainingQty ?? 0) }}</dd></div>
                 <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.scannedQty ?? 0) }}</dd></div>
@@ -1951,6 +2095,82 @@ onBeforeRouteLeave((to) => {
         <button class="confirm" type="button" @click="confirmEditingLine">
           {{ editingExistingLineId ? '保存' : pendingScanLines.length ? '确认并继续' : '确认添加' }}
         </button>
+      </footer>
+    </div>
+
+    <div v-if="showManualReturn" class="line-editor-page" role="dialog" aria-modal="true" aria-label="无标签退料">
+      <header class="line-editor-header manual-return-header">
+        <button type="button" aria-label="取消" @click="closeManualReturn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <div class="editor-title-heading"><h2>无标签退料</h2></div>
+      </header>
+      <div class="line-editor-content manual-return-content">
+        <div class="material-search-row">
+          <input
+            v-model="manualMaterialQuery"
+            autocomplete="off"
+            enterkeyhint="search"
+            placeholder="料号或名称"
+            @keyup.enter="queryManualMaterials"
+          />
+          <button type="button" :disabled="manualMaterialLoading" @click="queryManualMaterials">
+            {{ manualMaterialLoading ? '查询中' : '查询' }}
+          </button>
+        </div>
+        <div v-if="manualMaterialResults.length" class="material-search-results">
+          <button
+            v-for="material in manualMaterialResults"
+            :key="material.code"
+            type="button"
+            @click="selectManualMaterial(material)"
+          >
+            <strong>{{ material.code }}</strong>
+            <span>{{ material.name }}</span>
+            <small v-if="material.specification">{{ material.specification }}</small>
+          </button>
+        </div>
+        <div v-if="manualMaterial" class="manual-material-selected">
+          <strong>{{ manualMaterial.code }}</strong>
+          <span>{{ manualMaterial.name }}</span>
+        </div>
+        <div class="editor-form-grid">
+          <label class="field">
+            <span><i>*</i>退料数量</span>
+            <input v-model.number="manualQuantity" type="number" inputmode="decimal" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span><i v-if="manualMaterial?.requiresBatch">*</i>批号</span>
+            <input v-model="manualBatchNo" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span><i>*</i>仓库</span>
+            <SearchSelect
+              v-model="manualWarehouseCode"
+              :options="warehouseSelectOptions"
+              label-only
+              placeholder="编号或名称"
+              @update:model-value="handleManualWarehouseChange"
+            />
+          </label>
+          <label class="field">
+            <span>货位</span>
+            <SearchSelect
+              v-model="manualLocationCode"
+              :options="manualLocationSelectOptions"
+              label-only
+              placeholder="编号或名称"
+            />
+          </label>
+          <label class="field">
+            <span>单位</span>
+            <input :value="manualMaterial?.unitCode ?? ''" readonly />
+          </label>
+        </div>
+      </div>
+      <footer class="line-editor-actions">
+        <button type="button" @click="closeManualReturn">取消</button>
+        <button class="confirm" type="button" @click="confirmManualReturn">确认添加</button>
       </footer>
     </div>
 
@@ -2279,6 +2499,16 @@ h1 {
   color: #fff;
   font-size: 14px;
   font-weight: 700;
+}
+
+.manual-return-button {
+  height: 42px;
+  border: 1px solid #9dbce1;
+  border-radius: 10px;
+  background: #f4f8fd;
+  color: #2368c4;
+  font-size: 14px;
+  font-weight: 750;
 }
 
 .line-section {
@@ -3082,6 +3312,86 @@ h1 {
   color: #718096;
   text-align: center;
   font-weight: 700;
+}
+
+.manual-return-header {
+  grid-template-columns: 42px minmax(0, 1fr);
+}
+
+.manual-return-content {
+  display: grid;
+  gap: 14px;
+}
+
+.material-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 8px;
+}
+
+.material-search-row input {
+  min-width: 0;
+  height: 44px;
+  padding: 0 11px;
+  border: 1px solid #c9d6e5;
+  border-radius: 10px;
+  outline: none;
+}
+
+.material-search-row button {
+  border: 0;
+  border-radius: 10px;
+  background: #2368c4;
+  color: #fff;
+  font-weight: 750;
+}
+
+.material-search-results {
+  overflow: hidden;
+  border: 1px solid #dce6f1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.material-search-results button {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 0;
+  border-bottom: 1px solid #edf1f5;
+  background: #fff;
+  color: #314862;
+  text-align: left;
+}
+
+.material-search-results button:last-child {
+  border-bottom: 0;
+}
+
+.material-search-results strong {
+  font: 700 13px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.material-search-results span,
+.material-search-results small {
+  color: #718096;
+  font-size: 12px;
+}
+
+.manual-material-selected {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #edf4fd;
+  color: #244b79;
+}
+
+.manual-material-selected span {
+  color: #637a94;
+  font-size: 13px;
 }
 
 .toast-enter-active,

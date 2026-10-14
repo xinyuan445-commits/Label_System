@@ -144,6 +144,7 @@ POST /api/v1/source-documents/material-requirements
 GET  /api/v1/reference-data/rd-styles
 GET  /api/v1/reference-data/warehouse-positions
 GET  /api/v1/reference-data/departments
+GET  /api/v1/reference-data/materials?keyword=&limit=
 GET  /api/v1/reference-data/document-master-data
 ```
 
@@ -156,6 +157,8 @@ GET  /api/v1/reference-data/document-master-data
 `GET /reference-data/rd-styles` 使用固定 SQL 读取 `dbo.Rd_Style`，将 `bRdFlag=1` 映射为 `IN`、`bRdFlag=0` 映射为 `OUT`，并返回 `bRdEnd` 末级标志。接口不接受表名、字段名或 SQL 参数，不写 U8；测试账套已只读验证 52 条记录。
 
 `GET /reference-data/warehouse-positions` 使用固定 SQL 将 `dbo.Warehouse` 左连接 `dbo.Position`，只读取 `dWhEndDate IS NULL` 的仓库；没有仓位的仓库仍返回一行。`GET /reference-data/departments` 使用固定 SQL 读取 `dbo.Department` 中 `dDepEndDate IS NULL` 的部门。两者都不接受客户端 SQL，不写 U8；测试账套已只读验证 45 个仓库、475 个仓位和 50 个部门。
+
+`GET /reference-data/materials` 使用固定、参数化 SQL 查询 `dbo.Inventory`，`keyword` 同时模糊匹配 `cInvCode` 和 `cInvName`，`limit` 限制在 1–100。返回物料编码、名称、规格、库存主计量单位和是否批次管理；不接受客户端表名、列名或 SQL。版本 `0.5.6` 已用测试账套 888 的两个真实料号完成只读验证。
 
 `GET /reference-data/document-master-data` 使用固定 SQL 读取 `PurchaseType`、`SaleType`、`foreigncurrency` 和 `exch`，返回采购类型、销售类型、币种及各币种最新可用汇率。接口不接受任意 SQL，不写 U8；888 已验证返回 16、11、4 条。
 

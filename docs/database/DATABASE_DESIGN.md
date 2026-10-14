@@ -1,9 +1,9 @@
 # 标签管理系统数据库设计说明
 
-状态：结构、业务设置、U8 基础资料缓存、用户权限、漫游数据、本地密码凭据、用户管理审计、多端草稿同步及标签 Code 规则已创建；三套环境最新迁移编号均为 `011`
+状态：结构、业务设置、U8 基础资料缓存、用户权限、漫游数据、本地密码凭据、用户管理审计、多端草稿同步、标签 Code 规则及退料发码关联已创建；三套环境最新迁移编号均为 `013`
 数据库：Microsoft SQL Server 2019 Standard（15.0.2170.1）
 实例：`172.16.1.159` 默认实例
-更新时间：2026-10-12
+更新时间：2026-10-14
 
 ## 1. 文件与执行顺序
 
@@ -43,9 +43,15 @@
 | 32 | `034_allow_shared_inventory_label_rule.sql` | 允许产品标签与托盘共用一条 Code 规则 |
 | 33 | `035_install_migration_011_all_environments.sql` | 用 sqlcmd 将 011 安装到三个环境 |
 | 34 | `036_record_migration_011_checksum.sql` | 保存 011 迁移脚本 SHA-256 |
-| 35 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
-| 36 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
-| 37 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
+| 35 | `037_cache_u8_document_master_data.sql` | 建立采购类型、销售类型、币种和汇率缓存 |
+| 36 | `038_install_migration_012_all_environments.sql` | 用 sqlcmd 将 012 安装到三个环境 |
+| 37 | `039_record_migration_012_checksum.sql` | 保存 012 迁移脚本 SHA-256 |
+| 38 | `040_add_generated_label_to_operation_line.sql` | 记录无标签红字退料成功后生成的新产品标签 |
+| 39 | `041_install_migration_013_all_environments.sql` | 用 sqlcmd 将 013 安装到三个环境 |
+| 40 | `042_record_migration_013_checksum.sql` | 保存 013 迁移脚本 SHA-256 |
+| 41 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
+| 42 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
+| 43 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
 
 脚本使用 UTF-8 保存。通过旧版 `sqlcmd` 执行时必须增加 `-f 65001`，并使用 `-b` 在 SQL 错误时返回失败；连接密码通过安全部署配置或 `SQLCMDPASSWORD` 提供，不写入命令脚本。
 
@@ -237,6 +243,7 @@ label_code_rule
 | `line_status` | varchar(20) | 否 | PENDING、SUCCESS、FAILED、SKIPPED |
 | `label_id` | bigint | 是 | 绑定的产品标签；纯 U8 单据明细为空 |
 | `pallet_id` | bigint | 是 | 绑定的托盘；与 `label_id` 互斥 |
+| `generated_label_id` | bigint | 是 | 无标签红字退料在 U8 成功后生成的产品标签；同一新标签只能关联一条明细 |
 | `selection_source` | varchar(20) | 是 | LABEL_SCAN 或 PALLET_SCAN |
 | `source_pallet_id` | bigint | 是 | 选择标签时所属的托盘；托盘扫码时必填 |
 | `inventory_qty_snapshot` | decimal(18,6) | 是 | 扫码或提交时看到的标签或托盘库存数量快照 |
@@ -270,7 +277,7 @@ label_code_rule
 | `updated_at` | datetime2(3) | 否 | 最后更新时间 |
 | `row_version` | rowversion | 否 | 并发版本 |
 
-关键约束：同一操作的 `line_no` 唯一；数量不得为负；属性必须是合法 JSON。产品标签和托盘最多绑定一种；绑定库存对象时必须保存选择来源和库存数量快照。通过托盘选择产品标签时必须保存来源托盘；托盘自身做单时 `requested_qty` 固定为 1。
+关键约束：同一操作的 `line_no` 唯一；数量不得为负；属性必须是合法 JSON。产品标签和托盘最多绑定一种；绑定库存对象时必须保存选择来源和库存数量快照。通过托盘选择产品标签时必须保存来源托盘；托盘自身做单时 `requested_qty` 固定为 1。`generated_label_id` 与提交前的扫码绑定分离，只有 U8 红字退料新增确认后赋值，并使用过滤唯一索引防止一张新标签关联多条明细。
 
 `inventory_qty_snapshot` 和 `requested_qty` 含义不同。例如产品标签扫码时余额为 100、本次申请使用 60，两个字段分别保存 100 和 60。前者只还原用户提交现场，后者保存业务请求；最终实际执行前后数量只写入 `inventory_flow.qty_before` 和 `inventory_flow.qty_after`。
 
@@ -677,4 +684,4 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 3. 对应的 SQL 迁移脚本。
 4. API 请求、响应及错误码合同。
 
-迁移 001 至 012 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。类型缓存保存关联出入库类别和默认标志；币种缓存保存本位币标志、小数位及最新可用汇率。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。
+迁移 001 至 013 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。迁移 `013` 在 `business_operation_line` 增加唯一的 `generated_label_id`，用于把无标签红字退料明细与 U8 成功后新建的产品标签关联；该字段不代替原扫码 `label_id`。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。

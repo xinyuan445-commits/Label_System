@@ -73,6 +73,27 @@ namespace U8Gateway.Api.Controllers
         }
 
         [HttpGet]
+        [Route("materials")]
+        public IHttpActionResult GetMaterials(string keyword = "", int limit = 50)
+        {
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    Reader().SearchMaterials(keyword, limit), GatewayRequestContext.Id));
+            }
+            catch (SqlException)
+            {
+                return Error(HttpStatusCode.ServiceUnavailable,
+                    "U8_REFERENCE_QUERY_FAILED", "U8 物料查询失败。");
+            }
+            catch (InvalidOperationException)
+            {
+                return Error(HttpStatusCode.ServiceUnavailable,
+                    "U8_GATEWAY_NOT_CONFIGURED", "U8 Gateway 尚未完成配置。");
+            }
+        }
+
+        [HttpGet]
         [Route("document-master-data")]
         public IHttpActionResult GetDocumentMasterData()
         {

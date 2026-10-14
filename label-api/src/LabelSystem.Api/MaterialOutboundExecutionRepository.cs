@@ -1,9 +1,17 @@
 using System.Data;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Options;
 
 namespace LabelSystem.Api;
 
-public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory connections)
+public sealed class MaterialOutboundExecutionRepository(
+    SqlConnectionFactory connections,
+    LabelCodeRuleEngine codeRules,
+    IOptionsMonitor<LabelSystemOptions> options)
 {
     public async Task<IReadOnlyList<MaterialOutboundExecutionOperation>> GetPlanAsync(
         string groupId,
@@ -18,7 +26,9 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                    ISNULL(lines.warehouse_code,N''), op.device_id, op.device_model, op.reason,
                    op.archive_relative_path, op.archive_sha256,
                    line.id, line.line_no,
-                   CASE WHEN line.label_id IS NOT NULL THEN 'PRODUCT_LABEL' ELSE 'PALLET' END,
+                   CASE WHEN line.label_id IS NOT NULL THEN 'PRODUCT_LABEL'
+                        WHEN line.pallet_id IS NOT NULL THEN 'PALLET'
+                        ELSE 'UNLABELED_MATERIAL' END,
                    line.label_id, line.pallet_id, line.source_pallet_id,
                    COALESCE(label.label_code,pallet.pallet_code,N''),
                    TRY_CONVERT(int,line.source_line_id), TRY_CONVERT(int,line.source_line_no),
@@ -128,6 +138,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         }
         foreach (var line in operation.Lines)
         {
+            if (line.ObjectType == "UNLABELED_MATERIAL") continue;
             var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
             var id = line.LabelId ?? line.PalletId ?? 0;
             await using var lockCheck = new SqlCommand(
@@ -171,9 +182,14 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                 if (line.ObjectType == "PRODUCT_LABEL")
                     await CompleteLabelAsync(connection, transaction, operation, line, erp,
                         redVoucher, cancellationToken);
-                else
+                else if (line.ObjectType == "PALLET")
                     await CompletePalletAsync(connection, transaction, operation, line, erp,
                         redVoucher, cancellationToken);
+                else if (operation.ErpDocumentType == "material-outbound" && redVoucher)
+                    await CompleteGeneratedLabelAsync(
+                        connection, transaction, operation, line, erp, cancellationToken);
+                else
+                    throw new InvalidOperationException("无标签明细只能用于红字材料出库单。");
             }
             else if (operation.ErpDocumentType is "transfer" or "location-adjustment")
             {
@@ -394,6 +410,183 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                 connection, transaction, operation.SubmissionGroupId, operation.OperatorId,
                 requestId, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private async Task CompleteGeneratedLabelAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        MaterialOutboundExecutionOperation operation,
+        MaterialOutboundExecutionLine line,
+        (string? LineId, string? PositionId) erp,
+        CancellationToken cancellationToken)
+    {
+        const string ruleSql = """
+            SELECT TOP (1) version.id, version.spec_json
+            FROM dbo.label_code_rule rule WITH (UPDLOCK,HOLDLOCK)
+            INNER JOIN dbo.label_code_rule_version version WITH (UPDLOCK,HOLDLOCK)
+                ON version.rule_id=rule.id AND version.version_status='ACTIVE'
+            WHERE rule.is_enabled=1
+              AND rule.object_type IN ('PRODUCT_LABEL','INVENTORY_OBJECT')
+            ORDER BY CASE WHEN rule.object_type='PRODUCT_LABEL' THEN 0 ELSE 1 END,
+                     rule.priority,rule.id;
+            """;
+        long ruleVersionId;
+        string specJson;
+        await using (var ruleCommand = new SqlCommand(ruleSql, connection, transaction))
+        await using (var reader = await ruleCommand.ExecuteReaderAsync(cancellationToken))
+        {
+            if (!await reader.ReadAsync(cancellationToken))
+                throw new InvalidOperationException("没有可用的产品标签编码规则。");
+            ruleVersionId = reader.GetInt64(0);
+            specJson = reader.GetString(1);
+        }
+
+        using var document = JsonDocument.Parse(specJson);
+        var validated = codeRules.Validate(document.RootElement);
+        var uniqueSegment = validated.Spec.Segments.FirstOrDefault(segment =>
+            segment.Kind == "FIELD" && segment.Field == "LABEL_UNIQUE_VALUE");
+        var sequenceSegment = validated.Spec.Segments.FirstOrDefault(segment => segment.Kind == "SEQUENCE");
+        if (uniqueSegment is null && sequenceSegment is null)
+            throw new InvalidOperationException("产品标签规则缺少唯一值或流水号。");
+
+        var now = BusinessClock.Now;
+        var partition = $"RETURN:{now:yyyyMMdd}";
+        long sequence;
+        await using (var updateSequence = new SqlCommand("""
+            UPDATE dbo.label_code_sequence WITH (UPDLOCK,HOLDLOCK)
+            SET current_value=current_value+1,
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            OUTPUT inserted.current_value
+            WHERE rule_version_id=@version_id AND partition_key=@partition;
+            """, connection, transaction))
+        {
+            updateSequence.Parameters.Add("@version_id", SqlDbType.BigInt).Value = ruleVersionId;
+            updateSequence.Parameters.Add("@partition", SqlDbType.NVarChar, 200).Value = partition;
+            var current = await updateSequence.ExecuteScalarAsync(cancellationToken);
+            if (current is null)
+            {
+                await using var insertSequence = new SqlCommand("""
+                    INSERT INTO dbo.label_code_sequence(rule_version_id,partition_key,current_value)
+                    VALUES(@version_id,@partition,1);
+                    """, connection, transaction);
+                insertSequence.Parameters.Add("@version_id", SqlDbType.BigInt).Value = ruleVersionId;
+                insertSequence.Parameters.Add("@partition", SqlDbType.NVarChar, 200).Value = partition;
+                await insertSequence.ExecuteNonQueryAsync(cancellationToken);
+                sequence = 1;
+            }
+            else
+            {
+                sequence = Convert.ToInt64(current, CultureInfo.InvariantCulture);
+            }
+        }
+
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["LABEL_TYPE"] = "PRODUCT",
+            ["MATERIAL_CODE"] = line.MaterialCode,
+            ["BATCH_NO"] = string.IsNullOrWhiteSpace(line.BatchNo) ? "NO_BATCH" : line.BatchNo,
+            ["ISSUED_QUANTITY"] = line.RequestedQty.ToString(CultureInfo.InvariantCulture),
+            ["UNIT_CODE"] = line.UnitCode,
+            ["SOURCE_DOCUMENT_NO"] = string.IsNullOrWhiteSpace(operation.SourceDocumentNo)
+                ? operation.ClientRequestId
+                : operation.SourceDocumentNo,
+            ["SEQUENCE"] = sequence.ToString(CultureInfo.InvariantCulture),
+            ["CURRENT_DATE"] = now.ToString("O", CultureInfo.InvariantCulture)
+        };
+        if (uniqueSegment is not null)
+        {
+            var length = uniqueSegment.Length ?? uniqueSegment.MaxLength ?? 10;
+            var prefix = length > 6 ? now.ToString("yyMMdd", CultureInfo.InvariantCulture) : string.Empty;
+            var sequenceLength = length - prefix.Length;
+            var suffix = sequence.ToString(CultureInfo.InvariantCulture).PadLeft(sequenceLength, '0');
+            if (suffix.Length > sequenceLength)
+                throw new InvalidOperationException("标签唯一值流水号已超出规则长度。");
+            values["LABEL_UNIQUE_VALUE"] = prefix + suffix;
+        }
+        var code = codeRules.Render(validated.Spec, values, options.CurrentValue.ErpAccountId);
+        if (code.Length > 100)
+            throw new InvalidOperationException("标签编码超过数据库长度。");
+
+        long labelId;
+        await using (var insertLabel = new SqlCommand("""
+            INSERT INTO dbo.product_label(label_code,current_qty,status)
+            OUTPUT inserted.id
+            VALUES(@code,@quantity,'PENDING_PRINT');
+            """, connection, transaction))
+        {
+            insertLabel.Parameters.Add("@code", SqlDbType.NVarChar, 100).Value = code;
+            insertLabel.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(line.RequestedQty);
+            labelId = Convert.ToInt64(await insertLabel.ExecuteScalarAsync(cancellationToken));
+        }
+
+        var payloadJson = JsonSerializer.Serialize(values);
+        await using (var insertRegistry = new SqlCommand("""
+            INSERT INTO dbo.label_code_registry
+                (code_hash,normalized_code,raw_code,object_type,product_label_id,
+                 rule_version_id,erp_account_id,parsed_payload_json,registry_status)
+            VALUES
+                (@hash,@code,@code,'PRODUCT_LABEL',@label_id,
+                 @version_id,@account_id,@payload,'PENDING_PRINT');
+            """, connection, transaction))
+        {
+            insertRegistry.Parameters.Add("@hash", SqlDbType.Binary, 32).Value =
+                SHA256.HashData(Encoding.UTF8.GetBytes(code));
+            insertRegistry.Parameters.Add("@code", SqlDbType.NVarChar, -1).Value = code;
+            insertRegistry.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+            insertRegistry.Parameters.Add("@version_id", SqlDbType.BigInt).Value = ruleVersionId;
+            insertRegistry.Parameters.Add("@account_id", SqlDbType.NVarChar, 20).Value =
+                options.CurrentValue.ErpAccountId;
+            insertRegistry.Parameters.Add("@payload", SqlDbType.NVarChar, -1).Value = payloadJson;
+            await insertRegistry.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        long flowId;
+        await using (var insertFlow = new SqlCommand("""
+            INSERT INTO dbo.inventory_flow
+                (operation_id,operation_line_id,object_type,label_id,object_sequence_no,
+                 flow_role,operation_type,unit_code,qty_before,change_qty,qty_after,
+                 material_code,batch_no,inventory_attributes_json,attribute_schema_version,
+                 to_warehouse_code,to_location_code,remark)
+            OUTPUT inserted.id
+            VALUES
+                (@operation_id,@line_id,'PRODUCT_LABEL',@label_id,1,
+                 'NORMAL',@operation_type,@unit_code,0,@quantity,@quantity,
+                 @material_code,@batch_no,@attributes,1,
+                 @warehouse,@location,@remark);
+            """, connection, transaction))
+        {
+            insertFlow.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
+            insertFlow.Parameters.Add("@line_id", SqlDbType.BigInt).Value = line.Id;
+            insertFlow.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+            insertFlow.Parameters.Add("@operation_type", SqlDbType.VarChar, 50).Value = operation.OperationType;
+            insertFlow.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.UnitCode;
+            insertFlow.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(line.RequestedQty);
+            insertFlow.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = line.MaterialCode;
+            insertFlow.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(line.BatchNo, 100);
+            insertFlow.Parameters.Add("@attributes", SqlDbType.NVarChar, -1).Value = payloadJson;
+            insertFlow.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value = line.WarehouseCode;
+            insertFlow.Parameters.Add("@location", SqlDbType.NVarChar, 100).Value = DbValue(line.LocationCode, 100);
+            insertFlow.Parameters.Add("@remark", SqlDbType.NVarChar, 500).Value = DbValue(line.Remark, 500);
+            flowId = Convert.ToInt64(await insertFlow.ExecuteScalarAsync(cancellationToken));
+        }
+
+        await using (var updateLabel = new SqlCommand(
+                         "UPDATE dbo.product_label SET last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@label_id;",
+                         connection, transaction))
+        {
+            updateLabel.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = flowId;
+            updateLabel.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+            await updateLabel.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+        await using var updateLine = new SqlCommand(
+            "UPDATE dbo.business_operation_line SET generated_label_id=@label_id WHERE id=@line_id AND operation_id=@operation_id;",
+            connection, transaction);
+        updateLine.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+        updateLine.Parameters.Add("@line_id", SqlDbType.BigInt).Value = line.Id;
+        updateLine.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
+        if (await updateLine.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new InvalidOperationException("新标签与业务明细关联失败。");
     }
 
     private static async Task CompleteLabelAsync(

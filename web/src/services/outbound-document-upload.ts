@@ -44,10 +44,15 @@ interface MaterialOutboundPayload {
 
 interface InventoryDocumentLine {
   labelCode: string
-  objectType: 'PRODUCT_LABEL' | 'PALLET'
+  objectType: 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
   sourcePalletCode?: string
   materialCode: string
+  materialName?: string
+  batchNo?: string
   unitCode: string
+  warehouseCode?: string
+  locationCode?: string
+  requiresBatch?: boolean
   requestedQty: number
   fieldValues?: Record<string, string | number>
 }
@@ -136,6 +141,11 @@ function createInventoryPrepareLines(payload: InventoryDocumentPayload) {
     requestedQty: Number(line.requestedQty),
     remark: payload.remark || null,
     additionalFields: line.fieldValues ?? {},
+    materialName: line.materialName || null,
+    batchNo: line.batchNo || null,
+    warehouseCode: line.warehouseCode || null,
+    locationCode: line.locationCode || null,
+    requiresBatch: line.requiresBatch === true,
   }))
   const sources = (payload.selectedSourceLines ?? []).map((line) => ({
     ...line,
@@ -281,6 +291,16 @@ export async function cancelOutboundOperationGroup(
 ): Promise<OperationGroupSnapshot> {
   return apiRequest<OperationGroupSnapshot>(
     `/api/v1/operations/groups/${encodeURIComponent(submissionGroupId)}/cancel`,
+    { method: 'POST' },
+  )
+}
+
+export async function confirmIssuedLabel(
+  submissionGroupId: string,
+  labelCode: string,
+): Promise<OperationGroupSnapshot> {
+  return apiRequest<OperationGroupSnapshot>(
+    `/api/v1/operations/groups/${encodeURIComponent(submissionGroupId)}/issued-labels/${encodeURIComponent(labelCode)}/confirm`,
     { method: 'POST' },
   )
 }

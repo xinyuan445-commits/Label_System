@@ -10,7 +10,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         long? LabelId,
         long? PalletId,
         long? SourcePalletId,
-        decimal InventoryQty,
+        decimal? InventoryQty,
         string BatchNo,
         string WarehouseCode,
         string LocationCode);
@@ -164,7 +164,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     line, product.Id, null, product.PalletId, product.CurrentQty,
                     product.BatchNo, product.WarehouseCode, product.LocationCode));
             }
-            else
+            else if (line.ObjectType == "PALLET")
             {
                 var pallet = pallets[line.LabelCode.Trim()];
                 EnsureIdentity(line, pallet.Line.MaterialCode, pallet.Line.UnitCode);
@@ -173,6 +173,14 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     line, null, pallet.Id, null, pallet.Line.AvailableQty,
                     pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode));
             }
+            else
+            {
+                result.Add(new ResolvedLine(
+                    line, null, null, null, null,
+                    line.BatchNo?.Trim() ?? string.Empty,
+                    line.WarehouseCode?.Trim() ?? string.Empty,
+                    line.LocationCode?.Trim() ?? string.Empty));
+            }
         }
         foreach (var group in result.GroupBy(line => new
                  {
@@ -180,8 +188,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                      Code = line.Request.LabelCode.Trim().ToUpperInvariant()
                  }))
         {
+            if (group.Key.ObjectType == "UNLABELED_MATERIAL") continue;
             var total = group.Sum(line => line.Request.RequestedQty);
-            var available = group.First().InventoryQty;
+            var available = group.First().InventoryQty ?? 0m;
             if (!definition.AllowZeroQuantity && total > available)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "LABEL_QUANTITY_INSUFFICIENT", $"标签数量不足：{group.Key.Code}");
@@ -409,10 +418,15 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             command.Parameters.Add("@label_id", SqlDbType.BigInt).Value = line.LabelId.HasValue ? line.LabelId.Value : DBNull.Value;
             command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = line.PalletId.HasValue ? line.PalletId.Value : DBNull.Value;
             command.Parameters.Add("@selection_source", SqlDbType.VarChar, 20).Value =
-                line.SourcePalletId.HasValue || line.PalletId.HasValue ? "PALLET_SCAN" : "LABEL_SCAN";
+                line.LabelId.HasValue
+                    ? line.SourcePalletId.HasValue ? "PALLET_SCAN" : "LABEL_SCAN"
+                    : line.PalletId.HasValue ? "PALLET_SCAN" : DBNull.Value;
             command.Parameters.Add("@source_pallet_id", SqlDbType.BigInt).Value =
                 line.SourcePalletId.HasValue ? line.SourcePalletId.Value : DBNull.Value;
-            AddDecimal(command, "@inventory_qty", line.InventoryQty);
+            if (line.InventoryQty.HasValue)
+                AddDecimal(command, "@inventory_qty", line.InventoryQty.Value);
+            else
+                command.Parameters.Add("@inventory_qty", SqlDbType.Decimal).Value = DBNull.Value;
             command.Parameters.Add("@source_line_id", SqlDbType.NVarChar, 100).Value =
                 line.Request.SourceLineId.HasValue ? line.Request.SourceLineId.Value.ToString() : DBNull.Value;
             command.Parameters.Add("@source_line_no", SqlDbType.NVarChar, 50).Value =

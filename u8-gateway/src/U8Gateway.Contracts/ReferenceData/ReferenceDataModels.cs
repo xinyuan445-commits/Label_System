@@ -28,6 +28,15 @@ namespace U8Gateway.Contracts.ReferenceData
         public string Name { get; set; }
     }
 
+    public sealed class MaterialItem
+    {
+        public string Code { get; set; }
+        public string Name { get; set; }
+        public string Specification { get; set; }
+        public string UnitCode { get; set; }
+        public bool RequiresBatch { get; set; }
+    }
+
     public sealed class DocumentTypeItem
     {
         public string Code { get; set; }

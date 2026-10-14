@@ -15,6 +15,7 @@ import {
   listAllLocalDocuments,
   requestOutboundDocumentEdit,
   subscribeDraftChanges,
+  updateOutboundDocumentGroup,
   type OperationGroupSnapshot,
   type StoredOutboundDocument,
 } from '@/services/outbound-document-drafts'
@@ -25,6 +26,7 @@ import {
 import { readSession } from '@/services/auth'
 import {
   getOutboundOperationGroup,
+  confirmIssuedLabel,
   listOutboundOperationGroups,
   executeOutboundDocument,
   refreshOutboundDocumentGroup,
@@ -47,6 +49,7 @@ const selectedDocument = ref<StoredOutboundDocument | null>(null)
 const message = ref('')
 const uploadingId = ref('')
 const processingId = ref('')
+const confirmingLabelCode = ref('')
 const selectionMode = ref(false)
 const selectedIds = ref<Set<string>>(new Set())
 let allowDocumentReturn = false
@@ -109,6 +112,7 @@ async function refresh(): Promise<void> {
         serverErrorCode: group.errorCode,
         serverErrorMessage: group.errorMessage,
         preparedOperations: group.operations,
+        issuedLabels: group.issuedLabels ?? existing.issuedLabels ?? [],
         updatedAt: group.updatedAt ?? existing.updatedAt,
       })
       continue
@@ -130,6 +134,7 @@ async function refresh(): Promise<void> {
       serverErrorCode: group.errorCode,
       serverErrorMessage: group.errorMessage,
       preparedOperations: group.operations,
+      issuedLabels: group.issuedLabels ?? [],
       summary: {
         documentDate: (group.createdAt ?? now).slice(0, 10),
         sourceTypeLabel: title.value,
@@ -173,6 +178,22 @@ function changeStatus(status: ManagerStatus): void {
   activeStatus.value = status
   selectedIds.value = new Set()
   void refresh()
+}
+
+async function confirmLabel(document: StoredOutboundDocument, code: string): Promise<void> {
+  if (!document.serverOperationId || confirmingLabelCode.value) return
+  confirmingLabelCode.value = code
+  try {
+    const group = await confirmIssuedLabel(document.serverOperationId, code)
+    const updated = await updateOutboundDocumentGroup(document.id, group)
+    selectedDocument.value = updated
+    documents.value = documents.value.map((item) => item.id === document.id ? updated : item)
+    message.value = '标签已启用'
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : '确认失败'
+  } finally {
+    confirmingLabelCode.value = ''
+  }
 }
 
 const allSelected = computed(() =>
@@ -535,6 +556,22 @@ onBeforeRouteLeave((to) => {
             <span v-if="operation.errorMessage" class="operation-error">{{ operation.errorMessage }}</span>
           </div>
         </div>
+        <div v-if="selectedDocument.issuedLabels?.length" class="issued-label-list">
+          <h3>待打印标签</h3>
+          <div v-for="label in selectedDocument.issuedLabels" :key="label.code">
+            <strong>{{ label.code }}</strong>
+            <span>{{ label.materialCode }} · {{ label.materialName || '--' }}</span>
+            <span>{{ label.batchNo || '无批号' }} · {{ label.quantity }} {{ label.unitCode }}</span>
+            <span>{{ label.warehouseCode }}{{ label.locationCode ? ` / ${label.locationCode}` : '' }}</span>
+            <button
+              v-if="label.status === 'PENDING_PRINT' && selectedDocument.serverStatus === 'SUCCESS'"
+              type="button"
+              :disabled="confirmingLabelCode === label.code"
+              @click="confirmLabel(selectedDocument, label.code)"
+            >{{ confirmingLabelCode === label.code ? '确认中' : '确认已贴标' }}</button>
+            <b v-else-if="label.status === 'ACTIVE'">已启用</b>
+          </div>
+        </div>
       </section>
     </div>
 
@@ -548,6 +585,7 @@ onBeforeRouteLeave((to) => {
 .draft-sync-status{display:flex;justify-content:space-between;gap:10px;margin:-4px 0 12px;color:#60758e;font-size:12px}.draft-sync-status span{color:#8b98a8}
 .server-status{display:flex;justify-content:space-between;gap:10px;margin:-4px 0 12px;color:#2867ad;font-size:12px;font-weight:700}.server-status span{color:#8491a2;font-weight:500}.operation-list{display:grid;gap:8px;margin-top:12px}.operation-list>div{display:grid;gap:3px;padding:10px;border-radius:9px;background:#f7f9fc}.operation-list strong{color:#33465e;font-size:12px}.operation-list span{color:#7b899b;font-size:11px}.operation-list .operation-error{color:#ae4141}
 .erp-document-number{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:-4px 0 12px;color:#60758e;font-size:12px}.erp-document-number strong{overflow-wrap:anywhere;color:#2368c4;text-align:right}.operation-list .operation-erp-no{color:#2368c4;font-weight:700}
+.issued-label-list{display:grid;gap:8px;margin-top:12px}.issued-label-list h3{margin:0;color:#33465e;font-size:13px}.issued-label-list>div{display:grid;gap:3px;padding:10px;border:1px solid #d9e7f6;border-radius:9px;background:#f6faff}.issued-label-list strong{overflow-wrap:anywhere;color:#2368c4;font:700 12px ui-monospace,SFMono-Regular,Consolas,monospace}.issued-label-list span{color:#697b90;font-size:11px}.issued-label-list button{justify-self:end;height:32px;padding:0 10px;border:0;border-radius:8px;background:#2368c4;color:#fff;font-size:12px;font-weight:750}.issued-label-list button:disabled{opacity:.55}.issued-label-list b{justify-self:end;color:#23724d;font-size:12px}
 .manager-page {
   padding-top: var(--app-header-height);
 }

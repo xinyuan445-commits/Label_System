@@ -621,6 +621,23 @@ app.MapGet("/api/v1/reference-data/departments", async (
     CancellationToken cancellationToken) =>
     ApiResults.Ok(context, await repository.ListDepartmentsAsync(cancellationToken)));
 
+app.MapGet("/api/v1/reference-data/materials", async (
+    HttpContext context,
+    string? keyword,
+    int? limit,
+    U8GatewayClient gateway,
+    UserRepository users,
+    CancellationToken cancellationToken) =>
+{
+    await RequireFunctionAsync(context, users, "material-outbound", cancellationToken);
+    var normalized = keyword?.Trim() ?? string.Empty;
+    if (normalized.Length > 100)
+        throw new ApiException(StatusCodes.Status400BadRequest,
+            "MATERIAL_QUERY_INVALID", "物料查询条件无效。");
+    return ApiResults.Ok(context,
+        await gateway.SearchMaterialsAsync(normalized, Math.Clamp(limit ?? 50, 1, 100), cancellationToken));
+});
+
 app.MapGet("/api/v1/reference-data/purchase-types", async (
     HttpContext context,
     ReferenceDataRepository repository,
@@ -957,6 +974,20 @@ app.MapPost("/api/v1/operations/groups/{groupId}/cancel", async (
     ApiResults.Ok(context, await repository.CancelAsync(
         groupId, RequestContext.Id(context), RequestContext.User(context).Id,
         false, cancellationToken)));
+
+app.MapPost("/api/v1/operations/groups/{groupId}/issued-labels/{labelCode}/confirm", async (
+    HttpContext context,
+    string groupId,
+    string labelCode,
+    MaterialOutboundRepository repository,
+    UserRepository users,
+    CancellationToken cancellationToken) =>
+{
+    await RequireFunctionAsync(context, users, "material-outbound", cancellationToken);
+    return ApiResults.Ok(context, await repository.ConfirmIssuedLabelAsync(
+        groupId, labelCode, RequestContext.Id(context), RequestContext.User(context).Id,
+        RequestContext.IsAdmin(context), cancellationToken));
+});
 
 app.Run();
 

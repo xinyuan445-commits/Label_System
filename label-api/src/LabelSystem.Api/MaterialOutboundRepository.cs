@@ -159,7 +159,203 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         if (operations.Count == 0)
             throw new ApiException(StatusCodes.Status404NotFound, "OPERATION_NOT_FOUND", "业务操作不存在。");
         EnsureOperationAccess(operations, userId, manageAll);
-        return ToGroupResult(submissionGroupId, operations);
+        var result = ToGroupResult(submissionGroupId, operations);
+        return result with
+        {
+            IssuedLabels = await ReadIssuedLabelsAsync(
+                connection, submissionGroupId, cancellationToken)
+        };
+    }
+
+    private static async Task<IReadOnlyList<IssuedLabelItem>> ReadIssuedLabelsAsync(
+        SqlConnection connection,
+        string submissionGroupId,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT label.label_code,flow.material_code,flow.batch_no,flow.unit_code,
+                   flow.qty_after,flow.to_warehouse_code,flow.to_location_code,label.status
+            FROM dbo.business_operation operation
+            INNER JOIN dbo.business_operation_line line ON line.operation_id=operation.id
+            INNER JOIN dbo.product_label label ON label.id=line.generated_label_id
+            INNER JOIN dbo.inventory_flow flow ON flow.id=label.last_flow_id
+            WHERE operation.submission_group_id=@group_id
+            ORDER BY operation.id,line.line_no;
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = submissionGroupId;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var result = new List<IssuedLabelItem>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(new IssuedLabelItem(
+                reader.GetString(0), reader.GetString(1), null,
+                reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3),
+                reader.GetDecimal(4), reader.GetString(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetString(7)));
+        }
+        return result;
+    }
+
+    public async Task<OperationGroupResult> ConfirmIssuedLabelAsync(
+        string submissionGroupId,
+        string labelCode,
+        string requestId,
+        string userId,
+        bool manageAll,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable, cancellationToken);
+
+        const string readSql = """
+            SELECT label.id,label.status,label.current_qty,label.last_flow_id,
+                   line.id,operation.id,operation.status,operation.operator_id,
+                   flow.unit_code,flow.material_code,flow.batch_no,flow.inventory_attributes_json,
+                   flow.attribute_schema_version,flow.inventory_identity_hash,
+                   flow.to_warehouse_code,flow.to_location_code,flow.to_pallet_id
+            FROM dbo.business_operation operation WITH (UPDLOCK,HOLDLOCK)
+            INNER JOIN dbo.business_operation_line line WITH (UPDLOCK,HOLDLOCK)
+                ON line.operation_id=operation.id
+            INNER JOIN dbo.product_label label WITH (UPDLOCK,HOLDLOCK)
+                ON label.id=line.generated_label_id
+            INNER JOIN dbo.inventory_flow flow WITH (UPDLOCK,HOLDLOCK)
+                ON flow.id=label.last_flow_id
+            WHERE operation.submission_group_id=@group_id AND label.label_code=@label_code;
+            """;
+        long labelId;
+        string labelStatus;
+        decimal quantity;
+        long lastFlowId;
+        long lineId;
+        long operationId;
+        string operationStatus;
+        string operatorId;
+        string unitCode;
+        string materialCode;
+        string? batchNo;
+        string? attributes;
+        int attributeVersion;
+        string? identityHash;
+        string warehouseCode;
+        string? locationCode;
+        long? palletId;
+        await using (var read = new SqlCommand(readSql, connection, transaction))
+        {
+            read.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = submissionGroupId;
+            read.Parameters.Add("@label_code", SqlDbType.NVarChar, 100).Value = labelCode;
+            await using var reader = await read.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+                throw new ApiException(StatusCodes.Status404NotFound,
+                    "ISSUED_LABEL_NOT_FOUND", "待打印标签不存在。");
+            labelId = reader.GetInt64(0);
+            labelStatus = reader.GetString(1);
+            quantity = reader.GetDecimal(2);
+            lastFlowId = reader.GetInt64(3);
+            lineId = reader.GetInt64(4);
+            operationId = reader.GetInt64(5);
+            operationStatus = reader.GetString(6);
+            operatorId = reader.GetString(7);
+            unitCode = reader.GetString(8);
+            materialCode = reader.GetString(9);
+            batchNo = reader.IsDBNull(10) ? null : reader.GetString(10);
+            attributes = reader.IsDBNull(11) ? null : reader.GetString(11);
+            attributeVersion = reader.GetInt32(12);
+            identityHash = reader.IsDBNull(13) ? null : reader.GetString(13);
+            warehouseCode = reader.GetString(14);
+            locationCode = reader.IsDBNull(15) ? null : reader.GetString(15);
+            palletId = reader.IsDBNull(16) ? null : reader.GetInt64(16);
+        }
+        if (!manageAll && !string.Equals(operatorId, userId, StringComparison.OrdinalIgnoreCase))
+            throw new ApiException(StatusCodes.Status403Forbidden,
+                "OPERATION_FORBIDDEN", "只能确认本人创建的标签。");
+        if (labelStatus == "ACTIVE")
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return await GetGroupAsync(submissionGroupId, userId, manageAll, cancellationToken);
+        }
+        if (labelStatus != "PENDING_PRINT")
+            throw new ApiException(StatusCodes.Status409Conflict,
+                "ISSUED_LABEL_STATUS_INVALID", "标签当前不能确认。");
+        if (operationStatus != "SUCCESS")
+            throw new ApiException(StatusCodes.Status409Conflict,
+                "OPERATION_NOT_COMPLETED", "单据完成后才能确认标签。");
+
+        int sequence;
+        await using (var readSequence = new SqlCommand(
+                         "SELECT ISNULL(MAX(object_sequence_no),0)+1 FROM dbo.inventory_flow WITH (UPDLOCK,HOLDLOCK) WHERE label_id=@label_id;",
+                         connection, transaction))
+        {
+            readSequence.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+            sequence = Convert.ToInt32(await readSequence.ExecuteScalarAsync(cancellationToken));
+        }
+        long printFlowId;
+        await using (var insertFlow = new SqlCommand("""
+            INSERT INTO dbo.inventory_flow
+                (operation_id,operation_line_id,object_type,label_id,object_sequence_no,
+                 flow_role,operation_type,unit_code,qty_before,change_qty,qty_after,
+                 material_code,batch_no,inventory_attributes_json,attribute_schema_version,
+                 inventory_identity_hash,from_warehouse_code,from_location_code,
+                 to_warehouse_code,to_location_code,from_pallet_id,to_pallet_id,remark)
+            OUTPUT inserted.id
+            VALUES
+                (@operation_id,@line_id,'PRODUCT_LABEL',@label_id,@sequence,
+                 'NORMAL','PRINT',@unit_code,@quantity,0,@quantity,
+                 @material_code,@batch_no,@attributes,@attribute_version,
+                 @identity_hash,@warehouse,@location,@warehouse,@location,@pallet_id,@pallet_id,N'首次打印确认');
+            """, connection, transaction))
+        {
+            insertFlow.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operationId;
+            insertFlow.Parameters.Add("@line_id", SqlDbType.BigInt).Value = lineId;
+            insertFlow.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+            insertFlow.Parameters.Add("@sequence", SqlDbType.Int).Value = sequence;
+            insertFlow.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = unitCode;
+            insertFlow.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(quantity);
+            insertFlow.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = materialCode;
+            insertFlow.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(batchNo);
+            insertFlow.Parameters.Add("@attributes", SqlDbType.NVarChar, -1).Value = DbValue(attributes);
+            insertFlow.Parameters.Add("@attribute_version", SqlDbType.Int).Value = attributeVersion;
+            insertFlow.Parameters.Add("@identity_hash", SqlDbType.Char, 64).Value = DbValue(identityHash);
+            insertFlow.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value = warehouseCode;
+            insertFlow.Parameters.Add("@location", SqlDbType.NVarChar, 100).Value = DbValue(locationCode);
+            insertFlow.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = palletId.HasValue ? palletId.Value : DBNull.Value;
+            printFlowId = Convert.ToInt64(await insertFlow.ExecuteScalarAsync(cancellationToken));
+        }
+        await using (var updateLabel = new SqlCommand("""
+            UPDATE dbo.product_label
+            SET status='ACTIVE',last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE id=@label_id AND status='PENDING_PRINT' AND last_flow_id=@last_flow_id;
+            UPDATE dbo.label_code_registry
+            SET registry_status='ACTIVE',updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE product_label_id=@label_id AND registry_status='PENDING_PRINT';
+            UPDATE dbo.business_operation_line
+            SET printed_label_count=ISNULL(printed_label_count,0)+1,
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE id=@line_id AND operation_id=@operation_id;
+            """, connection, transaction))
+        {
+            updateLabel.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = printFlowId;
+            updateLabel.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+            updateLabel.Parameters.Add("@last_flow_id", SqlDbType.BigInt).Value = lastFlowId;
+            updateLabel.Parameters.Add("@line_id", SqlDbType.BigInt).Value = lineId;
+            updateLabel.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operationId;
+            await updateLabel.ExecuteNonQueryAsync(cancellationToken);
+        }
+        var nextEventSequence = 1;
+        await using (var eventSequence = new SqlCommand(
+                         "SELECT ISNULL(MAX(sequence_no),0)+1 FROM dbo.business_operation_event WITH (UPDLOCK,HOLDLOCK) WHERE operation_id=@operation_id;",
+                         connection, transaction))
+        {
+            eventSequence.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operationId;
+            nextEventSequence = Convert.ToInt32(await eventSequence.ExecuteScalarAsync(cancellationToken));
+        }
+        await InsertEventAsync(connection, transaction, operationId, nextEventSequence,
+            "LABEL_PRINT_CONFIRMED", "SUCCESS", requestId,
+            $"新标签已确认：{labelCode}", cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return await GetGroupAsync(submissionGroupId, userId, manageAll, cancellationToken);
     }
 
     public async Task<OperationGroupListResult> ListGroupsAsync(
@@ -251,7 +447,17 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
             .OrderByDescending(group => group.UpdatedAt)
             .ThenByDescending(group => group.SubmissionGroupId, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        return new OperationGroupListResult(skip, take, total, items);
+        await reader.DisposeAsync();
+        var hydrated = new List<OperationGroupResult>(items.Length);
+        foreach (var item in items)
+        {
+            hydrated.Add(item with
+            {
+                IssuedLabels = await ReadIssuedLabelsAsync(
+                    connection, item.SubmissionGroupId, cancellationToken)
+            });
+        }
+        return new OperationGroupListResult(skip, take, total, hydrated);
     }
 
     public async Task<OperationGroupResult> HeartbeatAsync(

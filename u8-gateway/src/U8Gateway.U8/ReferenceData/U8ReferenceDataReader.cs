@@ -138,6 +138,51 @@ order by d.cDepCode;";
             return result;
         }
 
+        public IList<MaterialItem> SearchMaterials(string keyword, int limit)
+        {
+            const string sql = @"
+select top (@limit)
+    i.cInvCode,
+    i.cInvName,
+    isnull(i.cInvStd, N''),
+    isnull(i.cComUnitCode, N''),
+    convert(bit, isnull(i.bInvBatch, 0))
+from dbo.Inventory i
+where i.dEDate is null
+  and nullif(ltrim(rtrim(i.cInvCode)), N'') is not null
+  and (@keyword = N'' or i.cInvCode like @pattern or i.cInvName like @pattern)
+order by case when i.cInvCode = @keyword then 0 else 1 end, i.cInvCode;";
+
+            var result = new List<MaterialItem>();
+            using (var connection = new SqlConnection(_connectionString))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.CommandTimeout = 20;
+                command.Parameters.Add("@limit", System.Data.SqlDbType.Int).Value =
+                    Math.Max(1, Math.Min(limit, 100));
+                string normalized = (keyword ?? string.Empty).Trim();
+                command.Parameters.Add("@keyword", System.Data.SqlDbType.NVarChar, 100).Value = normalized;
+                command.Parameters.Add("@pattern", System.Data.SqlDbType.NVarChar, 204).Value =
+                    "%" + normalized.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]") + "%";
+                connection.Open();
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        result.Add(new MaterialItem
+                        {
+                            Code = reader.GetString(0).Trim(),
+                            Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim(),
+                            Specification = reader.GetString(2).Trim(),
+                            UnitCode = reader.GetString(3).Trim(),
+                            RequiresBatch = reader.GetBoolean(4)
+                        });
+                    }
+                }
+            }
+            return result;
+        }
+
         public DocumentMasterData GetDocumentMasterData()
         {
             return new DocumentMasterData
