@@ -163,6 +163,7 @@ const headerFieldValues = ref<Record<string, string | number>>({})
 const selectedSourceLines = ref<SourceDocumentLine[]>([])
 const materialRequirements = ref<MaterialRequirementLine[]>([])
 const overIssueTargets = ref<Record<string, number>>({})
+const dismissedOverIssueLineIds = ref<string[]>([])
 const scanCode = ref('')
 const lines = ref<OutboundLine[]>([])
 const pendingScanLines = ref<OutboundLine[]>([])
@@ -269,11 +270,13 @@ function materialPickingComplete(line: OutboundLine): boolean {
   return Boolean(progress && progress.remainingQty > 0 &&
     progress.scannedQty >= progress.remainingQty && progress.unallocatedQty <= 0)
 }
-const pendingOverIssueLine = computed(() =>
-  documentPolicy.value.allowOverIssue
-    ? lines.value.find((line) => allocationByLine.value[line.id]?.requiresOverIssueTarget)
-    : undefined,
+const unresolvedOverIssueLines = computed(() => documentPolicy.value.allowOverIssue
+  ? lines.value.filter((line) => allocationByLine.value[line.id]?.requiresOverIssueTarget)
+  : [],
 )
+const pendingOverIssueLine = computed(() => unresolvedOverIssueLines.value.find(
+  (line) => !dismissedOverIssueLineIds.value.includes(line.id),
+))
 const pendingOverIssueMaterial = computed(() =>
   materialSummaries.value.find(
     (item) => item.materialCode.localeCompare(
@@ -641,6 +644,9 @@ function confirmEditingLine(): void {
     lines.value = lines.value.map((line) =>
       line.id === editingExistingLineId.value ? normalizedLine : line,
     )
+    dismissedOverIssueLineIds.value = dismissedOverIssueLineIds.value.filter(
+      (lineId) => lineId !== editingExistingLineId.value,
+    )
     editingLine.value = null
     editingExistingLineId.value = null
     notify('已保存', 'success')
@@ -969,6 +975,9 @@ function removeLine(id: string): void {
     delete next[id]
     overIssueTargets.value = next
   }
+  dismissedOverIssueLineIds.value = dismissedOverIssueLineIds.value.filter(
+    (lineId) => lineId !== id,
+  )
 }
 
 async function openSourceDocumentSelection(): Promise<void> {
@@ -1109,6 +1118,7 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
   overIssueTargets.value = draft.overIssueTargets && typeof draft.overIssueTargets === 'object'
     ? draft.overIssueTargets
     : {}
+  dismissedOverIssueLineIds.value = []
   lines.value = Array.isArray(draft.lines)
     ? draft.lines.map((line) => ({
         ...line,
@@ -1172,6 +1182,9 @@ async function saveCompletedDocument(): Promise<StoredOutboundDocument | null> {
   const error = validate()
   if (error) {
     notify(error, 'error')
+    if (error === '请选择超领产品' && unresolvedOverIssueLines.value[0]) {
+      showOverIssueTarget(unresolvedOverIssueLines.value[0].id)
+    }
     return null
   }
 
@@ -1314,19 +1327,25 @@ function chooseOverIssueTarget(requirementId: number): void {
   const lineId = pendingOverIssueLine.value?.id
   if (!lineId) return
   overIssueTargets.value = { ...overIssueTargets.value, [lineId]: requirementId }
+  dismissedOverIssueLineIds.value = dismissedOverIssueLineIds.value.filter(
+    (item) => item !== lineId,
+  )
 }
 
 function cancelOverIssue(): void {
   const pending = pendingOverIssueLine.value
   if (!pending) return
-  const quantityToRemove = allocationByLine.value[pending.id]?.unallocatedQty ?? 0
-  const current = normalizeQty(pending.requestedQty)
-  const nextQuantity = normalizeQty(current - quantityToRemove)
-  if (nextQuantity <= 0) {
-    lines.value = lines.value.filter((line) => line.id !== pending.id)
-    return
-  }
-  pending.requestedQty = nextQuantity
+  dismissedOverIssueLineIds.value = [...new Set([
+    ...dismissedOverIssueLineIds.value,
+    ...unresolvedOverIssueLines.value.map((line) => line.id),
+  ])]
+  notify('已保留，请选择超领归属', 'info')
+}
+
+function showOverIssueTarget(lineId: string): void {
+  dismissedOverIssueLineIds.value = dismissedOverIssueLineIds.value.filter(
+    (item) => item !== lineId,
+  )
 }
 
 function goToScanStep(): void {
@@ -1356,6 +1375,9 @@ async function finishDocument(): Promise<void> {
   if (validationError) {
     completionError.value = validationError
     notify(validationError, 'error')
+    if (validationError === '请选择超领产品' && unresolvedOverIssueLines.value[0]) {
+      showOverIssueTarget(unresolvedOverIssueLines.value[0].id)
+    }
     return
   }
   finishing.value = true
@@ -1747,6 +1769,14 @@ onBeforeRouteLeave((to) => {
               </template>
             </dl>
             <span v-if="materialPickingComplete(line)" class="picking-complete-stamp">拣货完成</span>
+            <button
+              v-if="allocationByLine[line.id]?.requiresOverIssueTarget"
+              class="pending-over-issue"
+              type="button"
+              @click.stop="showOverIssueTarget(line.id)"
+            >
+              待选超领归属
+            </button>
           </article>
         </div>
 
@@ -2415,6 +2445,17 @@ h1 {
   letter-spacing: 2px;
   line-height: 1;
   box-shadow: inset 0 0 0 2px rgba(190, 46, 46, .08);
+}
+
+.pending-over-issue {
+  margin-top: 10px;
+  padding: 5px 8px;
+  border: 1px solid #e7b966;
+  border-radius: 8px;
+  background: #fff7e7;
+  color: #9a6309;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .line-info dt {
