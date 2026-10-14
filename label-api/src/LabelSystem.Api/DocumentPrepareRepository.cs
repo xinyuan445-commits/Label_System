@@ -263,9 +263,12 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             if (!isRedMaterialReturn && !definition.AllowZeroQuantity && total > available)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "LABEL_QUANTITY_INSUFFICIENT", $"标签数量不足：{group.Key.Code}");
-            if (definition.WholePalletMove && total != available)
+            var belongsToPallet = group.First().SourcePalletId.HasValue;
+            if (definition.WholePalletMove &&
+                (group.Key.ObjectType == "PALLET" || belongsToPallet) &&
+                total != available)
                 throw new ApiException(StatusCodes.Status409Conflict,
-                    "WHOLE_OBJECT_QUANTITY_REQUIRED", $"必须整件处理：{group.Key.Code}");
+                    "WHOLE_PALLET_QUANTITY_REQUIRED", $"托盘必须整体处理：{group.Key.Code}");
         }
         return result.ToArray();
     }

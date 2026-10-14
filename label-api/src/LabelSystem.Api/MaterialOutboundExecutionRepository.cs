@@ -13,6 +13,8 @@ public sealed class MaterialOutboundExecutionRepository(
     LabelCodeRuleEngine codeRules,
     IOptionsMonitor<LabelSystemOptions> options)
 {
+    private sealed record PendingProductLabel(long Id, string Code, string AttributesJson);
+
     public async Task<IReadOnlyList<MaterialOutboundExecutionOperation>> GetPlanAsync(
         string groupId,
         string userId,
@@ -470,6 +472,61 @@ public sealed class MaterialOutboundExecutionRepository(
         (string? LineId, string? PositionId) erp,
         CancellationToken cancellationToken)
     {
+        var generated = await CreatePendingProductLabelAsync(
+            connection, transaction, operation, line, line.RequestedQty, "RETURN", cancellationToken);
+
+        long flowId;
+        await using (var insertFlow = new SqlCommand("""
+            INSERT INTO dbo.inventory_flow
+                (operation_id,operation_line_id,object_type,label_id,object_sequence_no,
+                 flow_role,operation_type,unit_code,qty_before,change_qty,qty_after,
+                 material_code,batch_no,inventory_attributes_json,attribute_schema_version,
+                 to_warehouse_code,to_location_code,remark)
+            OUTPUT inserted.id
+            VALUES
+                (@operation_id,@line_id,'PRODUCT_LABEL',@label_id,1,
+                 'NORMAL',@operation_type,@unit_code,0,@quantity,@quantity,
+                 @material_code,@batch_no,@attributes,1,
+                 @warehouse,@location,@remark);
+            """, connection, transaction))
+        {
+            insertFlow.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
+            insertFlow.Parameters.Add("@line_id", SqlDbType.BigInt).Value = line.Id;
+            insertFlow.Parameters.Add("@label_id", SqlDbType.BigInt).Value = generated.Id;
+            insertFlow.Parameters.Add("@operation_type", SqlDbType.VarChar, 50).Value = operation.OperationType;
+            insertFlow.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.UnitCode;
+            insertFlow.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(line.RequestedQty);
+            insertFlow.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = line.MaterialCode;
+            insertFlow.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(line.BatchNo, 100);
+            insertFlow.Parameters.Add("@attributes", SqlDbType.NVarChar, -1).Value = generated.AttributesJson;
+            insertFlow.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value = line.WarehouseCode;
+            insertFlow.Parameters.Add("@location", SqlDbType.NVarChar, 100).Value = DbValue(line.LocationCode, 100);
+            insertFlow.Parameters.Add("@remark", SqlDbType.NVarChar, 500).Value = DbValue(line.Remark, 500);
+            flowId = Convert.ToInt64(await insertFlow.ExecuteScalarAsync(cancellationToken));
+        }
+
+        await using (var updateLabel = new SqlCommand(
+                         "UPDATE dbo.product_label SET last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@label_id;",
+                         connection, transaction))
+        {
+            updateLabel.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = flowId;
+            updateLabel.Parameters.Add("@label_id", SqlDbType.BigInt).Value = generated.Id;
+            await updateLabel.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+        await LinkGeneratedLabelAsync(
+            connection, transaction, operation.Id, line.Id, generated.Id, cancellationToken);
+    }
+
+    private async Task<PendingProductLabel> CreatePendingProductLabelAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        MaterialOutboundExecutionOperation operation,
+        MaterialOutboundExecutionLine line,
+        decimal quantity,
+        string partitionType,
+        CancellationToken cancellationToken)
+    {
         const string ruleSql = """
             SELECT TOP (1) [version].id, [version].spec_json
             FROM dbo.label_code_rule AS [rule] WITH (UPDLOCK,HOLDLOCK)
@@ -500,7 +557,7 @@ public sealed class MaterialOutboundExecutionRepository(
             throw new InvalidOperationException("产品标签规则缺少唯一值或流水号。");
 
         var now = BusinessClock.Now;
-        var partition = $"RETURN:{now:yyyyMMdd}";
+        var partition = $"{partitionType}:{now:yyyyMMdd}";
         long sequence;
         await using (var updateSequence = new SqlCommand("""
             UPDATE dbo.label_code_sequence WITH (UPDLOCK,HOLDLOCK)
@@ -535,7 +592,7 @@ public sealed class MaterialOutboundExecutionRepository(
             ["LABEL_TYPE"] = "PRODUCT",
             ["MATERIAL_CODE"] = line.MaterialCode,
             ["BATCH_NO"] = string.IsNullOrWhiteSpace(line.BatchNo) ? "NO_BATCH" : line.BatchNo,
-            ["ISSUED_QUANTITY"] = line.RequestedQty.ToString(CultureInfo.InvariantCulture),
+            ["ISSUED_QUANTITY"] = quantity.ToString(CultureInfo.InvariantCulture),
             ["UNIT_CODE"] = line.UnitCode,
             ["SOURCE_DOCUMENT_NO"] = string.IsNullOrWhiteSpace(operation.SourceDocumentNo)
                 ? operation.ClientRequestId
@@ -565,7 +622,7 @@ public sealed class MaterialOutboundExecutionRepository(
             """, connection, transaction))
         {
             insertLabel.Parameters.Add("@code", SqlDbType.NVarChar, 100).Value = code;
-            insertLabel.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(line.RequestedQty);
+            insertLabel.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(quantity);
             labelId = Convert.ToInt64(await insertLabel.ExecuteScalarAsync(cancellationToken));
         }
 
@@ -590,53 +647,7 @@ public sealed class MaterialOutboundExecutionRepository(
             await insertRegistry.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        long flowId;
-        await using (var insertFlow = new SqlCommand("""
-            INSERT INTO dbo.inventory_flow
-                (operation_id,operation_line_id,object_type,label_id,object_sequence_no,
-                 flow_role,operation_type,unit_code,qty_before,change_qty,qty_after,
-                 material_code,batch_no,inventory_attributes_json,attribute_schema_version,
-                 to_warehouse_code,to_location_code,remark)
-            OUTPUT inserted.id
-            VALUES
-                (@operation_id,@line_id,'PRODUCT_LABEL',@label_id,1,
-                 'NORMAL',@operation_type,@unit_code,0,@quantity,@quantity,
-                 @material_code,@batch_no,@attributes,1,
-                 @warehouse,@location,@remark);
-            """, connection, transaction))
-        {
-            insertFlow.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
-            insertFlow.Parameters.Add("@line_id", SqlDbType.BigInt).Value = line.Id;
-            insertFlow.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
-            insertFlow.Parameters.Add("@operation_type", SqlDbType.VarChar, 50).Value = operation.OperationType;
-            insertFlow.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.UnitCode;
-            insertFlow.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(line.RequestedQty);
-            insertFlow.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = line.MaterialCode;
-            insertFlow.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(line.BatchNo, 100);
-            insertFlow.Parameters.Add("@attributes", SqlDbType.NVarChar, -1).Value = payloadJson;
-            insertFlow.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value = line.WarehouseCode;
-            insertFlow.Parameters.Add("@location", SqlDbType.NVarChar, 100).Value = DbValue(line.LocationCode, 100);
-            insertFlow.Parameters.Add("@remark", SqlDbType.NVarChar, 500).Value = DbValue(line.Remark, 500);
-            flowId = Convert.ToInt64(await insertFlow.ExecuteScalarAsync(cancellationToken));
-        }
-
-        await using (var updateLabel = new SqlCommand(
-                         "UPDATE dbo.product_label SET last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@label_id;",
-                         connection, transaction))
-        {
-            updateLabel.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = flowId;
-            updateLabel.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
-            await updateLabel.ExecuteNonQueryAsync(cancellationToken);
-        }
-        await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
-        await using var updateLine = new SqlCommand(
-            "UPDATE dbo.business_operation_line SET generated_label_id=@label_id WHERE id=@line_id AND operation_id=@operation_id;",
-            connection, transaction);
-        updateLine.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
-        updateLine.Parameters.Add("@line_id", SqlDbType.BigInt).Value = line.Id;
-        updateLine.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
-        if (await updateLine.ExecuteNonQueryAsync(cancellationToken) != 1)
-            throw new InvalidOperationException("新标签与业务明细关联失败。");
+        return new PendingProductLabel(labelId, code, payloadJson);
     }
 
     private static async Task CompleteLabelAsync(
@@ -783,7 +794,7 @@ public sealed class MaterialOutboundExecutionRepository(
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
-    private static async Task CompleteMoveAsync(
+    private async Task CompleteMoveAsync(
         SqlConnection connection, SqlTransaction transaction,
         MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
         (string? LineId, string? PositionId) erp,
@@ -802,9 +813,20 @@ public sealed class MaterialOutboundExecutionRepository(
         var previousFlowId = reader.IsDBNull(2) ? (long?)null : reader.GetInt64(2);
         await reader.CloseAsync();
         if (lockedBy != operation.RootOperationId) throw new InvalidOperationException("库存对象锁已变化。");
+        if (line.RequestedQty <= 0 || line.RequestedQty > quantity)
+            throw new InvalidOperationException("移动数量无效。");
+        if ((line.ObjectType == "PALLET" || line.SourcePalletId.HasValue) && line.RequestedQty != quantity)
+            throw new InvalidOperationException("托盘必须整体移动。");
 
         var targetWarehouse = line.TargetWarehouseCode ?? line.WarehouseCode;
         var targetLocation = line.TargetLocationCode;
+        if (line.ObjectType == "PRODUCT_LABEL" && line.RequestedQty < quantity)
+        {
+            await CompletePartialMoveAsync(
+                connection, transaction, operation, line, erp, quantity,
+                targetWarehouse, targetLocation, previousFlowId, cancellationToken);
+            return;
+        }
         var flowId = await InsertStateFlowAsync(
             connection, transaction, operation, line, quantity, 0m, quantity,
             line.WarehouseCode, line.LocationCode, targetWarehouse, targetLocation,
@@ -822,6 +844,147 @@ public sealed class MaterialOutboundExecutionRepository(
         if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
             throw new InvalidOperationException("库存对象更新冲突。");
         await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+    }
+
+    private async Task CompletePartialMoveAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        MaterialOutboundExecutionOperation operation,
+        MaterialOutboundExecutionLine line,
+        (string? LineId, string? PositionId) erp,
+        decimal before,
+        string targetWarehouse,
+        string? targetLocation,
+        long? previousFlowId,
+        CancellationToken cancellationToken)
+    {
+        var remaining = before - line.RequestedQty;
+        var generated = await CreatePendingProductLabelAsync(
+            connection, transaction, operation, line, line.RequestedQty, "SPLIT", cancellationToken);
+
+        const string sourceFlowSql = """
+            INSERT INTO dbo.inventory_flow
+                (operation_id,operation_line_id,object_type,label_id,object_sequence_no,
+                 relation_group_no,flow_role,operation_type,unit_code,
+                 qty_before,change_qty,qty_after,material_code,batch_no,
+                 manufacture_date,expiry_date,serial_no,inventory_attributes_json,
+                 attribute_schema_version,inventory_identity_hash,
+                 from_warehouse_code,from_location_code,to_warehouse_code,to_location_code,remark)
+            OUTPUT inserted.id
+            SELECT @operation_id,@line_id,'PRODUCT_LABEL',@label_id,
+                   (SELECT ISNULL(MAX(sequence_flow.object_sequence_no),0)+1
+                    FROM dbo.inventory_flow sequence_flow WITH (UPDLOCK,HOLDLOCK)
+                    WHERE sequence_flow.label_id=@label_id),
+                   @relation_group_no,'SOURCE','SPLIT',@unit_code,
+                   @before,-@quantity,@remaining,@material_code,@batch_no,
+                   previous.manufacture_date,previous.expiry_date,previous.serial_no,
+                   previous.inventory_attributes_json,ISNULL(previous.attribute_schema_version,1),
+                   previous.inventory_identity_hash,
+                   @source_warehouse,@source_location,@source_warehouse,@source_location,@remark
+            FROM (SELECT 1 AS marker) seed
+            LEFT JOIN dbo.inventory_flow previous ON previous.id=@previous_flow_id;
+            """;
+        long sourceFlowId;
+        await using (var sourceFlow = new SqlCommand(sourceFlowSql, connection, transaction))
+        {
+            AddSplitFlowParameters(
+                sourceFlow, operation, line, line.LabelId!.Value, line.LineNo,
+                before, line.RequestedQty, remaining, line.WarehouseCode, line.LocationCode,
+                targetWarehouse, targetLocation, previousFlowId);
+            sourceFlowId = Convert.ToInt64(await sourceFlow.ExecuteScalarAsync(cancellationToken));
+        }
+
+        const string targetFlowSql = """
+            INSERT INTO dbo.inventory_flow
+                (operation_id,operation_line_id,object_type,label_id,object_sequence_no,
+                 relation_group_no,flow_role,operation_type,unit_code,
+                 qty_before,change_qty,qty_after,material_code,batch_no,
+                 manufacture_date,expiry_date,serial_no,inventory_attributes_json,
+                 attribute_schema_version,inventory_identity_hash,
+                 from_warehouse_code,from_location_code,to_warehouse_code,to_location_code,remark)
+            OUTPUT inserted.id
+            SELECT @operation_id,@line_id,'PRODUCT_LABEL',@label_id,1,
+                   @relation_group_no,'TARGET','SPLIT',@unit_code,
+                   0,@quantity,@quantity,@material_code,@batch_no,
+                   previous.manufacture_date,previous.expiry_date,previous.serial_no,
+                   previous.inventory_attributes_json,ISNULL(previous.attribute_schema_version,1),
+                   previous.inventory_identity_hash,
+                   @source_warehouse,@source_location,@target_warehouse,@target_location,@remark
+            FROM (SELECT 1 AS marker) seed
+            LEFT JOIN dbo.inventory_flow previous ON previous.id=@previous_flow_id;
+            """;
+        long targetFlowId;
+        await using (var targetFlow = new SqlCommand(targetFlowSql, connection, transaction))
+        {
+            AddSplitFlowParameters(
+                targetFlow, operation, line, generated.Id, line.LineNo,
+                before, line.RequestedQty, remaining, line.WarehouseCode, line.LocationCode,
+                targetWarehouse, targetLocation, previousFlowId);
+            targetFlowId = Convert.ToInt64(await targetFlow.ExecuteScalarAsync(cancellationToken));
+        }
+
+        await using (var updateSource = new SqlCommand("""
+            UPDATE dbo.product_label
+            SET current_qty=@quantity,status='ACTIVE',last_flow_id=@flow_id,
+                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
+            WHERE id=@label_id AND locked_operation_id=@root_id;
+            """, connection, transaction))
+        {
+            updateSource.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(remaining);
+            updateSource.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = sourceFlowId;
+            updateSource.Parameters.Add("@label_id", SqlDbType.BigInt).Value = line.LabelId!.Value;
+            updateSource.Parameters.Add("@root_id", SqlDbType.BigInt).Value = operation.RootOperationId;
+            if (await updateSource.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("原标签拆分更新冲突。");
+        }
+        await using (var updateTarget = new SqlCommand(
+                         "UPDATE dbo.product_label SET last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@label_id AND status='PENDING_PRINT';",
+                         connection, transaction))
+        {
+            updateTarget.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = targetFlowId;
+            updateTarget.Parameters.Add("@label_id", SqlDbType.BigInt).Value = generated.Id;
+            if (await updateTarget.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("新标签拆分更新冲突。");
+        }
+
+        await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+        await LinkGeneratedLabelAsync(
+            connection, transaction, operation.Id, line.Id, generated.Id, cancellationToken);
+    }
+
+    private static void AddSplitFlowParameters(
+        SqlCommand command,
+        MaterialOutboundExecutionOperation operation,
+        MaterialOutboundExecutionLine line,
+        long labelId,
+        int relationGroupNo,
+        decimal before,
+        decimal quantity,
+        decimal remaining,
+        string sourceWarehouse,
+        string? sourceLocation,
+        string targetWarehouse,
+        string? targetLocation,
+        long? previousFlowId)
+    {
+        command.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
+        command.Parameters.Add("@line_id", SqlDbType.BigInt).Value = line.Id;
+        command.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+        command.Parameters.Add("@relation_group_no", SqlDbType.Int).Value = relationGroupNo;
+        command.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.UnitCode;
+        command.Parameters.Add("@before", SqlDbType.Decimal).ConfigureDecimal(before);
+        command.Parameters.Add("@quantity", SqlDbType.Decimal).ConfigureDecimal(quantity);
+        command.Parameters.Add("@remaining", SqlDbType.Decimal).ConfigureDecimal(remaining);
+        command.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = line.MaterialCode;
+        command.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(line.BatchNo, 100);
+        command.Parameters.Add("@source_warehouse", SqlDbType.NVarChar, 100).Value = sourceWarehouse;
+        command.Parameters.Add("@source_location", SqlDbType.NVarChar, 100).Value = DbValue(sourceLocation, 100);
+        command.Parameters.Add("@target_warehouse", SqlDbType.NVarChar, 100).Value = targetWarehouse;
+        command.Parameters.Add("@target_location", SqlDbType.NVarChar, 100).Value = DbValue(targetLocation, 100);
+        command.Parameters.Add("@previous_flow_id", SqlDbType.BigInt).Value = previousFlowId.HasValue
+            ? previousFlowId.Value
+            : DBNull.Value;
+        command.Parameters.Add("@remark", SqlDbType.NVarChar, 500).Value = DbValue(line.Remark, 500);
     }
 
     private static async Task CompleteCountAsync(
@@ -982,6 +1145,24 @@ public sealed class MaterialOutboundExecutionRepository(
         update.Parameters.Add("@id", SqlDbType.BigInt).Value = line.Id;
         if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
             throw new InvalidOperationException("业务明细状态已变化。");
+    }
+
+    private static async Task LinkGeneratedLabelAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        long operationId,
+        long lineId,
+        long labelId,
+        CancellationToken cancellationToken)
+    {
+        await using var update = new SqlCommand(
+            "UPDATE dbo.business_operation_line SET generated_label_id=@label_id WHERE id=@line_id AND operation_id=@operation_id;",
+            connection, transaction);
+        update.Parameters.Add("@label_id", SqlDbType.BigInt).Value = labelId;
+        update.Parameters.Add("@line_id", SqlDbType.BigInt).Value = lineId;
+        update.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operationId;
+        if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new InvalidOperationException("新标签与业务明细关联失败。");
     }
 
     private static async Task SetDraftCompletedWhenTerminalAsync(

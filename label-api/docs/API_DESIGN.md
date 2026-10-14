@@ -246,3 +246,9 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 ## 货位调整明细位置（0.8.15）
 
 `location-adjustment` 不再要求表头 `warehouseCode`、`sourceLocationCode` 或 `targetLocationCode`。每条明细提交扫码快照的 `warehouseCode`、`locationCode` 和用户选择的 `targetLocationCode`；服务端以标签或托盘最新库存位置为准，并按实际仓库拆组。目标货位必须存在于当前仓库且不能等于原货位，整托明细的目标位置必须一致。
+
+## 调拨与货位调整部分数量（0.8.16）
+
+`transfer-order` 和 `location-adjustment` 的独立 `PRODUCT_LABEL` 明细允许 `0 < requestedQty <= inventoryQtySnapshot`。服务端加锁后重新读取当前余额；数量超过当前余额返回 `LABEL_QUANTITY_INSUFFICIENT`。`PALLET` 明细及带 `sourcePalletCode` 的托内产品明细仍必须按当前余额整体提交，否则返回 `WHOLE_PALLET_QUANTITY_REQUIRED`。
+
+全量移动继续为原标签写入位置流水。部分移动在 U8 新增回查成功后原子完成：原标签扣减 `requestedQty` 并保留来源位置，目标位置创建 `PENDING_PRINT` 产品标签，两条 `inventory_flow` 使用同一 `relation_group_no`、`operation_type=SPLIT`，角色分别为 `SOURCE` 和 `TARGET`。业务组查询通过既有 `issuedLabels` 返回新标签，确认已贴标仍调用现有待打印确认接口。

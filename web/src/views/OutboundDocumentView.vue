@@ -723,8 +723,9 @@ function lineEditError(line: OutboundLine): string {
   }
   if (
     ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
+    (line.objectType === 'PALLET' || Boolean(line.sourcePalletCode)) &&
     quantity !== line.availableQty
-  ) return '调拨和货位调整必须整件处理'
+  ) return '托盘必须整体处理'
   if (
     line.locationCode && line.warehouseCode &&
     !warehousePositionOptions.value.some((item) =>
@@ -1673,8 +1674,11 @@ function validate(): string {
   ) return '本次处理数量不能超过标签当前数量'
   if (
     ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
-    lines.value.some((line) => normalizeQty(line.requestedQty) !== line.availableQty)
-  ) return '调拨和货位调整必须整件处理'
+    lines.value.some((line) =>
+      (line.objectType === 'PALLET' || Boolean(line.sourcePalletCode)) &&
+      normalizeQty(line.requestedQty) !== line.availableQty,
+    )
+  ) return '托盘必须整体处理'
   if (
     props.documentType !== 'material-outbound' &&
     selectedSourceLines.value.length > 0 &&
@@ -2354,7 +2358,9 @@ onBeforeRouteLeave((to) => {
               :value="editorFieldValue(editingLine, field.key)"
               :type="fieldInputType(field)"
               :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
-              :readonly="field.key === 'body.quantity' && ['transfer-order', 'location-adjustment'].includes(documentType)"
+              :readonly="field.key === 'body.quantity' &&
+                ['transfer-order', 'location-adjustment'].includes(documentType) &&
+                (editingLine.objectType === 'PALLET' || Boolean(editingLine.sourcePalletCode))"
               autocomplete="off"
               @focus="keepEditorInputVisible"
               @input="updateEditorInput(field, $event)"

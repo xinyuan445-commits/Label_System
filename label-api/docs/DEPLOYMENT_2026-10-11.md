@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-14 18:58 已发布 Business API `0.8.16` 到 `D:\LabelSystem\Api\releases\20261014_185811`，外置配置备份为 `D:\LabelSystem\Config\label-api.pre-0.8.16.json`。调拨和货位调整允许独立产品标签按部分数量处理：全量继续移动原标签，部分数量在 U8 成功后保留原标签余量并生成目标位置的待打印标签；托盘及托内标签仍整体移动。H5 更新为 `0.2.0-dev.69`，5173 已重启，运行时配置返回新版本。H5 构建和 Business API Release 构建均通过，API 健康检查 `ready`、版本 `0.8.16`、数据库就绪、888 测试写入开启。复用迁移 013，无数据库迁移，Gateway 和 APK 不变；本次未调用 U8 写接口，也未生成标签数据。
+
 2026-10-14 已发布 Business API `0.8.15` 到 `D:\LabelSystem\Api\releases\20261014_184515`，配置更新前备份为 `D:\LabelSystem\Config\label-api.pre-0.8.15.json`。货位调整不再从表头接收仓库、原货位和目标货位；服务端按标签或托盘当前仓库拆单，逐条校验目标货位属于当前仓库且不同于原货位，并约束整托目标一致。H5 更新为 `0.2.0-dev.68`，5173 已重启并返回 200。H5 构建和 Business API Release 构建均通过，API 健康检查 `ready`、版本 `0.8.15`、数据库就绪、888 测试写入开启。无数据库迁移，Gateway 和 APK 不变；本次未调用 U8 写接口。
 
 2026-10-14 17:50 已发布 Business API `0.8.14` 到 `D:\LabelSystem\Api\releases\20261014_175000`，外置配置备份为 `D:\LabelSystem\Config\label-api.json.20261014_174956.bak`。修正全组明确失败后草稿被误标为 `COMPLETED`：只有全组均为 `FAILED` 时恢复 `DRAFT`，部分成功仍保持完成，结果未知仍保持待核对。调拨失败组 `41ee9f62-d09a-480b-998d-748fb58872ea` 已在确认没有 ERP ID、ERP 单号和库存流水后恢复为 `DRAFT`，原操作及错误审计保留。健康检查 `ready`、版本 `0.8.14`、数据库就绪、888 测试写入开启；未代用户重试新增。无数据库迁移，H5 和 APK 不变。

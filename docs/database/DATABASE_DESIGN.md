@@ -243,7 +243,7 @@ label_code_rule
 | `line_status` | varchar(20) | 否 | PENDING、SUCCESS、FAILED、SKIPPED |
 | `label_id` | bigint | 是 | 绑定的产品标签；纯 U8 单据明细为空 |
 | `pallet_id` | bigint | 是 | 绑定的托盘；与 `label_id` 互斥 |
-| `generated_label_id` | bigint | 是 | 无标签红字退料在 U8 成功后生成的产品标签；同一新标签只能关联一条明细 |
+| `generated_label_id` | bigint | 是 | U8 成功后由该明细生成的产品标签，包括无标签红字退料及调拨/货位调整部分移动；同一新标签只能关联一条明细 |
 | `selection_source` | varchar(20) | 是 | LABEL_SCAN 或 PALLET_SCAN |
 | `source_pallet_id` | bigint | 是 | 选择标签时所属的托盘；托盘扫码时必填 |
 | `inventory_qty_snapshot` | decimal(18,6) | 是 | 扫码或提交时看到的标签或托盘库存数量快照 |
@@ -277,7 +277,7 @@ label_code_rule
 | `updated_at` | datetime2(3) | 否 | 最后更新时间 |
 | `row_version` | rowversion | 否 | 并发版本 |
 
-关键约束：同一操作的 `line_no` 唯一；数量不得为负；属性必须是合法 JSON。产品标签和托盘最多绑定一种；绑定库存对象时必须保存选择来源和库存数量快照。通过托盘选择产品标签时必须保存来源托盘；托盘自身做单时 `requested_qty` 固定为 1。`generated_label_id` 与提交前的扫码绑定分离，只有 U8 红字退料新增确认后赋值，并使用过滤唯一索引防止一张新标签关联多条明细。
+关键约束：同一操作的 `line_no` 唯一；数量不得为负；属性必须是合法 JSON。产品标签和托盘最多绑定一种；绑定库存对象时必须保存选择来源和库存数量快照。通过托盘选择产品标签时必须保存来源托盘；托盘自身做单时 `requested_qty` 固定为 1。`generated_label_id` 与提交前的扫码绑定分离，只在 U8 新增回查确认后赋值，并使用过滤唯一索引防止一张新标签关联多条明细；当前用于无标签红字退料和调拨/货位调整部分移动产生的待打印标签。
 
 `inventory_qty_snapshot` 和 `requested_qty` 含义不同。例如产品标签扫码时余额为 100、本次申请使用 60，两个字段分别保存 100 和 60。前者只还原用户提交现场，后者保存业务请求；最终实际执行前后数量只写入 `inventory_flow.qty_before` 和 `inventory_flow.qty_after`。
 
@@ -686,4 +686,4 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 3. 对应的 SQL 迁移脚本。
 4. API 请求、响应及错误码合同。
 
-迁移 001 至 013 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。迁移 `013` 在 `business_operation_line` 增加唯一的 `generated_label_id`，用于把无标签红字退料明细与 U8 成功后新建的产品标签关联；该字段不代替原扫码 `label_id`。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。
+迁移 001 至 013 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。迁移 `013` 在 `business_operation_line` 增加唯一的 `generated_label_id`，用于把无标签红字退料或部分移动明细与 U8 成功后新建的产品标签关联；该字段不代替原扫码 `label_id`。调拨和货位调整部分移动复用现有 `inventory_flow.relation_group_no`、`flow_role` 及标签登记结构，不需要新增迁移。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。
