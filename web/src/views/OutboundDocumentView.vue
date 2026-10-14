@@ -343,6 +343,10 @@ const targetLocationOptions = computed(() => warehousePositionOptions.value.filt
 const warehouseSelectOptions = computed<SearchSelectOption[]>(() =>
   warehouseOptions.value.map((item) => ({ value: item.code, label: item.name })),
 )
+const documentDirectionOptions: SearchSelectOption[] = [
+  { value: 'BLUE', label: '蓝字' },
+  { value: 'RED', label: '红字' },
+]
 const sourceLocationSelectOptions = computed<SearchSelectOption[]>(() =>
   locationOptions.value.map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
 )
@@ -406,6 +410,10 @@ function beijingDate(): string {
 function normalizeQty(value: number): number {
   const normalized = Number(value)
   return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
+}
+
+function handleDocumentDirectionChange(value: string): void {
+  documentDirection.value = value === 'RED' ? 'RED' : 'BLUE'
 }
 
 function formatQty(value: number | null): string {
@@ -1707,10 +1715,15 @@ onBeforeRouteLeave((to) => {
 
           <label v-if="pageConfig.supportsRedBlue" class="field full-width">
             <span><i>*</i>单据类型</span>
-            <select v-model="documentDirection" aria-label="单据类型">
-              <option value="BLUE">蓝字</option>
-              <option value="RED">红字</option>
-            </select>
+            <SearchSelect
+              :model-value="documentDirection"
+              :options="documentDirectionOptions"
+              :searchable="false"
+              :clearable="false"
+              label-only
+              dialog-label="单据类型"
+              @update:model-value="handleDocumentDirectionChange"
+            />
           </label>
 
           <label v-if="fieldVisible('header.documentDate')" class="field">
