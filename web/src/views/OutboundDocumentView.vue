@@ -84,6 +84,7 @@ interface OutboundLine {
   sourcePalletCode?: string
   sourceAllocations?: SourceQuantityAllocation[]
   unallocatedQty?: number
+  requiresOverIssueQuantity?: boolean
 }
 
 interface MaterialOutboundSubmissionLine {
@@ -233,6 +234,9 @@ const editableBodyFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) &&
     !inventoryIdentityFieldKeys.has(field.key),
 ))
+const quantityVisibleInEditor = computed(() =>
+  editableBodyFields.value.some((field) => field.key === 'body.quantity'),
+)
 const readonlyEditorFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) &&
     inventoryIdentityFieldKeys.has(field.key),
@@ -527,6 +531,12 @@ function updateEditorInput(field: DocumentFieldDefinition, event: Event): void {
   updateEditorField(field.key, field.valueType === 'number' && raw !== '' ? Number(raw) : raw)
 }
 
+function updateOverIssueQuantity(event: Event): void {
+  if (!editingLine.value) return
+  const raw = (event.target as HTMLInputElement).value
+  editingLine.value.requestedQty = raw === '' ? 0 : Number(raw)
+}
+
 function updateEditorWarehouse(value: string): void {
   updateEditorField('body.warehouseCode', value)
   const valid = new Set(editorLocationSelectOptions.value.map((item) => item.value))
@@ -625,6 +635,7 @@ function confirmEditingLine(): void {
     warehouseCode: current.warehouseCode.trim(),
     locationCode: current.locationCode.trim(),
     fieldValues: { ...current.fieldValues },
+    requiresOverIssueQuantity: undefined,
   }
   if (editingExistingLineId.value) {
     lines.value = lines.value.map((line) =>
@@ -848,16 +859,20 @@ async function addBarcode(rawCode: string): Promise<void> {
     const sourceRemaining = remainingDemandByMaterial()
     const useSourceRemainder = props.documentType === 'material-outbound' &&
       selectedSourceLines.value.length > 0
+    const allowOverIssue = useSourceRemainder && documentPolicy.value.allowOverIssue
     const additions: OutboundLine[] = []
     let skippedSatisfied = 0
     for (const item of found) {
       const key = materialKey(item.materialCode)
       const remaining = sourceRemaining.get(key) ?? 0
-      if (useSourceRemainder && remaining <= 0) {
+      const requiresOverIssueQuantity = allowOverIssue && remaining <= 0
+      if (useSourceRemainder && remaining <= 0 && !allowOverIssue) {
         skippedSatisfied += 1
         continue
       }
-      const requestedQty = useSourceRemainder
+      const requestedQty = requiresOverIssueQuantity
+        ? 0
+        : useSourceRemainder
         ? Math.min(item.availableQty, remaining)
         : item.availableQty
       if (useSourceRemainder) sourceRemaining.set(key, normalizeQty(remaining - requestedQty))
@@ -890,6 +905,7 @@ async function addBarcode(rawCode: string): Promise<void> {
             : {}),
         },
         sourcePalletCode: item.objectType === 'PRODUCT_LABEL' ? item.palletCode : undefined,
+        requiresOverIssueQuantity,
       })
     }
     if (!additions.length) {
@@ -897,6 +913,7 @@ async function addBarcode(rawCode: string): Promise<void> {
     }
     if (
       documentPolicy.value.autoAddScannedDetail &&
+      !additions.some((line) => line.requiresOverIssueQuantity) &&
       !additions.some((line) => missingRequiredBodyField(line))
     ) {
       lines.value = [...lines.value, ...additions]
@@ -1808,6 +1825,9 @@ onBeforeRouteLeave((to) => {
       </header>
 
       <div class="line-editor-content">
+        <div v-if="editingLine.requiresOverIssueQuantity" class="over-issue-editor-notice">
+          超领 · 输入本次数量
+        </div>
         <dl v-if="readonlyEditorFields.length" class="editor-readonly-grid">
           <div v-for="field in readonlyEditorFields" :key="field.key">
             <dt>{{ field.label }}</dt>
@@ -1816,6 +1836,19 @@ onBeforeRouteLeave((to) => {
         </dl>
 
         <div class="editor-form-grid">
+          <label
+            v-if="editingLine.requiresOverIssueQuantity && !quantityVisibleInEditor"
+            class="field"
+          >
+            <span><i>*</i>超领数量</span>
+            <input
+              :value="editingLine.requestedQty || ''"
+              type="number"
+              inputmode="decimal"
+              autocomplete="off"
+              @input="updateOverIssueQuantity"
+            />
+          </label>
           <label v-for="field in editableBodyFields" :key="field.key" class="field">
             <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
             <SearchSelect
@@ -2897,6 +2930,17 @@ h1 {
 
 .over-issue-mask {
   z-index: 46;
+}
+
+.over-issue-editor-notice {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #f2ca76;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #96620d;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .over-issue-dialog {
