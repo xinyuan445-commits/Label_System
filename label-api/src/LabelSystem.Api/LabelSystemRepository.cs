@@ -388,17 +388,22 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         var sql = $"""
             SELECT pl.id, pl.label_code, pl.current_qty, pl.status, pl.locked_operation_id,
                    pl.row_version, f.material_code, f.batch_no, f.unit_code,
-                   f.to_warehouse_code, f.to_location_code, p.id, p.pallet_code,
+                   COALESCE(NULLIF(f.to_warehouse_code,N''),f.from_warehouse_code),
+                   CASE WHEN NULLIF(f.to_warehouse_code,N'') IS NULL
+                        THEN f.from_location_code ELSE f.to_location_code END, p.id, p.pallet_code,
                    JSON_VALUE(f.inventory_attributes_json, '$.materialName'),
                    JSON_VALUE(f.inventory_attributes_json, '$.unitName'),
                    w.warehouse_name, pos.position_name
             FROM dbo.product_label AS pl{hint}
             LEFT JOIN dbo.inventory_flow AS f ON f.id = pl.last_flow_id
             LEFT JOIN dbo.u8_warehouse_cache AS w
-              ON w.warehouse_code = f.to_warehouse_code AND w.is_active = 1
+              ON w.warehouse_code = COALESCE(NULLIF(f.to_warehouse_code,N''),f.from_warehouse_code)
+             AND w.is_active = 1
             LEFT JOIN dbo.u8_position_cache AS pos
-              ON pos.position_code = f.to_location_code
-             AND pos.warehouse_code = f.to_warehouse_code AND pos.is_active = 1
+              ON pos.position_code = CASE WHEN NULLIF(f.to_warehouse_code,N'') IS NULL
+                                          THEN f.from_location_code ELSE f.to_location_code END
+             AND pos.warehouse_code = COALESCE(NULLIF(f.to_warehouse_code,N''),f.from_warehouse_code)
+             AND pos.is_active = 1
             OUTER APPLY
             (
                 SELECT TOP (1) pallet.id, pallet.pallet_code

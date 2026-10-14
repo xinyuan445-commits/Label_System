@@ -230,6 +230,10 @@ const inventoryIdentityFieldKeys = new Set([
   'body.locationCode',
   'body.availableQty',
 ])
+const returnPositionFieldKeys = new Set([
+  'body.warehouseCode',
+  'body.locationCode',
+])
 
 const pageConfig = computed(() => getBusinessDocumentConfig(props.documentType))
 const hasFixedMaterialOutboundCategory = computed(() =>
@@ -249,16 +253,25 @@ const documentFields = computed(() => getBusinessDocumentFields(props.documentTy
 const headerExtraFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'header' && fieldVisible(field.key) && !handledHeaderFieldKeys.has(field.key),
 ))
-const editableBodyFields = computed(() => documentFields.value.filter(
-  (field) => field.area === 'body' && fieldVisible(field.key) &&
-    !inventoryIdentityFieldKeys.has(field.key),
-))
+const editingRedProductReturn = computed(() =>
+  props.documentType === 'material-outbound' &&
+  documentDirection.value === 'RED' &&
+  editingLine.value?.returnByLabel === true,
+)
+const editableBodyFields = computed(() => documentFields.value.filter((field) => {
+  if (field.area !== 'body') return false
+  const editableReturnPosition = editingRedProductReturn.value &&
+    returnPositionFieldKeys.has(field.key)
+  return (fieldVisible(field.key) || editableReturnPosition) &&
+    (!inventoryIdentityFieldKeys.has(field.key) || editableReturnPosition)
+}))
 const quantityVisibleInEditor = computed(() =>
   editableBodyFields.value.some((field) => field.key === 'body.quantity'),
 )
 const readonlyEditorFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) &&
-    inventoryIdentityFieldKeys.has(field.key),
+    inventoryIdentityFieldKeys.has(field.key) &&
+    !(editingRedProductReturn.value && returnPositionFieldKeys.has(field.key)),
 ))
 const returnRequirementTargets = computed(() => Object.fromEntries(
   lines.value
@@ -2208,6 +2221,7 @@ onBeforeRouteLeave((to) => {
               v-if="field.key === 'body.warehouseCode'"
               :model-value="editingLine.warehouseCode"
               :options="warehouseSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
               @update:model-value="updateEditorWarehouse"
@@ -2216,6 +2230,7 @@ onBeforeRouteLeave((to) => {
               v-else-if="field.key === 'body.locationCode'"
               :model-value="editingLine.locationCode"
               :options="editorLocationSelectOptions"
+              label-only
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
               @update:model-value="updateEditorField(field.key, $event)"
