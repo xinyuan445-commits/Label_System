@@ -1620,6 +1620,15 @@ function goToScanStep(): void {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+function returnToHeaderStep(): void {
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+  currentStep.value = 1
+  completionError.value = ''
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 function resetDocument(): void {
   if (!window.confirm('清空当前内容？')) return
   draftId.value = null
@@ -1696,6 +1705,10 @@ async function discardAndLeave(): Promise<void> {
 }
 
 async function leaveDocument(): Promise<void> {
+  if (currentStep.value === 2) {
+    returnToHeaderStep()
+    return
+  }
   await router.replace({ name: returnRouteName.value })
 }
 
@@ -1760,6 +1773,10 @@ onBeforeRouteLeave((to) => {
   if (allowNavigation) {
     allowNavigation = false
     return true
+  }
+  if (currentStep.value === 2) {
+    returnToHeaderStep()
+    return false
   }
   if (lines.value.length && hasUnsavedChanges()) {
     showLeaveConfirm.value = true
