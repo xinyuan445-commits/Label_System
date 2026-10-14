@@ -84,4 +84,6 @@ dotnet run --project src\LabelSystem.Api\LabelSystem.Api.csproj
 
 `0.8.3` 允许本人草稿从“全部拆组均为明确失败、没有 ERP 单号且没有库存流水”的旧业务组重新绑定到新的重试组，并把全组 `FAILED` 的服务端草稿保持为“未提交”。H5 对明确 `FAILED` 结果保留在“未提交”，每次人工重试生成新的、最长 64 字符的请求号；网络结果不明确时沿用当前请求号查询，避免重复单据。`NEEDS_RECONCILIATION` 仍禁止重试。
 
+`0.8.4` 补齐参照生产订单的材料出库单表头工单号：写入 `iproorderid` 的同时写入 `cmpocode`，表体生产订单和子件需求关联保持不变。
+
 2026-10-13 材料出库端到端验证已通过：同一生产订单按仓库拆成 U8 单据 `CLCKD20263349` 和 `CLCKD20263350`，业务组成功后写入 3 条 `MATERIAL_OUTBOUND` 流水并释放全部标签锁。两张 U8 单据保持未审核，符合 `autoApprove=false`。

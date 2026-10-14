@@ -156,7 +156,10 @@ public sealed class MaterialOutboundExecutionService(
         if (request.HasProductionSource && int.TryParse(
                 operation.SourceDocumentId, NumberStyles.Integer,
                 CultureInfo.InvariantCulture, out var sourceDocumentId))
+        {
             header["iproorderid"] = sourceDocumentId;
+            header["cmpocode"] = operation.SourceDocumentNo;
+        }
         ApplyAdditional(header, request.HeaderAdditional, "header.");
 
         var requirementById = requirements.ToDictionary(item => item.RequirementId);
