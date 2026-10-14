@@ -724,6 +724,28 @@ namespace U8Gateway.U8.Documents
                         Empty(error, "USERPCO 初始化失败。"));
                 }
                 object id = checked((int)voucherId);
+                head = Create("MSXML2.DOMDocument.3.0");
+                body = Create("MSXML2.DOMDocument.3.0");
+                position = Create("MSXML2.DOMDocument.3.0");
+                bool loaded = native.Load(
+                    profile.ComponentDocumentType,
+                    "ID=" + voucherId,
+                    ref head,
+                    ref body,
+                    ref position,
+                    ref error,
+                    false,
+                    string.Empty);
+                if (!loaded)
+                {
+                    return NativeStateChangeResult.Rejected(
+                        Empty(error, "操作前加载 U8 单据失败。"));
+                }
+                object timestamp = FirstAttribute(Xml(head), "ufts");
+                if (timestamp == null)
+                {
+                    return NativeStateChangeResult.Rejected("U8 单据缺少并发时间戳。");
+                }
                 bool succeeded;
                 if (string.Equals(operation, DocumentOperationCodes.Verify,
                     StringComparison.OrdinalIgnoreCase))
@@ -732,6 +754,7 @@ namespace U8Gateway.U8.Documents
                         voucher,
                         profile.ComponentDocumentType,
                         id,
+                        timestamp,
                         true);
                     return new NativeStateChangeResult(result.Succeeded, result.Error);
                 }
@@ -742,33 +765,12 @@ namespace U8Gateway.U8.Documents
                         voucher,
                         profile.ComponentDocumentType,
                         id,
+                        timestamp,
                         false);
                     return new NativeStateChangeResult(result.Succeeded, result.Error);
                 }
                 else
                 {
-                    head = Create("MSXML2.DOMDocument.3.0");
-                    body = Create("MSXML2.DOMDocument.3.0");
-                    position = Create("MSXML2.DOMDocument.3.0");
-                    bool loaded = native.Load(
-                        profile.ComponentDocumentType,
-                        "ID=" + voucherId,
-                        ref head,
-                        ref body,
-                        ref position,
-                        ref error,
-                        false,
-                        string.Empty);
-                    if (!loaded)
-                    {
-                        return NativeStateChangeResult.Rejected(
-                            Empty(error, "删除前加载 U8 单据失败。"));
-                    }
-                    object timestamp = FirstAttribute(Xml(head), "ufts");
-                    if (timestamp == null)
-                    {
-                        return NativeStateChangeResult.Rejected("U8 单据缺少并发时间戳。");
-                    }
                     succeeded = native.Delete(
                         profile.ComponentDocumentType,
                         id,

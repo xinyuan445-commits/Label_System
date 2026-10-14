@@ -7,7 +7,7 @@
 - `POST /api/v1/approval-documents/{documentType}/{voucherCode}/audit`
 - `POST /api/v1/approval-documents/{documentType}/{voucherCode}/unaudit`
 
-操作请求携带 `clientRequestId`、`expectedVersion`、原因和设备版本信息。Business API 使用当前会话和服务端 ERP 映射重建操作人；development 已对测试账套 888 开放审核和弃审，操作后必须由 Gateway 回查确认状态。
+操作请求携带 `clientRequestId`、`expectedVersion`、原因和设备版本信息。Business API 使用当前会话和服务端 ERP 映射重建操作人；development 已对测试账套 888 开放审核和弃审，操作后必须由 Gateway 回查确认状态。`expectedVersion` 用于调用前的 U8 SQL 并发校验；库存 USERPCO 状态操作另由 Gateway `Load` 当前单据并传入组件格式时间戳，二者都通过后才允许执行。
 
 用户管理接口要求管理员角色或当前会话短时管理权限；当前管理员不能停用自己或取消自己的管理员身份，系统也不允许停用或降级最后一个启用管理员。密码不进入用户列表、编辑响应或审计记录。
 Base path：`/api/v1`

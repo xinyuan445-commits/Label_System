@@ -71,13 +71,13 @@ namespace U8Gateway.UserpcoBridge
             object voucher,
             string voucherType,
             object voucherId,
+            object timestamp,
             bool verify)
         {
             if (voucher == null) throw new ArgumentNullException(nameof(voucher));
 
             string error = string.Empty;
             Connection connection = null;
-            object timestamp = null;
             IXMLDOMDocument2 message = null;
             bool check = true;
             bool beforeCheckStock = true;
