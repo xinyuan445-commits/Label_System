@@ -119,7 +119,9 @@ export function allocateMaterialScans(
     let requiresOverIssueTarget = false
     if (pending > 0 && allowOverIssue && matches.length) {
       const targetId = overIssueTargets[line.id]
-      const target = matches.find((requirement) => requirement.requirementId === targetId)
+      const target = matches.length === 1
+        ? matches[0]
+        : matches.find((requirement) => requirement.requirementId === targetId)
       if (target) {
         addAllocation(allocations, target, 0, pending)
         pending = 0
