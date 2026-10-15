@@ -258,3 +258,11 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 业务完成产生的 `PENDING_PRINT` 产品标签允许 `label_code=null`。`issuedLabels` 返回 `id`、可空 `code`、物料、批次、数量、仓库、货位和状态；H5 对空 Code 显示“待生成”，不提供“确认已贴标”。业务完成阶段不更新 `label_code_sequence`，也不写入 `label_code_registry`。
 
 打印平台后续必须使用内部 `id` 发起首次打印，在同一事务中分配流水、生成 Code、回填标签并登记唯一哈希。Code 一经分配即不可回收；打印失败只能复用原 Code 重试。现有按 `{labelCode}/confirm` 的接口仅兼容迁移前已经提前分配 Code 的待打印记录。
+
+## TraceBack 产品标签接口计划（尚未实施）
+
+迁移期产品标签查询将由 Business API 编排 Gateway 的 TraceBack 快照接口。稳定对外响应继续使用现有标签查询模型，不向 H5 暴露旧表 JSON、数据库字段或 UUID。快照至少包含完整 Code、SN、余额、最新流水 ID、物料、批次、单位、仓库、货位、来源业务标识和异常状态。
+
+材料出库、调拨和货位调整的预提交与执行前复核必须比较最新流水 ID、余额和位置。旧表写入任务是 ERP 成功后的必要收口步骤；失败或未知时新增独立的标签同步待恢复状态，并保留原 ERP 幂等编号、业务锁和稳定 TraceBack 事件键。恢复接口只能核对或补写原事件，不能重新新增 ERP 单据。
+
+无标签红字及部分移动产生的 `PENDING_PRINT` 在首次打印前不向 `TraceBackOnlyCode` 写空 Code。打印分配正式 Code 后，Business API 再提交打印阶段的 TraceBack 正流水。完整计划见 `docs/TRACEBACK_COEXISTENCE_PLAN.md`；具体路由、请求和错误码在实现前另行固化。

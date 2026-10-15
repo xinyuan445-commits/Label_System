@@ -173,3 +173,11 @@ GET  /api/v1/reference-data/document-master-data
 `VoucherCO.Insert` 按 U8 16.0 的 13 参数签名调用，消息文档以空输出参数传入，两个校验标志初始为 `true`，货位文档使用空 DOM，具体货位由表体 `cposition` 交给 U8 生成。新增返回后先按 USERPCO 返回的单据 ID 查询主表，再回退按预取单号查询；只有数据库确认存在才返回成功。
 
 U8 登录许可饱和返回 `U8_LICENSE_UNAVAILABLE`；反射或参数绑定发生在保存前时返回明确失败。COM 调用抛错后仍按预取单号和返回 ID 进行短时回查，查到单据按成功处理，无法判断是否写入才进入 `RECONCILIATION_REQUIRED`。
+
+## 9. TraceBack 标签接口规划（尚未实施）
+
+规划增加仅供 Business API 调用的单张/批量产品标签快照查询，以及幂等的 TraceBack 同步包写入和结果查询。读取规则为：按完整 `traceBackCode` 汇总 `TraceBackOnlyCode.sum`，取最大 `id` 关联 `TraceBackGoods`，再按 `pdaOrderUuid` 关联 `TraceBackOrder`。负余额、数量不可转换、Goods 缺失/重复和 JSON 身份冲突必须返回结构化异常，不能包装为正常标签。
+
+写入包按材料出库负/正流水、调拨和货位调整全量零流水、部分移动来源负流水、首次打印目标正流水区分事件角色。Gateway 只接受结构化字段，不接受客户端 SQL；在单一账套事务内核对确定性 UUID、写入三表并返回可复核结果。托盘不进入本接口。
+
+具体路由、请求上限、错误码和索引变更尚未固化，实施时必须先在 888 完成执行计划、重复请求、超时未知和历史异常样本测试。详细方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。

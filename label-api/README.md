@@ -115,3 +115,9 @@ Gateway `0.5.8` 起，调拨审核和弃审会联动 U8 自动生成的其他出
 `0.8.17` 取消业务完成时提前发码。无标签红字退料、调拨部分移动和货位调整部分移动只创建无 Code 的 `PENDING_PRINT` 产品标签，不读取编码规则、不消耗流水、不写 `label_code_registry`。业务组 `issuedLabels` 增加内部 `id`，`code` 在尚未打印时为 `null`；历史已有 Code 的待打印标签继续兼容。三套数据库已执行迁移 `014`。
 
 2026-10-13 材料出库端到端验证已通过：同一生产订单按仓库拆成 U8 单据 `CLCKD20263349` 和 `CLCKD20263350`，业务组成功后写入 3 条 `MATERIAL_OUTBOUND` 流水并释放全部标签锁。两张 U8 单据保持未审核，符合 `autoApprove=false`。
+
+## TraceBack 并行运行计划（尚未实施）
+
+材料出库、调拨和货位调整下一阶段将接入 U8 账套的 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode`。迁移期内，已有产品标签扫码余额和当前位置以旧三表实时查询为准，本地 `product_label`、`inventory_flow` 用作业务镜像、锁、待打印和审计；托盘暂不纳入该兼容范围。
+
+Business API 将在扫码和提交前通过 Gateway 复核旧表最新流水。U8 已成功但旧表同步未确认时，操作进入标签同步待恢复并继续占用相关标签，禁止以新请求重复生成 U8 单据。具体读取、写入、幂等和切换方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`；当前 `0.8.17` 尚未实现这些接口和状态。

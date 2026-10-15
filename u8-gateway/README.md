@@ -81,3 +81,9 @@ u8-gateway/
 - [2026-10-11 部署记录](docs/DEPLOYMENT_2026-10-11.md)
 - [字段合同](document-contracts/README.md)
 - [U8 来源映射](document-contracts/u8-source-map.json)
+
+## TraceBack 三表接口计划（尚未实施）
+
+下一阶段 Gateway 将为材料出库、调拨和货位调整提供 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode` 的产品标签快照查询、幂等同步包写入和写入结果核对。一个同步包必须在账套数据库的单一 SQL 事务中提交，并通过确定性 Order/Goods UUID 防止超时重试重复插入。
+
+本计划不包含托盘。当前 Gateway 版本尚未提供上述接口；详细数据口径、实际样本和迁移边界见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。

@@ -690,3 +690,12 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 4. API 请求、响应及错误码合同。
 
 迁移 001 至 014 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。迁移 `013` 在 `business_operation_line` 增加唯一的 `generated_label_id`，用于把无标签红字退料或部分移动明细与 U8 成功后新建的产品标签关联；该字段不代替原扫码 `label_id`。迁移 `014` 允许 `PENDING_PRINT` 产品标签在实际打印前保持 `label_code` 为空，并把唯一约束改为非空过滤唯一索引。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。
+
+## 10. TraceBack 迁移期数据边界（2026-10-15）
+
+- 现有产品标签的外部权威数据来自账套库 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode`；本地 `product_label` 和 `inventory_flow` 保存业务镜像、锁、待打印状态及新系统审计。托盘继续完全由本地表管理。
+- 后续迁移需要保存每张外部标签最后同步的 `TraceBackOnlyCode.id`、同步时间和身份摘要，并建立不可丢失的 TraceBack 写入任务、稳定事件键、尝试次数、最后错误和完成时间。具体表名及字段在实施迁移时确定，不直接修改迁移 001 至 014。
+- 一个外部 Code 的余额由全部可转换为十进制的 `sum` 合计；最新 `id` 对应 Goods 是当前身份和位置来源。负余额、无法转换的数量、关联缺失或 JSON 冲突进入异常状态，不能覆盖为本地正常标签。
+- U8 成功后的旧表写入与本地镜像提交必须可恢复：旧表未确认成功时保留业务锁和同步任务；确认成功后才更新本地最终余额、位置和操作状态。结果未知时按稳定 UUID 查证，不重复插入。
+- 调拨及货位调整的部分移动分为来源扣减和打印目标标签两个独立同步事件；打印前 `PENDING_PRINT` 仍允许无 Code，禁止向 `TraceBackOnlyCode` 写空值或临时码。
+- 详细读取、写入、索引和退出方案见 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
