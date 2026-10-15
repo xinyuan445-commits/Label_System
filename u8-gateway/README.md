@@ -2,6 +2,8 @@
 
 ## 测试账套写入
 
+`0.6.0` 增加 TraceBack 产品标签只读快照：按完整 Code 合计 `TraceBackOnlyCode.sum`，取最大流水 ID 关联 Goods 和 Order，并返回结构化异常。单次批量最多 100 张；不写旧三表，不处理托盘。该版本目前只在本地构建，尚未部署。
+
 `0.5.8` 将调拨审核视为一个联动状态：先审核调拨单，再审核 U8 生成的其他出库单和其他入库单；弃审按其他入库单、其他出库单、调拨单的顺序执行。每一步都按实际状态跳过已完成项并回查，因此明确失败后可以安全重试。审核列表只有在三类单据全部审核后才显示“已审核”。
 
 `0.5.7` 修正 USERPCO 新增取号后的表头回写：普通库存单写 `ccode`，调拨单写 `ctvcode`，货位调整写 `cvouchcode`，盘点单写 `ccvcode`。库存新增继续按完整 13 参数签名调用 `VoucherCO.Insert`，审核和弃审按完整签名调用 `Verify` / `UnVerify`；状态操作先用 USERPCO `Load` 读取组件格式的 `ufts`。测试账套 888 的九类新增、审核和弃审保持开放，修改和删除仍关闭。服务器写入总开关同时受 `test` 环境、`UFDATA_888_2021` 数据库和 888 账套限制。
@@ -82,8 +84,8 @@ u8-gateway/
 - [字段合同](document-contracts/README.md)
 - [U8 来源映射](document-contracts/u8-source-map.json)
 
-## TraceBack 三表接口计划（尚未实施）
+## TraceBack 三表只读接口
 
-下一阶段 Gateway 将为材料出库、调拨和货位调整提供 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode` 的产品标签快照查询、幂等同步包写入和写入结果核对。一个同步包必须在账套数据库的单一 SQL 事务中提交，并通过确定性 Order/Goods UUID 防止超时重试重复插入。
+Gateway `0.6.0` 提供 `GET /api/v1/traceback/labels/{code}` 和 `POST /api/v1/traceback/labels/snapshots`。批量请求最多 100 个完整 Code，响应顺序与去重后的请求顺序一致。读取前校验三张表及必要关联字段；负余额、数量无效、Goods 缺失或重复、JSON 无效和 Code 身份冲突均返回结构化异常状态。Order 关联异常只使来源字段留空，不猜测业务来源。
 
-本计划不包含托盘。当前 Gateway 版本尚未提供上述接口；详细数据口径、实际样本和迁移边界见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
+本阶段不包含托盘，也不提供旧三表写接口。后续同步包必须在账套数据库单一事务中提交，并通过确定性 Order/Goods UUID 防止超时重试重复插入。详细数据口径、实际样本和迁移边界见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。

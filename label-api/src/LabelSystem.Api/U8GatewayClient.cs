@@ -140,6 +140,51 @@ public sealed class U8GatewayClient(
         return envelope.Data;
     }
 
+    public async Task<IReadOnlyList<TraceBackLabelSnapshot>> GetTraceBackSnapshotsAsync(
+        IReadOnlyCollection<string> codes,
+        CancellationToken cancellationToken)
+    {
+        var normalized = codes.Select(code => code?.Trim() ?? string.Empty)
+            .Where(code => code.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (normalized.Length == 0 || normalized.Length > 100)
+            throw new ApiException(StatusCodes.Status400BadRequest,
+                "TRACEBACK_CODES_INVALID", "条码数量无效。");
+        try
+        {
+            using var message = CreateRequest(HttpMethod.Post, "/api/v1/traceback/labels/snapshots");
+            message.Content = JsonContent.Create(new TraceBackSnapshotRequest(normalized), options: JsonOptions);
+            using var response = await Client().SendAsync(message, cancellationToken);
+            var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<List<TraceBackLabelSnapshot>>>(
+                JsonOptions, cancellationToken);
+            if (response.IsSuccessStatusCode && envelope?.Success == true && envelope.Data is not null)
+                return envelope.Data;
+            throw new ApiException(StatusCodes.Status503ServiceUnavailable,
+                envelope?.Code ?? "TRACEBACK_QUERY_FAILED",
+                envelope?.Message ?? "标签查询失败。");
+        }
+        catch (ApiException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ApiException(StatusCodes.Status504GatewayTimeout,
+                "TRACEBACK_QUERY_TIMEOUT", "标签查询超时。");
+        }
+        catch (HttpRequestException)
+        {
+            throw new ApiException(StatusCodes.Status503ServiceUnavailable,
+                "U8_GATEWAY_UNAVAILABLE", "标签服务暂时不可用。");
+        }
+        catch (JsonException)
+        {
+            throw new ApiException(StatusCodes.Status502BadGateway,
+                "U8_GATEWAY_RESPONSE_INVALID", "标签服务返回异常。");
+        }
+    }
+
     public async Task ValidateDocumentAsync(
         string documentType,
         GatewayDocumentRequest request,

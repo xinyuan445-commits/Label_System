@@ -14,6 +14,16 @@
 
 本阶段不处理托盘兼容。托盘、装托关系及托盘库存继续只由 Label System 管理，不读写旧三表。
 
+### 1.1 第一阶段本地实现状态
+
+截至 2026-10-15，本地源码已完成只读部分，尚未部署：
+
+- Gateway `0.6.0` 增加单张与批量快照查询，批量上限 100。
+- Business API `0.9.0` 的产品标签扫码改为实时快照并建立本地镜像；托盘继续读本地表。
+- 材料出库、调拨和货位调整在业务建档前复核一次，在调用 U8 前再复核一次。
+- 迁移 015 增加本地镜像版本字段和 `traceback_sync_task` 结构；尚未在任何数据库执行。
+- 本阶段没有旧三表写接口，不创建同步任务，不修改 888 或生产账套索引。
+
 ## 2. 888 账套实际数据核查
 
 2026-10-15 对 `UFDATA_888_2021` 执行只读核查。最新可用旧追溯业务数据截至 2026-09-27；三表当时总量约为：
@@ -64,6 +74,17 @@
 - 扫码确认及 U8 写入前必须再次查询旧表，比较最新流水 ID、余额和位置。
 - 本地镜像用于业务锁、草稿、操作归档、待打印标签和新系统审计。
 - 产品标签列表可用增量镜像查询；单张扫码和提交前复核必须读取旧表实时数据。
+
+### 3.4 读取字段合同与异常分类
+
+Gateway 启动查询时固定检查：`TraceBackOnlyCode(id, traceBackCode, sum, pdaGoodsUuid, pdaOrderUuid)`、`TraceBackGoods(pdaGoodsUuid)`、`TraceBackOrder(pdaOrderUuid)`。Goods 和 Order 的业务字段可以来自同名列或 JSON，但只映射物料、批次、单位、仓库、货位、来源业务、PDA 单号和 ERP 单号等白名单逻辑字段；原始 JSON 不向 Gateway 外暴露。
+
+稳定异常编码包括：`TRACEBACK_QUANTITY_INVALID`、`TRACEBACK_NEGATIVE_BALANCE`、`TRACEBACK_GOODS_UUID_MISSING`、`TRACEBACK_GOODS_MISSING`、`TRACEBACK_GOODS_DUPLICATED`、`TRACEBACK_GOODS_JSON_INVALID`、`TRACEBACK_ORDER_JSON_INVALID`、`TRACEBACK_MATERIAL_MISSING`、`TRACEBACK_UNIT_MISSING`、`TRACEBACK_CODE_MATERIAL_CONFLICT`、`TRACEBACK_CODE_BATCH_CONFLICT`。任一异常都使状态变为 `RECONCILIATION_REQUIRED`。Order UUID 缺失、无匹配或不唯一时不猜测来源字段，但不单独改变库存身份和余额状态。
+
+只读路由为：
+
+- `GET /api/v1/traceback/labels/{code}`
+- `POST /api/v1/traceback/labels/snapshots`，请求为 `{"codes":[...]}`
 
 ## 4. 三类单据写入规则
 
@@ -138,11 +159,15 @@
 
 不得未经执行计划、重复值和空间评估直接在生产账套建索引。批量同步以最新 `TraceBackOnlyCode.id` 为游标，避免反复全表扫描。
 
+仓库提供 `docs/database/TRACEBACK_INDEX_ASSESSMENT_888.sql`，只读输出三表数据量、真实字段类型、现有索引、Goods/Order UUID 重复值、无效数量、负余额 Code，并执行一条带 Actual Plan 的代表性扫码查询。脚本末尾仅以注释给出三个候选索引，不会创建索引。本地开发机当前没有账套数据库凭据，因此本轮未重新采集实际计划；部署前必须在 888 保存执行前后计划、逻辑读和耗时，确认收益后才能单独建测试索引。
+
+Gateway 每次查询在同一次字段合同检查中读取 Code 和两个 UUID 键的真实 SQL 类型，并用 `varchar`、`nvarchar` 或 `uniqueidentifier` 的匹配参数绑定，避免因固定使用 Unicode 字符串而让 SQL Server 转换索引列。
+
 ## 8. 实施顺序
 
-1. 固化真实三表字段合同、JSON 字段映射和异常分类。
-2. 设计并新增本地 TraceBack 镜像版本与同步任务迁移。
-3. 为 Gateway 增加只读标签快照接口，先把扫码查询切到旧三表实时来源。
+1. 已在本地固化三表必要字段合同、JSON 白名单映射和异常分类。
+2. 已设计迁移 015，新增本地 TraceBack 镜像版本与同步任务结构；待部署。
+3. 已在本地增加 Gateway 只读快照接口，并把 Business API 扫码与两次复核切到旧三表实时来源；待 888 实机验收。
 4. 材料出库接入负数、红字正数及打印阶段正数流水。
 5. 调拨接入全量零流水、部分负流水及打印阶段新 Code 正流水。
 6. 货位调整接入全量零流水、部分负流水及打印阶段新 Code 正流水。

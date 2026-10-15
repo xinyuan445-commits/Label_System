@@ -265,6 +265,33 @@ public sealed record InventoryLookupResult(
     IReadOnlyList<InventoryObjectLine> Lines,
     InventoryObjectLine? Pallet);
 
+public sealed record TraceBackSnapshotRequest(IReadOnlyList<string> Codes);
+
+public sealed record TraceBackAnomaly(string Code, string Message);
+
+public sealed record TraceBackLabelSnapshot(
+    string Code,
+    string? SerialNo,
+    decimal? Balance,
+    long? LatestFlowId,
+    string? GoodsUuid,
+    string? OrderUuid,
+    string? MaterialCode,
+    string? MaterialName,
+    string? BatchNo,
+    string? UnitCode,
+    string? UnitName,
+    string? WarehouseCode,
+    string? WarehouseName,
+    string? LocationCode,
+    string? LocationName,
+    string? SourceBusinessType,
+    string? PdaDocumentNo,
+    string? ErpDocumentNo,
+    string? IdentityHash,
+    string Status,
+    IReadOnlyList<TraceBackAnomaly> Anomalies);
+
 public sealed record ApprovalActionRequest(
     string ClientRequestId,
     string ExpectedVersion,

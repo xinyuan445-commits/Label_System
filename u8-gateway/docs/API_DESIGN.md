@@ -174,10 +174,10 @@ GET  /api/v1/reference-data/document-master-data
 
 U8 登录许可饱和返回 `U8_LICENSE_UNAVAILABLE`；反射或参数绑定发生在保存前时返回明确失败。COM 调用抛错后仍按预取单号和返回 ID 进行短时回查，查到单据按成功处理，无法判断是否写入才进入 `RECONCILIATION_REQUIRED`。
 
-## 9. TraceBack 标签接口规划（尚未实施）
+## 9. TraceBack 标签只读接口（0.6.0）
 
-规划增加仅供 Business API 调用的单张/批量产品标签快照查询，以及幂等的 TraceBack 同步包写入和结果查询。读取规则为：按完整 `traceBackCode` 汇总 `TraceBackOnlyCode.sum`，取最大 `id` 关联 `TraceBackGoods`，再按 `pdaOrderUuid` 关联 `TraceBackOrder`。负余额、数量不可转换、Goods 缺失/重复和 JSON 身份冲突必须返回结构化异常，不能包装为正常标签。
+`GET /api/v1/traceback/labels/{code}` 查询单张，`POST /api/v1/traceback/labels/snapshots` 使用 `{"codes":[...]}` 查询最多 100 张。读取规则为：按完整 `traceBackCode` 汇总 `TraceBackOnlyCode.sum`，取最大 `id` 关联 `TraceBackGoods`，再按 `pdaOrderUuid` 关联 `TraceBackOrder`。响应包含 Code、SN、余额、最新流水 ID、Goods/Order UUID、物料、批次、单位、仓库、货位、来源业务、PDA/ERP 单号、身份摘要、状态和异常列表。
 
-写入包按材料出库负/正流水、调拨和货位调整全量零流水、部分移动来源负流水、首次打印目标正流水区分事件角色。Gateway 只接受结构化字段，不接受客户端 SQL；在单一账套事务内核对确定性 UUID、写入三表并返回可复核结果。托盘不进入本接口。
+状态为 `AVAILABLE`、`USED_UP`、`RECONCILIATION_REQUIRED` 或 `NOT_FOUND`。负余额、数量不可转换、Goods 缺失或重复、JSON 无效、必要身份字段缺失、Code 与 Goods 料号或批号冲突均进入待核对。Order 关联缺失或不唯一时来源字段留空，不猜测业务来源。结构缺失返回 `503 TRACEBACK_CONTRACT_INVALID`，SQL 查询失败返回 `503 TRACEBACK_QUERY_FAILED`，请求为空、超过 100 张或 Code 过长返回 `400 TRACEBACK_CODES_INVALID`。
 
-具体路由、请求上限、错误码和索引变更尚未固化，实施时必须先在 888 完成执行计划、重复请求、超时未知和历史异常样本测试。详细方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
+本阶段严格只读，不接受客户端 SQL，不写三表，托盘不进入接口。后续写入包仍按材料出库负/正流水、全量零流水、部分移动来源负流水和首次打印目标正流水区分事件角色。888 的索引、执行计划和历史异常验收必须在部署前完成；详细方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。

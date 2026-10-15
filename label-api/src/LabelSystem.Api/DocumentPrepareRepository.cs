@@ -16,7 +16,8 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         string WarehouseCode,
         string LocationCode,
         string TargetWarehouseCode,
-        string TargetLocationCode);
+        string TargetLocationCode,
+        long? TraceBackLatestFlowId);
 
     public async Task<MaterialOutboundPrepareResult> PrepareAsync(
         DocumentPrepareRequest request,
@@ -224,7 +225,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     line, product.Id, null, product.PalletId, product.CurrentQty,
                     product.BatchNo, warehouseCode, locationCode,
                     ResolveTargetWarehouse(request, definition, line, product.WarehouseCode),
-                    ResolveTargetLocation(request, line)));
+                    ResolveTargetLocation(request, line), product.TraceBackLatestFlowId));
             }
             else if (line.ObjectType == "PALLET")
             {
@@ -235,7 +236,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     line, null, pallet.Id, null, pallet.Line.AvailableQty,
                     pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode,
                     ResolveTargetWarehouse(request, definition, line, pallet.Line.WarehouseCode),
-                    ResolveTargetLocation(request, line)));
+                    ResolveTargetLocation(request, line), null));
             }
             else
             {
@@ -246,7 +247,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     line.LocationCode?.Trim() ?? string.Empty,
                     ResolveTargetWarehouse(
                         request, definition, line, line.WarehouseCode?.Trim() ?? string.Empty),
-                    ResolveTargetLocation(request, line)));
+                    ResolveTargetLocation(request, line), null));
             }
         }
         foreach (var group in result.GroupBy(line => new
@@ -520,14 +521,16 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             (
                 operation_id, line_no, line_status,
                 label_id, pallet_id, selection_source, source_pallet_id, inventory_qty_snapshot,
-                source_line_id, source_line_no, material_code, batch_no, unit_code, requested_qty,
+                source_line_id, source_line_no, material_code, batch_no, inventory_attributes_json,
+                unit_code, requested_qty,
                 from_warehouse_code, from_location_code, to_warehouse_code, to_location_code, remark
             )
             VALUES
             (
                 @operation_id, @line_no, 'PENDING',
                 @label_id, @pallet_id, @selection_source, @source_pallet_id, @inventory_qty,
-                @source_line_id, @source_line_no, @material_code, @batch_no, @unit_code, @requested_qty,
+                @source_line_id, @source_line_no, @material_code, @batch_no, @attributes,
+                @unit_code, @requested_qty,
                 @from_warehouse, @from_location, @to_warehouse, @to_location, @remark
             );
             """;
@@ -555,6 +558,10 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 line.Request.SourceLineNo.HasValue ? line.Request.SourceLineNo.Value.ToString() : DBNull.Value;
             command.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = line.Request.MaterialCode.Trim();
             command.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(line.BatchNo);
+            command.Parameters.Add("@attributes", SqlDbType.NVarChar, -1).Value =
+                line.TraceBackLatestFlowId.HasValue
+                    ? JsonSerializer.Serialize(new { traceBackLatestFlowId = line.TraceBackLatestFlowId.Value })
+                    : DBNull.Value;
             command.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.Request.UnitCode.Trim();
             AddDecimal(command, "@requested_qty", line.Request.RequestedQty);
             command.Parameters.Add("@from_warehouse", SqlDbType.NVarChar, 100).Value = line.WarehouseCode;

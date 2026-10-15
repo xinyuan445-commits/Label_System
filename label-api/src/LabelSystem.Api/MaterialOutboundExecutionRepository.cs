@@ -27,7 +27,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                    line.material_code, line.batch_no, line.unit_code,
                    ISNULL(line.inventory_qty_snapshot,0), line.requested_qty,
                    ISNULL(line.from_warehouse_code,N''), line.from_location_code,
-                   line.to_warehouse_code, line.to_location_code, line.remark
+                   line.to_warehouse_code, line.to_location_code, line.remark,
+                   TRY_CONVERT(bigint,JSON_VALUE(line.inventory_attributes_json,'$.traceBackLatestFlowId'))
             FROM dbo.business_operation op
             CROSS APPLY
             (
@@ -91,7 +92,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                 reader.IsDBNull(36) ? null : reader.GetString(36),
                 reader.IsDBNull(37) ? null : reader.GetString(37),
                 reader.IsDBNull(38) ? null : reader.GetString(38),
-                reader.IsDBNull(39) ? null : reader.GetString(39)));
+                reader.IsDBNull(39) ? null : reader.GetString(39),
+                reader.IsDBNull(40) ? null : reader.GetInt64(40)));
         }
         if (builders.Count == 0)
             throw new ApiException(StatusCodes.Status404NotFound,

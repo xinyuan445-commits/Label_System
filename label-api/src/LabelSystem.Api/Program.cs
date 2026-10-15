@@ -18,6 +18,8 @@ builder.Services.Configure<ManagementAccessOptions>(builder.Configuration.GetSec
 builder.Services.AddSingleton<DevelopmentSessionStore>();
 builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<LabelSystemRepository>();
+builder.Services.AddScoped<TraceBackMirrorRepository>();
+builder.Services.AddScoped<TraceBackSnapshotService>();
 builder.Services.AddScoped<MaterialOutboundRepository>();
 builder.Services.AddScoped<MaterialOutboundService>();
 builder.Services.AddScoped<MaterialOutboundExecutionRepository>();
@@ -583,13 +585,14 @@ app.MapGet("/api/v1/admin/draft-devices", async (
 app.MapGet("/api/v1/inventory-objects/lookup", async (
     HttpContext context,
     string code,
-    LabelSystemRepository repository,
+    TraceBackSnapshotService traceBack,
     UserRepository users,
     CancellationToken cancellationToken) =>
 {
     await RequireFunctionAsync(context, users,
         DocumentOrQueryFunctionCode(context.Request.Headers["X-Function-Code"]), cancellationToken);
-    return ApiResults.Ok(context, await repository.LookupInventoryObjectAsync(code, cancellationToken));
+    return ApiResults.Ok(context, await traceBack.LookupAsync(
+        code, RequestContext.User(context), cancellationToken));
 });
 
 app.MapGet("/api/v1/reference-data/rd-styles", async (

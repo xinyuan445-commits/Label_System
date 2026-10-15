@@ -29,6 +29,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "U8Gateway.UserpcoBridge", "src\U8Gateway.UserpcoBridge\U8Gateway.UserpcoBridge.csproj", "{D838F1B2-DAC5-49CD-8C90-91206837960B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TraceBackContractSmokeTest", "tools\TraceBackContractSmokeTest\TraceBackContractSmokeTest.csproj", "{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -171,6 +173,18 @@ Global
 		{D838F1B2-DAC5-49CD-8C90-91206837960B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D838F1B2-DAC5-49CD-8C90-91206837960B}.Release|x64.ActiveCfg = Release|Any CPU
 		{D838F1B2-DAC5-49CD-8C90-91206837960B}.Release|x64.Build.0 = Release|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Debug|x86.Build.0 = Debug|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Debug|x64.Build.0 = Debug|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Release|x86.ActiveCfg = Release|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Release|x86.Build.0 = Release|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Release|Any CPU.Build.0 = Release|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Release|x64.ActiveCfg = Release|Any CPU
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -181,5 +195,6 @@ Global
 		{7F2563F7-C935-4CB3-A181-324F258B122A} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{D3764B43-F72E-4729-990E-27B376AFDBE8} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{D838F1B2-DAC5-49CD-8C90-91206837960B} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{17A85CC8-2179-4C5C-8B19-E93A9F65CA10} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

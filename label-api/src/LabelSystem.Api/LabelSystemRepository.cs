@@ -347,7 +347,8 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
                    p.pallet_code, pl.status, pl.row_version,
                    JSON_VALUE(f.inventory_attributes_json, '$.materialName'),
                    JSON_VALUE(f.inventory_attributes_json, '$.unitName'),
-                   w.warehouse_name, pos.position_name
+                   w.warehouse_name, pos.position_name,
+                   pl.traceback_latest_flow_id, pl.mirror_source
             FROM dbo.pallet_label_relation AS rel
             INNER JOIN dbo.product_label AS pl ON pl.id = rel.label_id
             INNER JOIN dbo.pallet AS p ON p.id = rel.pallet_id
@@ -425,7 +426,8 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
             reader.IsDBNull(14) ? string.Empty : reader.GetString(14),
             reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
             reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
-            reader.IsDBNull(11) ? null : reader.GetInt64(11), reader.IsDBNull(12) ? null : reader.GetString(12));
+            reader.IsDBNull(11) ? null : reader.GetInt64(11), reader.IsDBNull(12) ? null : reader.GetString(12),
+            reader.IsDBNull(17) ? null : reader.GetInt64(17), reader.GetString(18));
     }
 
     internal static async Task<PalletSnapshot?> ReadPalletAsync(
@@ -496,6 +498,8 @@ public sealed record ProductLabelSnapshot(
     string WarehouseName,
     string LocationName,
     long? PalletId,
-    string? PalletCode);
+    string? PalletCode,
+    long? TraceBackLatestFlowId,
+    string MirrorSource);
 
 public sealed record PalletSnapshot(long Id, InventoryObjectLine Line, long? LockedOperationId);

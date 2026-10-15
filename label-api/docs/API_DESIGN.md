@@ -48,7 +48,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。develop
 | GET/PUT | `/users/me/preferences/{key}` | 读取或保存当前用户漫游数据 |
 | GET | `/settings?documentType=...` | 全局设置和单据设置 |
 | PUT | `/admin/settings/{scope}/{key}` | 新增或更新设置 |
-| GET | `/inventory-objects/lookup?code=...` | 查产品标签或托盘 |
+| GET | `/inventory-objects/lookup?code=...` | 实时查 TraceBack 产品标签；托盘查本地表 |
 | GET | `/label-code-rules/capabilities` | 查询规则字段、片段和支持码制 |
 | GET | `/label-code-rules/catalog` | 下发启用规则及可解析历史版本目录 |
 | POST | `/label-codes/parse` | 按规则目录解析标签 Code |
@@ -259,10 +259,10 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 
 打印平台后续必须使用内部 `id` 发起首次打印，在同一事务中分配流水、生成 Code、回填标签并登记唯一哈希。Code 一经分配即不可回收；打印失败只能复用原 Code 重试。现有按 `{labelCode}/confirm` 的接口仅兼容迁移前已经提前分配 Code 的待打印记录。
 
-## TraceBack 产品标签接口计划（尚未实施）
+## TraceBack 产品标签读取（0.9.0）
 
-迁移期产品标签查询将由 Business API 编排 Gateway 的 TraceBack 快照接口。稳定对外响应继续使用现有标签查询模型，不向 H5 暴露旧表 JSON、数据库字段或 UUID。快照至少包含完整 Code、SN、余额、最新流水 ID、物料、批次、单位、仓库、货位、来源业务标识和异常状态。
+迁移期产品标签查询由 Business API 编排 Gateway 的 TraceBack 快照接口。稳定对外响应继续使用现有 `InventoryLookupResult`，不向 H5 暴露旧表 JSON、数据库字段或 UUID。扫码成功会以 `TRACEBACK_MIRROR` 操作和库存流水建立或刷新本地镜像；托盘查询仍只读本地表。
 
-材料出库、调拨和货位调整的预提交与执行前复核必须比较最新流水 ID、余额和位置。旧表写入任务是 ERP 成功后的必要收口步骤；失败或未知时新增独立的标签同步待恢复状态，并保留原 ERP 幂等编号、业务锁和稳定 TraceBack 事件键。恢复接口只能核对或补写原事件，不能重新新增 ERP 单据。
+材料出库、调拨和货位调整在建档前重新查询快照；操作建立后、调用 Gateway 写 U8 前再查询一次，并比较归档的最新流水 ID、余额、身份和位置。蓝字与移动要求余额足够；原标签红字允许零余额且使用本次退回位置。快照变化返回 `TRACEBACK_SNAPSHOT_CHANGED`，旧业务没有归档外部版本时返回 `TRACEBACK_SNAPSHOT_VERSION_MISSING`，异常返回 `TRACEBACK_RECONCILIATION_REQUIRED`，余额不足返回 `LABEL_QUANTITY_INSUFFICIENT`。
 
-无标签红字及部分移动产生的 `PENDING_PRINT` 在首次打印前不向 `TraceBackOnlyCode` 写空 Code。打印分配正式 Code 后，Business API 再提交打印阶段的 TraceBack 正流水。完整计划见 `docs/TRACEBACK_COEXISTENCE_PLAN.md`；具体路由、请求和错误码在实现前另行固化。
+Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`、`TRACEBACK_CONTRACT_INVALID` 或 `TRACEBACK_QUERY_FAILED`。无标签红字及部分移动产生的 `PENDING_PRINT` 在首次打印前不向 `TraceBackOnlyCode` 写空 Code。当前阶段不写旧三表；同步任务和恢复合同留到下一阶段。

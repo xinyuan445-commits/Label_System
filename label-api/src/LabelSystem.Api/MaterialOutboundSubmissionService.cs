@@ -7,6 +7,7 @@ public sealed class MaterialOutboundSubmissionService(
     DocumentPrepareService documents,
     MaterialOutboundExecutionService execution,
     MaterialOutboundRepository operations,
+    TraceBackSnapshotService traceBack,
     IOptionsMonitor<LabelSystemOptions> options)
 {
     public async Task<OperationGroupResult> SubmitAsync(
@@ -20,6 +21,12 @@ public sealed class MaterialOutboundSubmissionService(
         MaterialOutboundPrepareResult? prepared = null;
         try
         {
+            await traceBack.RefreshBeforePrepareAsync(
+                "material-outbound", request.DocumentDirection,
+                request.Lines.Select(line => (
+                    line.ObjectType, line.LabelCode, line.MaterialCode, line.BatchNo,
+                    line.UnitCode, line.RequestedQty, line.WarehouseCode, line.LocationCode)),
+                user, cancellationToken);
             prepared = await materialOutbound.PrepareAsync(request, requestId, cancellationToken);
             return await ExecutePreparedAsync(prepared, user, requestId, autoApprove);
         }
@@ -42,6 +49,14 @@ public sealed class MaterialOutboundSubmissionService(
         MaterialOutboundPrepareResult? prepared = null;
         try
         {
+            await traceBack.RefreshBeforePrepareAsync(
+                documentType, request.Header.DocumentDirection,
+                request.Lines.Select(line => (
+                    line.ObjectType, line.LabelCode, line.MaterialCode, line.BatchNo,
+                    line.UnitCode, line.RequestedQty,
+                    line.WarehouseCode ?? request.Header.WarehouseCode,
+                    line.LocationCode ?? request.Header.SourceLocationCode)),
+                user, cancellationToken);
             prepared = await documents.PrepareAsync(documentType, request, requestId, cancellationToken);
             return await ExecutePreparedAsync(prepared, user, requestId, autoApprove);
         }

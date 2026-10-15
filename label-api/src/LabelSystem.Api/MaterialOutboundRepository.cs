@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using Microsoft.Data.SqlClient;
 
 namespace LabelSystem.Api;
@@ -13,7 +14,8 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         decimal? InventoryQty,
         string BatchNo,
         string WarehouseCode,
-        string LocationCode);
+        string LocationCode,
+        long? TraceBackLatestFlowId);
 
     public async Task<MaterialOutboundPrepareResult> PrepareAsync(
         MaterialOutboundPrepareRequest request,
@@ -604,7 +606,8 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                 }
                 result.Add(new ResolvedLine(
                     line, product.Id, null, product.PalletId, product.CurrentQty,
-                    product.BatchNo, warehouseCode, locationCode));
+                    product.BatchNo, warehouseCode, locationCode,
+                    product.TraceBackLatestFlowId));
             }
             else if (line.ObjectType == "PALLET")
             {
@@ -617,7 +620,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                     throw new ApiException(StatusCodes.Status409Conflict, "PALLET_LOCATION_MISSING", $"托盘没有当前仓库：{line.LabelCode}");
                 result.Add(new ResolvedLine(
                     line, null, pallet.Id, null, pallet.Line.AvailableQty,
-                    pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode));
+                    pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode, null));
             }
             else
             {
@@ -625,7 +628,7 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                     line, null, null, null, null,
                     line.BatchNo?.Trim() ?? string.Empty,
                     line.WarehouseCode?.Trim() ?? string.Empty,
-                    line.LocationCode?.Trim() ?? string.Empty));
+                    line.LocationCode?.Trim() ?? string.Empty, null));
             }
         }
         return result.ToArray();
@@ -753,14 +756,16 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
             (
                 operation_id, line_no, line_status,
                 label_id, pallet_id, selection_source, source_pallet_id, inventory_qty_snapshot,
-                source_line_id, source_line_no, material_code, batch_no, unit_code, requested_qty,
+                source_line_id, source_line_no, material_code, batch_no, inventory_attributes_json,
+                unit_code, requested_qty,
                 from_warehouse_code, from_location_code, remark
             )
             VALUES
             (
                 @operation_id, @line_no, 'PENDING',
                 @label_id, @pallet_id, @selection_source, @source_pallet_id, @inventory_qty,
-                @source_line_id, @source_line_no, @material_code, @batch_no, @unit_code, @requested_qty,
+                @source_line_id, @source_line_no, @material_code, @batch_no, @attributes,
+                @unit_code, @requested_qty,
                 @warehouse_code, @location_code, @remark
             );
             """;
@@ -793,6 +798,10 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
                 line.Request.SourceLineNo.HasValue ? line.Request.SourceLineNo.Value.ToString() : DBNull.Value;
             command.Parameters.Add("@material_code", SqlDbType.NVarChar, 100).Value = line.Request.MaterialCode;
             command.Parameters.Add("@batch_no", SqlDbType.NVarChar, 100).Value = DbValue(line.BatchNo);
+            command.Parameters.Add("@attributes", SqlDbType.NVarChar, -1).Value =
+                line.TraceBackLatestFlowId.HasValue
+                    ? JsonSerializer.Serialize(new { traceBackLatestFlowId = line.TraceBackLatestFlowId.Value })
+                    : DBNull.Value;
             command.Parameters.Add("@unit_code", SqlDbType.NVarChar, 50).Value = line.Request.UnitCode;
             command.Parameters.Add("@requested_qty", SqlDbType.Decimal).Value = line.Request.RequestedQty;
             command.Parameters["@requested_qty"].Precision = 18;

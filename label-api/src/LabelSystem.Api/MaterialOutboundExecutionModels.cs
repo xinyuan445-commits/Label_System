@@ -80,7 +80,8 @@ public sealed record MaterialOutboundExecutionLine(
     string? LocationCode,
     string? TargetWarehouseCode,
     string? TargetLocationCode,
-    string? Remark);
+    string? Remark,
+    long? TraceBackLatestFlowId);
 
 public sealed class GatewayWriteException(
     int statusCode,

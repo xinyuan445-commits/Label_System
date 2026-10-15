@@ -12,6 +12,7 @@ public sealed class MaterialOutboundExecutionService(
     OperationArchiveService archive,
     U8GatewayClient gateway,
     UserRepository users,
+    TraceBackSnapshotService traceBack,
     IOptionsMonitor<LabelSystemOptions> options)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -26,7 +27,12 @@ public sealed class MaterialOutboundExecutionService(
     {
         var prepared = await PrepareGatewayRequestsAsync(groupId, user, cancellationToken);
         foreach (var item in prepared)
+        {
+            await traceBack.ValidateBeforeU8Async(
+                item.Operation.ErpDocumentType, item.Operation.Lines,
+                item.RedVoucher, cancellationToken);
             await ValidateGatewayAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
+        }
         return new OperationGroupValidationResult(
             groupId, prepared.Count, prepared.Sum(item => item.Operation.Lines.Count), true);
     }
@@ -61,6 +67,9 @@ public sealed class MaterialOutboundExecutionService(
             if (!pending && !reconciling)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "OPERATION_NOT_PENDING", "业务操作不能上传，需要先核对状态。");
+            await traceBack.ValidateBeforeU8Async(
+                item.Operation.ErpDocumentType, item.Operation.Lines,
+                item.RedVoucher, cancellationToken);
             if (reconciling)
             {
                 await executionRepository.BeginReconciliationAsync(

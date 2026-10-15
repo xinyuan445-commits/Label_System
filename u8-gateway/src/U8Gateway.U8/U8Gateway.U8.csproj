@@ -9,6 +9,9 @@
     <ProjectReference Include="..\U8Gateway.UserpcoBridge\U8Gateway.UserpcoBridge.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="ADODB">
       <HintPath>..\..\lib\u8-interop\ADODB.dll</HintPath>
       <Private>true</Private>
