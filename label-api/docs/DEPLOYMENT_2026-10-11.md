@@ -1,6 +1,6 @@
 # 2026-10-11 Business API IIS 部署记录
 
-2026-10-15 本地已构建 Business API `0.9.0` 和 Gateway `0.6.0` 的 TraceBack 只读第一阶段：实时扫码、本地镜像、建档前复核和 U8 调用前复核已接入，迁移 015 与 888 只读索引评估脚本已准备。尚未发布、未执行迁移、未修改账套索引，也未向旧三表或 U8 写入测试数据。服务器仍以健康检查和下方最近发布记录为准。
+2026-10-15 22:50 已发布 Business API `0.9.0` 到 `D:\LabelSystem\Api\releases\20261015_225022`，发布前外置配置备份为 `D:\LabelSystem\Config\backups\label-api.pre-0.9.0.20261015_224935.json`；Gateway `0.6.0` 已发布到 `D:\U8Gateway\site`，原站点备份为 `D:\U8Gateway\backups\20261015_224935\site`。三套 LabelSystem 数据库均已执行迁移 `015`，脚本哈希为 `F2DBA15EEFFD25F09E7F1B086A458520D4D6E97A1290ADA0FF8B03F184F3AEAE`。888 只读核查确认 OnlyCode 52,398 行、Goods 50,123 行、Order 29,555 行，保存了实际执行计划；关联键为 `varchar(3500)`，因此本次未创建账套索引。Gateway 批量抽查最近 100 张正余额合法标签均为 `AVAILABLE`，负余额和缺失样本进入待核对。健康检查为 Business API `ready` / `0.9.0`、Gateway `running` / `0.6.0.0`。本次未调用 U8 写接口，未向旧 TraceBack 三表写数据，也未改生产账套索引；应用池回收后需重新登录。
 
 2026-10-14 19:12 已发布 Business API `0.8.17` 到 `D:\LabelSystem\Api\releases\20261014_191256`，外置配置备份为 `D:\LabelSystem\Config\label-api.pre-0.8.17.json`。取消无标签红字退料、调拨部分移动和货位调整部分移动的提前发码：U8 成功后只创建无 Code 的 `PENDING_PRINT` 标签及库存流水，不读取编码规则、不消耗流水、不写 Code 登记；历史已有 Code 的待打印标签继续兼容。三套数据库已执行迁移 `014`，脚本哈希一致，`product_label.label_code` 仅允许待打印状态为空，非空 Code 使用过滤唯一索引。H5 更新为 `0.2.0-dev.70`，单据管理对新待打印标签显示“待生成”且不提供提前贴标确认。API 健康检查 `ready`、版本 `0.8.17`、数据库就绪、888 测试写入开启，5173 返回 200 和新版本。Gateway 与 APK 不变；本次未调用 U8 写接口，也未创建标签数据。
 

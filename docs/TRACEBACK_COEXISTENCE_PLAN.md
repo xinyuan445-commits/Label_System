@@ -14,14 +14,14 @@
 
 本阶段不处理托盘兼容。托盘、装托关系及托盘库存继续只由 Label System 管理，不读写旧三表。
 
-### 1.1 第一阶段本地实现状态
+### 1.1 第一阶段实施状态
 
-截至 2026-10-15，本地源码已完成只读部分，尚未部署：
+截至 2026-10-15，第一阶段只读部分已部署：
 
 - Gateway `0.6.0` 增加单张与批量快照查询，批量上限 100。
 - Business API `0.9.0` 的产品标签扫码改为实时快照并建立本地镜像；托盘继续读本地表。
 - 材料出库、调拨和货位调整在业务建档前复核一次，在调用 U8 前再复核一次。
-- 迁移 015 增加本地镜像版本字段和 `traceback_sync_task` 结构；尚未在任何数据库执行。
+- 迁移 015 已在 `LabelSystem_Dev`、`LabelSystem_Test`、`LabelSystem_Prod` 执行并校验脚本哈希。
 - 本阶段没有旧三表写接口，不创建同步任务，不修改 888 或生产账套索引。
 
 ## 2. 888 账套实际数据核查
@@ -151,23 +151,21 @@ Gateway 启动查询时固定检查：`TraceBackOnlyCode(id, traceBackCode, sum,
 
 ## 7. 查询性能
 
-888 当前仅有 `TraceBackOnlyCode.id` 聚集主键，三个常用关联键没有索引。上线实时扫码前，应先在 888 验证以下非聚集索引，再安排生产维护窗口：
+888 当前仅有 `TraceBackOnlyCode.id` 聚集主键，三个常用关联键没有索引。2026-10-15 已保存代表性实际执行计划，查询使用 `TraceBackOnlyCode` 聚集索引扫描，估算子树成本 `0.93825`。数据质量核查结果：Goods UUID 无重复；Order UUID 有 11 组、22 行重复；无效数量 21 行；负余额 Code 164 个。
 
-- `TraceBackOnlyCode(traceBackCode, id)`，包含余额、Goods UUID、Order UUID、SN、时间等查询字段。
-- `TraceBackGoods(pdaGoodsUuid)`。
-- `TraceBackOrder(pdaOrderUuid)`。
+三个键的真实类型均为 `varchar(3500)`，超过普通非聚集索引键 1700 字节上限，因此没有在 888 创建原字段索引。测试账套候选方向为持久化 `SHA2_256` 计算列及“哈希 + 流水 ID”索引，同时在查询中保留完整原值复核以排除碰撞。该方案需要另行评估旧系统写入成本、索引空间和实际计划收益；生产账套不得直接套用。
 
 不得未经执行计划、重复值和空间评估直接在生产账套建索引。批量同步以最新 `TraceBackOnlyCode.id` 为游标，避免反复全表扫描。
 
-仓库提供 `docs/database/TRACEBACK_INDEX_ASSESSMENT_888.sql`，只读输出三表数据量、真实字段类型、现有索引、Goods/Order UUID 重复值、无效数量、负余额 Code，并执行一条带 Actual Plan 的代表性扫码查询。脚本末尾仅以注释给出三个候选索引，不会创建索引。本地开发机当前没有账套数据库凭据，因此本轮未重新采集实际计划；部署前必须在 888 保存执行前后计划、逻辑读和耗时，确认收益后才能单独建测试索引。
+仓库提供 `docs/database/TRACEBACK_INDEX_ASSESSMENT_888.sql`，只读输出三表数据量、真实字段类型、现有索引、Goods/Order UUID 重复值、无效数量、负余额 Code，并执行一条带 Actual Plan 的代表性扫码查询。服务器保存的创建前计划为 `D:\LabelSystem\Diagnostics\traceback-scan-before-20261015_224745.sqlplan`，SHA-256 为 `D661CA671FF05FF9CB888A05D0C938E5E859B2DE3A2E57F82B65C8F0826B5FBC`。脚本只说明哈希索引候选方向，不执行 DDL。
 
 Gateway 每次查询在同一次字段合同检查中读取 Code 和两个 UUID 键的真实 SQL 类型，并用 `varchar`、`nvarchar` 或 `uniqueidentifier` 的匹配参数绑定，避免因固定使用 Unicode 字符串而让 SQL Server 转换索引列。
 
 ## 8. 实施顺序
 
 1. 已在本地固化三表必要字段合同、JSON 白名单映射和异常分类。
-2. 已设计迁移 015，新增本地 TraceBack 镜像版本与同步任务结构；待部署。
-3. 已在本地增加 Gateway 只读快照接口，并把 Business API 扫码与两次复核切到旧三表实时来源；待 888 实机验收。
+2. 迁移 015 已在开发、测试和生产库执行，新增本地 TraceBack 镜像版本与同步任务结构。
+3. Gateway 只读快照接口和 Business API 扫码、两次复核已部署；888 批量读取 100 张正余额合法标签均返回 `AVAILABLE`，异常样本仍进入待核对。
 4. 材料出库接入负数、红字正数及打印阶段正数流水。
 5. 调拨接入全量零流水、部分负流水及打印阶段新 Code 正流水。
 6. 货位调整接入全量零流水、部分负流水及打印阶段新 Code 正流水。

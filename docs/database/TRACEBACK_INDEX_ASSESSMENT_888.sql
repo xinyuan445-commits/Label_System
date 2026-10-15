@@ -115,9 +115,10 @@ FROM
    代表性实时扫码。执行后在 SSMS 的“执行计划”页保存 Actual Plan，
    同时记录 Messages 中的 logical reads 和 elapsed time。
 */
-DECLARE @SampleCode nvarchar(100) =
+/* 888 实际字段为 varchar(3500)，参数类型必须匹配，避免列侧隐式转换。 */
+DECLARE @SampleCode varchar(3500) =
 (
-    SELECT TOP (1) CONVERT(nvarchar(100), traceBackCode)
+    SELECT TOP (1) traceBackCode
     FROM dbo.TraceBackOnlyCode
     WHERE traceBackCode IS NOT NULL
     GROUP BY traceBackCode
@@ -148,20 +149,15 @@ SET STATISTICS TIME OFF;
 SET STATISTICS IO OFF;
 
 /*
-测试账套候选索引（本脚本不执行）：
+测试账套候选方向（本脚本不执行）：
 
-CREATE NONCLUSTERED INDEX IX_TraceBackOnlyCode_traceBackCode_id
-ON dbo.TraceBackOnlyCode(traceBackCode, id DESC)
-INCLUDE([sum], pdaGoodsUuid, pdaOrderUuid)
-WITH (SORT_IN_TEMPDB = ON, ONLINE = OFF);
+888 的 traceBackCode、pdaGoodsUuid、pdaOrderUuid 均为 varchar(3500)，超过 SQL Server
+普通非聚集索引键 1700 字节上限，不能直接把完整原字段作为索引键。候选方案是在专门维护窗口：
 
-CREATE NONCLUSTERED INDEX IX_TraceBackGoods_pdaGoodsUuid
-ON dbo.TraceBackGoods(pdaGoodsUuid)
-WITH (SORT_IN_TEMPDB = ON, ONLINE = OFF);
-
-CREATE NONCLUSTERED INDEX IX_TraceBackOrder_pdaOrderUuid
-ON dbo.TraceBackOrder(pdaOrderUuid)
-WITH (SORT_IN_TEMPDB = ON, ONLINE = OFF);
+1. 为三个键分别增加基于 HASHBYTES('SHA2_256', 原字段) 的持久化 binary(32) 计算列。
+2. OnlyCode 按“Code 哈希 + id DESC”建立非聚集索引；Goods、Order 分别按 UUID 哈希建索引。
+3. Gateway 查询同时使用“哈希相等 + 原字段相等”，原字段复核用于排除哈希碰撞。
+4. 比较创建前后的 Actual Plan、logical reads、耗时、索引空间和旧系统写入影响后再决定保留。
 
 只有在重复值、字段类型、空间、写入影响和实际执行计划均验收后，才在 888 单独执行。
 不得把测试账套结论直接套用到生产账套。

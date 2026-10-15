@@ -51,11 +51,11 @@ namespace U8Gateway.U8.TraceBack
     public static class TraceBackSnapshotMapper
     {
         private static readonly string[] MaterialCodes =
-            { "materialCode", "inventoryCode", "invCode", "cInvCode", "存货编码", "料号" };
+            { "materialCode", "inventoryCode", "invCode", "cInvCode", "code", "存货编码", "料号" };
         private static readonly string[] MaterialNames =
-            { "materialName", "inventoryName", "invName", "cInvName", "存货名称", "物料名称" };
+            { "materialName", "inventoryName", "invName", "cInvName", "name", "存货名称", "物料名称" };
         private static readonly string[] BatchNos =
-            { "batchNo", "batchCode", "batch", "cBatch", "批号" };
+            { "batchNo", "batchCode", "batchNumber", "batch", "cBatch", "批号" };
         private static readonly string[] UnitCodes =
             { "unitCode", "mainUnitCode", "cComUnitCode", "计量单位编码", "单位编码", "unit" };
         private static readonly string[] UnitNames =
@@ -65,15 +65,15 @@ namespace U8Gateway.U8.TraceBack
         private static readonly string[] WarehouseNames =
             { "warehouseName", "wareHouseName", "cWhName", "仓库名称" };
         private static readonly string[] LocationCodes =
-            { "locationCode", "positionCode", "cPosCode", "货位编码" };
+            { "locationCode", "positionCode", "storageLocationCode", "cPosCode", "货位编码" };
         private static readonly string[] LocationNames =
-            { "locationName", "positionName", "cPosName", "货位名称" };
+            { "locationName", "positionName", "storageLocation", "cPosName", "货位名称" };
         private static readonly string[] BusinessTypes =
-            { "businessType", "operationType", "documentType", "voucherType", "业务类型", "单据类型" };
+            { "businessType", "orderType", "operationType", "documentType", "voucherType", "业务类型", "单据类型" };
         private static readonly string[] PdaDocumentNos =
-            { "pdaDocumentNo", "pdaOrderNo", "pdaNo", "orderNo", "PDA单号" };
+            { "pdaDocumentNo", "pdaOrderNo", "pdaNo", "documentNumber", "orderNo", "PDA单号" };
         private static readonly string[] ErpDocumentNos =
-            { "erpDocumentNo", "erpOrderNo", "erpNo", "u8Code", "voucherCode", "ERP单号", "U8单号" };
+            { "erpDocumentNo", "erpOrderNo", "erpNo", "uploadedErpOrder", "u8Code", "voucherCode", "ERP单号", "U8单号" };
 
         public static TraceBackLabelSnapshot Map(
             TraceBackFlowAggregate flow,
@@ -213,10 +213,13 @@ namespace U8Gateway.U8.TraceBack
             JObject obj = token as JObject;
             if (obj != null)
             {
+                /* 先匹配当前对象，避免通用字段名（如 code/name）被更深层对象抢先命中。 */
                 foreach (JProperty property in obj.Properties())
-                {
                     if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
                         return property.Value;
+
+                foreach (JProperty property in obj.Properties())
+                {
                     JToken nested = Find(property.Value, name);
                     if (nested != null) return nested;
                 }

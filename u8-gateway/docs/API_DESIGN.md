@@ -180,4 +180,4 @@ U8 登录许可饱和返回 `U8_LICENSE_UNAVAILABLE`；反射或参数绑定发�
 
 状态为 `AVAILABLE`、`USED_UP`、`RECONCILIATION_REQUIRED` 或 `NOT_FOUND`。负余额、数量不可转换、Goods 缺失或重复、JSON 无效、必要身份字段缺失、Code 与 Goods 料号或批号冲突均进入待核对。Order 关联缺失或不唯一时来源字段留空，不猜测业务来源。结构缺失返回 `503 TRACEBACK_CONTRACT_INVALID`，SQL 查询失败返回 `503 TRACEBACK_QUERY_FAILED`，请求为空、超过 100 张或 Code 过长返回 `400 TRACEBACK_CODES_INVALID`。
 
-本阶段严格只读，不接受客户端 SQL，不写三表，托盘不进入接口。后续写入包仍按材料出库负/正流水、全量零流水、部分移动来源负流水和首次打印目标正流水区分事件角色。888 的索引、执行计划和历史异常验收必须在部署前完成；详细方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
+本阶段严格只读，不接受客户端 SQL，不写三表，托盘不进入接口。后续写入包仍按材料出库负/正流水、全量零流水、部分移动来源负流水和首次打印目标正流水区分事件角色。888 已完成数据量、重复值、真实字段类型和实际执行计划核查；由于关联键均为 `varchar(3500)`，本次未创建原字段索引，后续哈希索引方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。

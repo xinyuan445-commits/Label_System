@@ -31,40 +31,42 @@ BEGIN TRY
             CONSTRAINT DF_product_label_traceback_sync_status DEFAULT ('NOT_APPLICABLE'),
         traceback_synced_at datetime2(3) NULL;
 
-    ALTER TABLE dbo.product_label ADD
-        CONSTRAINT CK_product_label_mirror_source
-            CHECK (mirror_source IN ('LOCAL', 'TRACEBACK')),
-        CONSTRAINT CK_product_label_traceback_flow
-            CHECK (traceback_latest_flow_id IS NULL OR traceback_latest_flow_id > 0),
-        CONSTRAINT CK_product_label_traceback_balance
-            CHECK (traceback_balance IS NULL OR traceback_balance >= 0),
-        CONSTRAINT CK_product_label_traceback_hash
-            CHECK (traceback_identity_hash IS NULL OR
-                   traceback_identity_hash NOT LIKE '%[^0-9A-F]%' AND
-                   LEN(traceback_identity_hash) = 64),
-        CONSTRAINT CK_product_label_traceback_sync_status
-            CHECK (traceback_sync_status IN
-                   ('NOT_APPLICABLE', 'SYNCED', 'STALE', 'PENDING', 'FAILED', 'UNKNOWN')),
-        CONSTRAINT CK_product_label_traceback_source_fields
-            CHECK (
-                mirror_source = 'LOCAL' AND traceback_account_id IS NULL
-                    AND traceback_latest_flow_id IS NULL AND traceback_balance IS NULL
-                    AND traceback_identity_hash IS NULL AND traceback_sync_status = 'NOT_APPLICABLE'
-                    AND traceback_synced_at IS NULL
-                OR
-                mirror_source = 'TRACEBACK' AND label_code IS NOT NULL
-                    AND traceback_account_id IS NOT NULL
-                    AND traceback_latest_flow_id IS NOT NULL
-                    AND traceback_balance IS NOT NULL
-                    AND traceback_identity_hash IS NOT NULL
-                    AND traceback_sync_status <> 'NOT_APPLICABLE'
-                    AND traceback_synced_at IS NOT NULL
-            );
+    /* 新增列和引用这些列的约束、索引不能在同一静态批次中编译，保留在当前事务内动态创建。 */
+    EXEC sys.sp_executesql N'
+        ALTER TABLE dbo.product_label ADD
+            CONSTRAINT CK_product_label_mirror_source
+                CHECK (mirror_source IN (''LOCAL'', ''TRACEBACK'')),
+            CONSTRAINT CK_product_label_traceback_flow
+                CHECK (traceback_latest_flow_id IS NULL OR traceback_latest_flow_id > 0),
+            CONSTRAINT CK_product_label_traceback_balance
+                CHECK (traceback_balance IS NULL OR traceback_balance >= 0),
+            CONSTRAINT CK_product_label_traceback_hash
+                CHECK (traceback_identity_hash IS NULL OR
+                       traceback_identity_hash NOT LIKE ''%[^0-9A-F]%'' AND
+                       LEN(traceback_identity_hash) = 64),
+            CONSTRAINT CK_product_label_traceback_sync_status
+                CHECK (traceback_sync_status IN
+                       (''NOT_APPLICABLE'', ''SYNCED'', ''STALE'', ''PENDING'', ''FAILED'', ''UNKNOWN'')),
+            CONSTRAINT CK_product_label_traceback_source_fields
+                CHECK (
+                    mirror_source = ''LOCAL'' AND traceback_account_id IS NULL
+                        AND traceback_latest_flow_id IS NULL AND traceback_balance IS NULL
+                        AND traceback_identity_hash IS NULL AND traceback_sync_status = ''NOT_APPLICABLE''
+                        AND traceback_synced_at IS NULL
+                    OR
+                    mirror_source = ''TRACEBACK'' AND label_code IS NOT NULL
+                        AND traceback_account_id IS NOT NULL
+                        AND traceback_latest_flow_id IS NOT NULL
+                        AND traceback_balance IS NOT NULL
+                        AND traceback_identity_hash IS NOT NULL
+                        AND traceback_sync_status <> ''NOT_APPLICABLE''
+                        AND traceback_synced_at IS NOT NULL
+                );
 
-    CREATE INDEX IX_product_label_traceback_cursor
-        ON dbo.product_label(mirror_source, traceback_latest_flow_id)
-        INCLUDE(label_code, traceback_sync_status, traceback_synced_at)
-        WHERE mirror_source = 'TRACEBACK';
+        CREATE INDEX IX_product_label_traceback_cursor
+            ON dbo.product_label(mirror_source, traceback_latest_flow_id)
+            INCLUDE(label_code, traceback_sync_status, traceback_synced_at)
+            WHERE mirror_source = ''TRACEBACK'';';
 
     CREATE TABLE dbo.traceback_sync_task
     (

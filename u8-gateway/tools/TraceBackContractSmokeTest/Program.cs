@@ -13,6 +13,7 @@ namespace U8Gateway.TraceBackContractSmokeTest
             try
             {
                 MapsAvailableSnapshot();
+                MapsLegacyPayloadSnapshot();
                 RejectsNegativeBalance();
                 RejectsDuplicateGoods();
                 RejectsInvalidJson();
@@ -45,6 +46,40 @@ namespace U8Gateway.TraceBackContractSmokeTest
             TraceBackLabelSnapshot result = Map(-1m);
             Equal("RECONCILIATION_REQUIRED", result.Status);
             Has(result, "TRACEBACK_NEGATIVE_BALANCE");
+        }
+
+        private static void MapsLegacyPayloadSnapshot()
+        {
+            TraceBackRecord goods = new TraceBackRecord
+            {
+                Values = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase),
+                JsonPayloads = new[]
+                {
+                    JObject.Parse("{\"code\":\"MAT-01\",\"name\":\"物料\",\"warehouseCode\":\"WH1\",\"storageLocationCode\":\"P1\",\"Attribute\":{\"batchNumber\":\"B01\"},\"inventory\":{\"unit\":\"EA\",\"warehouse\":\"仓库\",\"storageLocation\":\"货位\"}}")
+                }
+            };
+            TraceBackRecord order = new TraceBackRecord
+            {
+                Values = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["orderType"] = "材料出库"
+                },
+                JsonPayloads = new[]
+                {
+                    JObject.Parse("{\"documentNumber\":\"PDA1\",\"CurrencyOrderData\":{\"uploadedErpOrder\":\"MO1\"}}")
+                }
+            };
+
+            TraceBackLabelSnapshot result = TraceBackSnapshotMapper.Map(
+                Flow(12m), new[] { goods }, new[] { order });
+            Equal("AVAILABLE", result.Status);
+            Equal("MAT-01", result.MaterialCode);
+            Equal("B01", result.BatchNo);
+            Equal("EA", result.UnitCode);
+            Equal("P1", result.LocationCode);
+            Equal("材料出库", result.SourceBusinessType);
+            Equal("PDA1", result.PdaDocumentNo);
+            Equal("MO1", result.ErpDocumentNo);
         }
 
         private static void RejectsDuplicateGoods()
