@@ -394,7 +394,8 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
                         THEN f.from_location_code ELSE f.to_location_code END, p.id, p.pallet_code,
                    JSON_VALUE(f.inventory_attributes_json, '$.materialName'),
                    JSON_VALUE(f.inventory_attributes_json, '$.unitName'),
-                   w.warehouse_name, pos.position_name
+                   w.warehouse_name, pos.position_name,
+                   pl.traceback_latest_flow_id, pl.mirror_source
             FROM dbo.product_label AS pl{hint}
             LEFT JOIN dbo.inventory_flow AS f ON f.id = pl.last_flow_id
             LEFT JOIN dbo.u8_warehouse_cache AS w
