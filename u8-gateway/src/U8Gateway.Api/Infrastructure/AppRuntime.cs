@@ -60,6 +60,7 @@ namespace U8Gateway.Api.Infrastructure
             {
                 EnvironmentName = settings.EnvironmentName,
                 EnableWrites = settings.EnableTestWrites,
+                EnableProductionWrites = settings.EnableProductionWrites,
                 WriteAllowedDatabase = settings.WriteAllowedDatabase,
                 WriteAllowedAccountId = settings.WriteAllowedAccountId,
                 SqlServer = settings.SqlServer,

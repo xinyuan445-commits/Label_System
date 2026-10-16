@@ -50,4 +50,4 @@ GET http://127.0.0.1:9880/api/v1/health
 GET http://127.0.0.1:9880/admin/config
 ```
 
-保存配置后，再从服务器本机测试 SQL、U8 登录和只读单据查询。首次部署与程序更新均保持 `enableTestWrites=false`；只有 888 单据写入验收窗口才允许临时开启，008 永远不得加入写入白名单。
+保存配置后，再从服务器本机测试 SQL、U8 登录和只读单据查询。首次部署与程序更新均保持两层写入关闭。生产写入只能在确认 U8 登录、正式用户、标签库和 TraceBack 实时快照均正常后开启，并必须同时命中 `production`、精确数据库/账套白名单、Gateway 生产开关、Gateway 总开关和 Business API 开关。

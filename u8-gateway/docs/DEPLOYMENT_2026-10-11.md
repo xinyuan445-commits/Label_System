@@ -1,5 +1,7 @@
 # 2026-10-11 IIS 部署记录
 
+2026-10-16 14:29 已发布 Gateway `0.9.2`并将运行配置切换到 `production / 008 / UFDATA_008_2021`。新版增加独立生产写入门禁：Gateway 总写入、生产写入、精确账套/数据库白名单和 `ENABLE PRODUCTION 008 UFDATA_008_2021` 确认必须同时命中，Business API 仍保留第二层独立开关。修正了模板切换时已有 Business API JSON 节点未实际更新的问题，并让 U8 连接测试返回可安全展示的登录错误。最终站点备份为 `D:\U8Gateway\backups\20261016_143729-pre-0.9.2-final`；Release 构建 0 警告、0 错误，写入门禁和 TraceBack 合同烟测通过。切换前确认 008 SQL、U8 COM 登录、`LabelSystem_Prod` 迁移和正式本地管理员/ERP 操作员映射；切换后 Gateway `running / 0.9.2.0`，Business API `ready / 0.10.1`，两层写入已按用户授权开启。产品标签 `008|3601-17-ELCR5-3072-RR|2026090101|100.00|2609020052` 经 Gateway 与 Business API 实时查询为 `AVAILABLE / 100`，当前位置 `KML_BH / 673`；只建立了本地镜像，未代用户创建 U8 单据或写入 TraceBack 业务流水。
+
 2026-10-16 13:35 已发布 Gateway `0.9.0`，本机部署管理页新增可独立编辑的“开发 / 888”和“生产 / 008”模板。开发模板继承当前 `UFDATA_888_2021`、`LabelSystem_Dev`；生产模板使用 008、`UFDATA_008_2021`、`LabelSystem_Prod`，并固定关闭 Gateway 写入、Business API 写入和开发登录。模板保存在 `D:\U8GatewayData\deployment-templates.json`，不包含密码、API Key 或连接串；读取和保存模板不改变运行配置，保存前必须先读取所选模板。应用模板要求 `APPLY 模板 账套 数据库` 确认文字，并在修改前测试两个候选数据库、备份两端配置。部署前站点备份为 `D:\U8Gateway\backups\20261016_133342-pre-0.9.0\site`，最终页面备份为 `D:\U8Gateway\backups\20261016_133459-pre-template-ui-guard`。Release 构建 0 警告、0 错误，写入门禁和页面脚本检查通过；站点与应用池 Started，健康检查 `running` / `0.9.0.0`，本机页面返回 200、局域网仍返回 403。两套模板读取及生产模板无变更保存验证成功，错误应用确认返回 400；当前 888 运行配置和两层写入状态均未改变，生产模板未应用，未写入 U8 或 TraceBack 数据。
 
 2026-10-16 13:25 已发布 Gateway `0.8.1`，取消管理密码长度和强度限制，只保留非空校验；本机部署管理页的“新管理密码”可更换已有密码，留空保持原值。按用户指定值完成一次本机维护重置，只写入新的随机盐和 PBKDF2-SHA256 哈希，明文未写入仓库、备份或审计。有效站点备份为 `D:\U8Gateway\backups\20261016_132409-pre-copyfix-0.8.1\site`，受保护配置备份为 `D:\U8GatewayData\config-backups\gateway-settings.before-admin-reset.20261016_132434.json`；发布过程中误放在站点根目录的 31 个程序集副本已移动到可恢复隔离目录 `D:\U8Gateway\backups\20261016_132504-root-artifacts-0.8.1`，站点根目录复核只保留 `Global.asax` 和 `Web.config`。最终站点与应用池均为 Started，健康检查 `running` / `0.8.1.0`，新密码认证成功，本机管理页返回 200，局域网仍返回 403。Gateway 环境、888 账套、`UFDATA_888_2021` 数据库及写入开关未改变；Business API 保持 `0.10.1` 和原配置，本次未写入 U8 或 TraceBack 数据。
@@ -88,6 +90,6 @@ u8-gateway/runtime-data/deployment/U8Gateway-credentials.txt
 
 ## 尚未开放
 
-修改和删除仍关闭。新增、审核和弃审仅对测试账套 888 开放，必须按单据逐项完成 CO 保存、回读、失败和状态恢复测试；生产账套保持禁止写入。
+修改和删除仍关闭。新增、审核和弃审已在 008 受控生产门禁下开放，首张正式测试单完成后必须回读表头、明细、状态和 TraceBack 三表，确认无误后再继续使用。
 
 2026-10-12 08:27 已部署 `0.3.4`。部署前把原站点完整备份到 `D:\U8Gateway\backups\20261012_082651`；站点和应用池启动正常。生产订单、采购订单、采购到货、销售订单、发货单和委外订单的搜索及整单明细读取均通过 Business API 代理验证。未调用任何写接口，测试写入配置未修改。

@@ -49,7 +49,10 @@ namespace U8Gateway.Api.Controllers
                 }
                 GatewaySettings settings = AppRuntime.CurrentSettings;
                 var writer = new TraceBackSyncWriter(
-                    settings.SqlServer, settings.SqlDatabase, settings.SqlUser, settings.SqlPassword);
+                    settings.SqlServer, settings.SqlDatabase, settings.SqlUser, settings.SqlPassword,
+                    settings.EnvironmentName, settings.EnableProductionWrites,
+                    settings.U8AccountId, settings.WriteAllowedDatabase,
+                    settings.WriteAllowedAccountId);
                 TraceBackSyncEventResult result = writer.Apply(request);
                 return Ok(ApiResponse<TraceBackSyncEventResult>.Ok(result, GatewayRequestContext.Id));
             }

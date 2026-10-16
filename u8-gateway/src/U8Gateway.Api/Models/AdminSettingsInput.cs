@@ -17,6 +17,7 @@ namespace U8Gateway.Api.Models
         public string DefaultMaker { get; set; }
         public string OperationArchiveRoot { get; set; }
         public bool EnableTestWrites { get; set; }
+        public bool EnableProductionWrites { get; set; }
         public string WriteAllowedDatabase { get; set; }
         public string WriteAllowedAccountId { get; set; }
         public string WriteConfirmation { get; set; }

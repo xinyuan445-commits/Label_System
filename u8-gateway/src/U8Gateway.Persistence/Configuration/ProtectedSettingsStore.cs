@@ -78,6 +78,7 @@ namespace U8Gateway.Persistence.Configuration
                 DefaultMaker = value.DefaultMaker,
                 OperationArchiveRoot = value.OperationArchiveRoot,
                 EnableTestWrites = value.EnableTestWrites,
+                EnableProductionWrites = value.EnableProductionWrites,
                 WriteAllowedDatabase = value.WriteAllowedDatabase,
                 WriteAllowedAccountId = value.WriteAllowedAccountId,
                 HasInternalApiKey = !string.IsNullOrWhiteSpace(value.InternalApiKey),

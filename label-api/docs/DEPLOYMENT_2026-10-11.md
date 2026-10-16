@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-16 14:29 Business API 已切换到 `production / LabelSystem_Prod / 008 / UFDATA_008_2021`，版本保持 `0.10.1`。正式 `admin` 账号改为 `LOCAL`，密码仅保存 PBKDF2-SHA256 加盐派生值，并绑定 ERP 操作员 `yx`；开发登录关闭。Gateway `0.9.2` 修正外置 JSON 切换问题后，健康检查为 `ready`、数据库就绪、Business API 和 Gateway 两层写入均开启。用正式 TraceBack 标签完成一次实时扫码和本地镜像验证；本次未创建 U8 单据，未写入新的 TraceBack 业务流水。
+
 2026-10-16 13:35 Gateway `0.9.0` 的本机部署管理页已增加开发 / 888 与生产 / 008 配置模板。生产模板中的 Business API 环境为 `production`、标签数据库为 `LabelSystem_Prod`、ERP 账套为 008、ERP 数据库为 `UFDATA_008_2021`，并关闭 U8 写入和开发登录。模板不保存标签数据库密码或 Gateway API Key，读取和保存模板不会修改当前 Business API 配置；本次仅生成并验证模板，未应用生产模板。Business API 仍为 `0.10.1`、development、`LabelSystem_Dev` 和原 888 写入状态，健康检查 `ready`、数据库就绪；未回收应用池、执行数据库迁移或写入 U8/TraceBack 数据。
 
 2026-10-16 13:13 Gateway `0.8.0` 已增加服务器本机部署管理页，可读取 Business API 外置配置、测试标签库连接并查看服务健康状态。Business 配置保存采用密码留空保持原值、保存前备份和无密钥审计；生产写入仍硬阻断。为支持 Gateway 管理进程读取和原子替换外置配置，`D:\LabelSystem\Config` 及 `label-api.json` 已按最小范围授予两个 IIS 应用池所需的修改或读取权限。Business API 本体保持 `0.10.1`，健康检查 `ready`、数据库就绪，现有 development / 888 设置和写入开关未改变；本次没有发布 Business API、执行数据库迁移或写入 U8 数据。

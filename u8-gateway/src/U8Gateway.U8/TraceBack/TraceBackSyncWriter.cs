@@ -24,13 +24,26 @@ namespace U8Gateway.U8.TraceBack
         private readonly string _server;
         private readonly string _user;
         private readonly string _password;
+        private readonly string _environment;
+        private readonly bool _productionWritesEnabled;
+        private readonly string _accountId;
+        private readonly string _writeAllowedDatabase;
+        private readonly string _writeAllowedAccountId;
 
-        public TraceBackSyncWriter(string server, string database, string user, string password)
+        public TraceBackSyncWriter(
+            string server, string database, string user, string password,
+            string environment, bool productionWritesEnabled, string accountId,
+            string writeAllowedDatabase, string writeAllowedAccountId)
         {
             _database = database ?? string.Empty;
             _server = server;
             _user = user;
             _password = password;
+            _environment = environment;
+            _productionWritesEnabled = productionWritesEnabled;
+            _accountId = accountId;
+            _writeAllowedDatabase = writeAllowedDatabase;
+            _writeAllowedAccountId = writeAllowedAccountId;
             _connectionString = new SqlConnectionStringBuilder
             {
                 DataSource = server,
@@ -48,8 +61,14 @@ namespace U8Gateway.U8.TraceBack
         public TraceBackSyncEventResult Apply(TraceBackSyncEventRequest request)
         {
             Validate(request);
-            if (!string.Equals(_database, "UFDATA_888_2021", StringComparison.OrdinalIgnoreCase))
-                throw new TraceBackSyncException("TRACEBACK_WRITE_ACCOUNT_BLOCKED", "追溯写入仅开放测试账套。");
+            bool test = string.Equals(_environment, "test", StringComparison.OrdinalIgnoreCase);
+            bool production = string.Equals(
+                _environment, "production", StringComparison.OrdinalIgnoreCase);
+            if ((!test && !(production && _productionWritesEnabled)) ||
+                !Same(_database, _writeAllowedDatabase) ||
+                !Same(AccountCode(_accountId), AccountCode(_writeAllowedAccountId)))
+                throw new TraceBackSyncException(
+                    "TRACEBACK_WRITE_ACCOUNT_BLOCKED", "追溯写入未绑定当前账套。");
 
             using (var connection = new SqlConnection(_connectionString))
             {
@@ -423,6 +442,13 @@ VALUES(@code,@type,@order_uuid,@goods_uuid,@sn,@quantity,GETDATE(),@user);",
         private static bool Same(string left, string right) =>
             string.Equals((left ?? string.Empty).Trim(), (right ?? string.Empty).Trim(),
                 StringComparison.OrdinalIgnoreCase);
+
+        private static string AccountCode(string value)
+        {
+            string trimmed = (value ?? string.Empty).Trim();
+            int separator = trimmed.LastIndexOf('@');
+            return separator >= 0 ? trimmed.Substring(separator + 1) : trimmed;
+        }
 
         private sealed class ExistingEvent
         {

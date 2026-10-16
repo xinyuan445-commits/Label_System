@@ -141,7 +141,9 @@ namespace U8Gateway.TraceBackContractSmokeTest
         {
             try
             {
-                new TraceBackSyncWriter("server", "production", "user", "password").Apply(request);
+                new TraceBackSyncWriter(
+                    "server", "production", "user", "password",
+                    "development", false, "008", "production", "008").Apply(request);
             }
             catch (TraceBackSyncException error)
             {

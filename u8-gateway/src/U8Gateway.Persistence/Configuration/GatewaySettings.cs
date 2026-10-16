@@ -17,6 +17,7 @@ namespace U8Gateway.Persistence.Configuration
         public string DefaultMaker { get; set; }
         public string OperationArchiveRoot { get; set; }
         public bool EnableTestWrites { get; set; }
+        public bool EnableProductionWrites { get; set; }
         public string WriteAllowedDatabase { get; set; }
         public string WriteAllowedAccountId { get; set; }
         public string InternalApiKey { get; set; }
@@ -43,6 +44,7 @@ namespace U8Gateway.Persistence.Configuration
         public string DefaultMaker { get; set; }
         public string OperationArchiveRoot { get; set; }
         public bool EnableTestWrites { get; set; }
+        public bool EnableProductionWrites { get; set; }
         public string WriteAllowedDatabase { get; set; }
         public string WriteAllowedAccountId { get; set; }
         public bool HasInternalApiKey { get; set; }

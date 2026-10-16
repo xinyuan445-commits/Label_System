@@ -1739,9 +1739,17 @@ namespace U8Gateway.U8.Documents
             {
                 throw new InvalidOperationException("U8 写入开关未启用。");
             }
-            if (!string.Equals(options.EnvironmentName, "test", StringComparison.OrdinalIgnoreCase))
+            bool test = string.Equals(
+                options.EnvironmentName, "test", StringComparison.OrdinalIgnoreCase);
+            bool production = string.Equals(
+                options.EnvironmentName, "production", StringComparison.OrdinalIgnoreCase);
+            if (options.EnableProductionWrites && !production)
             {
-                throw new InvalidOperationException("U8 写入仅允许测试环境。");
+                throw new InvalidOperationException("生产写入开关与当前环境不匹配。");
+            }
+            if (!test && !(production && options.EnableProductionWrites))
+            {
+                throw new InvalidOperationException("当前环境未开放 U8 写入。");
             }
             if (string.IsNullOrWhiteSpace(options.WriteAllowedDatabase) ||
                 !string.Equals(

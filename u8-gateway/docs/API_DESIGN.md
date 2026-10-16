@@ -2,7 +2,7 @@
 
 ## 本机部署管理（0.9.0）
 
-`GET /admin/config` 提供仅服务器本机可访问的部署管理页，所有管理 API 都要求现有管理密码。`GET /admin/api/overview` 汇总 Gateway、Business API、标签数据库迁移和双层写入状态；`GET /admin/api/business-config` 返回不含密码和 API Key 的 Business API 外置配置视图；`POST /admin/api/test-business-sql` 测试候选标签数据库；`POST /admin/api/save-business` 原子保存并备份 Business API 外置配置；`POST /admin/api/traceback-check` 只读检查 TraceBack 三表及可选产品标签快照。Gateway 配置保存时可同时更换为任意非空管理密码，留空保持原值。Gateway 与 Business API 开启写入时均要求 `ENABLE 账套 数据库` 确认文字，生产写入仍由代码硬阻断。配置审计不记录密码、连接串或内部 API Key。
+`GET /admin/config` 提供仅服务器本机可访问的部署管理页，所有管理 API 都要求现有管理密码。`GET /admin/api/overview` 汇总 Gateway、Business API、标签数据库迁移和双层写入状态；`GET /admin/api/business-config` 返回不含密码和 API Key 的 Business API 外置配置视图；`POST /admin/api/test-business-sql` 测试候选标签数据库；`POST /admin/api/save-business` 原子保存并备份 Business API 外置配置；`POST /admin/api/traceback-check` 只读检查 TraceBack 三表及可选产品标签快照。Gateway 配置保存时可同时更换为任意非空管理密码，留空保持原值。测试写入要求 `ENABLE 账套 数据库`；生产写入还必须单独开启生产门禁，严格命中当前账套与数据库白名单，并输入 `ENABLE PRODUCTION 账套 数据库`。Business API 仍有独立写入开关和同样的生产确认。配置审计不记录密码、连接串或内部 API Key。
 
 配置模板接口为 `GET /admin/api/templates`、`POST /admin/api/templates/save` 和 `POST /admin/api/templates/apply`。开发与生产模板保存在 `D:\U8GatewayData\deployment-templates.json`，只保存非敏感配置，可分别读取、编辑和保存；首次生成时，开发模板继承当前 888 配置，生产模板使用 008、`UFDATA_008_2021` 和 `LabelSystem_Prod`，并关闭 Gateway 写入、Business API 写入和开发登录。应用模板要求 `APPLY 模板 账套 数据库` 确认文字，应用前测试两个候选数据库，保存前分别备份两端配置；模板中的空密码始终复用当前受保护密码。生产写入仍不可通过模板开启。
 

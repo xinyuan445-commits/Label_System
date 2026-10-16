@@ -17,6 +17,11 @@ namespace U8Gateway.WriteSafetySmokeTest
                 production.EnvironmentName = "production";
                 MustBlock(production);
 
+                U8GatewayRuntimeOptions allowedProduction = ProductionAllowed();
+                LateBoundU8DocumentRuntime.ValidateWriteOptions(allowedProduction);
+                allowedProduction.EnableProductionWrites = false;
+                MustBlock(allowedProduction);
+
                 U8GatewayRuntimeOptions wrongDatabase = Allowed();
                 wrongDatabase.SqlDatabase = "UFDATA_008_2021";
                 MustBlock(wrongDatabase);
@@ -29,6 +34,9 @@ namespace U8Gateway.WriteSafetySmokeTest
                 U8GatewayRuntimeOptions completeAccount = Allowed();
                 completeAccount.U8.AccountId = "(default)@888";
                 LateBoundU8DocumentRuntime.ValidateWriteOptions(completeAccount);
+                U8GatewayRuntimeOptions testWithProductionFlag = Allowed();
+                testWithProductionFlag.EnableProductionWrites = true;
+                MustBlock(testWithProductionFlag);
 
                 Console.WriteLine("write safety gate smoke passed");
                 return 0;
@@ -70,6 +78,19 @@ namespace U8Gateway.WriteSafetySmokeTest
                     Password = "password"
                 }
             };
+        }
+
+        private static U8GatewayRuntimeOptions ProductionAllowed()
+        {
+            U8GatewayRuntimeOptions options = Base();
+            options.EnvironmentName = "production";
+            options.EnableWrites = true;
+            options.EnableProductionWrites = true;
+            options.SqlDatabase = "UFDATA_008_2021";
+            options.WriteAllowedDatabase = "UFDATA_008_2021";
+            options.U8.AccountId = "008";
+            options.WriteAllowedAccountId = "008";
+            return options;
         }
 
         private static void MustBlock(U8GatewayRuntimeOptions options)

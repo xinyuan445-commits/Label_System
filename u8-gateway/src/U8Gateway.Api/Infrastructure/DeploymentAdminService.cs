@@ -93,6 +93,7 @@ FROM dbo.schema_migration;", connection))
                     accountId = AccountCode(gateway.U8AccountId),
                     year = gateway.U8Year,
                     writesEnabled = gateway.EnableTestWrites,
+                    productionWritesEnabled = gateway.EnableProductionWrites,
                     allowedDatabase = gateway.WriteAllowedDatabase,
                     allowedAccountId = gateway.WriteAllowedAccountId,
                     revision = gateway.Revision
@@ -100,7 +101,7 @@ FROM dbo.schema_migration;", connection))
                 business,
                 businessHealth,
                 migrations,
-                productionWritesSupported = false,
+                productionWritesSupported = true,
                 adminAccess = "LOCAL_ONLY"
             };
         }
@@ -330,12 +331,24 @@ SELECT
         {
             JObject root = ReadBusinessConfig();
             SqlConnectionStringBuilder connection = BusinessConnection(input, true);
-            JObject label = root["LabelSystem"] as JObject ?? new JObject();
-            JObject strings = root["ConnectionStrings"] as JObject ?? new JObject();
-            JObject gateway = root["U8Gateway"] as JObject ?? new JObject();
-            root["LabelSystem"] = label;
-            root["ConnectionStrings"] = strings;
-            root["U8Gateway"] = gateway;
+            JObject label = root["LabelSystem"] as JObject;
+            if (label == null)
+            {
+                label = new JObject();
+                root["LabelSystem"] = label;
+            }
+            JObject strings = root["ConnectionStrings"] as JObject;
+            if (strings == null)
+            {
+                strings = new JObject();
+                root["ConnectionStrings"] = strings;
+            }
+            JObject gateway = root["U8Gateway"] as JObject;
+            if (gateway == null)
+            {
+                gateway = new JObject();
+                root["U8Gateway"] = gateway;
+            }
             label["Environment"] = input.EnvironmentName.Trim();
             label["ErpAccountId"] = input.ErpAccountId.Trim();
             label["ErpYear"] = input.ErpYear;
@@ -393,9 +406,11 @@ SELECT
             if (string.IsNullOrWhiteSpace(connection.Password))
                 throw new InvalidOperationException("标签数据库密码未配置。");
             if (!input.U8WritesEnabled) return;
-            if (string.Equals(input.EnvironmentName, "production", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("生产写入尚未开放。");
-            string expected = "ENABLE " + input.ErpAccountId.Trim() + " " + input.ErpDatabaseName.Trim();
+            bool production = string.Equals(
+                input.EnvironmentName, "production", StringComparison.OrdinalIgnoreCase);
+            string expected = production
+                ? "ENABLE PRODUCTION " + input.ErpAccountId.Trim() + " " + input.ErpDatabaseName.Trim()
+                : "ENABLE " + input.ErpAccountId.Trim() + " " + input.ErpDatabaseName.Trim();
             if (!string.Equals(input.WriteConfirmation?.Trim(), expected, StringComparison.Ordinal))
                 throw new InvalidOperationException("写入确认文字不匹配。");
         }
@@ -416,6 +431,7 @@ SELECT
             productionGateway.WriteAllowedAccountId = ReplaceAccount(
                 productionGateway.WriteAllowedAccountId, "008");
             productionGateway.EnableTestWrites = false;
+            productionGateway.EnableProductionWrites = false;
             BusinessSettingsInput productionBusiness = TemplateBusinessInput(businessRoot);
             productionBusiness.EnvironmentName = "production";
             productionBusiness.LabelSqlDatabase = "LabelSystem_Prod";
@@ -496,6 +512,7 @@ SELECT
                     defaultMaker = gateway.DefaultMaker?.Trim(),
                     operationArchiveRoot = gateway.OperationArchiveRoot?.Trim(),
                     enableTestWrites = gatewayWrites,
+                    enableProductionWrites = false,
                     writeAllowedDatabase = gateway.WriteAllowedDatabase?.Trim(),
                     writeAllowedAccountId = gateway.WriteAllowedAccountId?.Trim()
                 }),
@@ -560,6 +577,7 @@ SELECT
                 DefaultMaker = input.DefaultMaker?.Trim(),
                 OperationArchiveRoot = input.OperationArchiveRoot?.Trim(),
                 EnableTestWrites = writes,
+                EnableProductionWrites = false,
                 WriteAllowedDatabase = input.WriteAllowedDatabase?.Trim(),
                 WriteAllowedAccountId = input.WriteAllowedAccountId?.Trim()
             };
@@ -581,6 +599,7 @@ SELECT
                 DefaultMaker = value.DefaultMaker,
                 OperationArchiveRoot = value.OperationArchiveRoot,
                 EnableTestWrites = value.EnableTestWrites,
+                EnableProductionWrites = value.EnableProductionWrites,
                 WriteAllowedDatabase = value.WriteAllowedDatabase,
                 WriteAllowedAccountId = value.WriteAllowedAccountId
             };

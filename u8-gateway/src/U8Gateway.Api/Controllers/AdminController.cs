@@ -238,21 +238,35 @@ namespace U8Gateway.Api.Controllers
                     "请填写 U8 密码。"));
             }
 
-            U8ConnectionTestResult result = await AppRuntime.U8Queue.ExecuteAsync(
-                () => U8ConnectionTester.Test(new U8ConnectionOptions
+            try
+            {
+                U8ConnectionTestResult result = await AppRuntime.U8Queue.ExecuteAsync(
+                    () => U8ConnectionTester.Test(new U8ConnectionOptions
+                    {
+                        Server = input.U8Server,
+                        AccountId = input.U8AccountId,
+                        Year = input.U8Year,
+                        Subsystem = input.U8Subsystem,
+                        User = input.U8User,
+                        Password = password,
+                        LoginDate = BusinessClock.Today
+                    }));
+                return Ok(ApiResponse<U8ConnectionTestResult>.Ok(
+                    result,
+                    GatewayRequestContext.Id,
+                    "U8 连接成功"));
+            }
+            catch (U8LoginException exception)
+            {
+                return Content(HttpStatusCode.BadRequest, new ApiResponse<object>
                 {
-                    Server = input.U8Server,
-                    AccountId = input.U8AccountId,
-                    Year = input.U8Year,
-                    Subsystem = input.U8Subsystem,
-                    User = input.U8User,
-                    Password = password,
-                    LoginDate = BusinessClock.Today
-                }));
-            return Ok(ApiResponse<U8ConnectionTestResult>.Ok(
-                result,
-                GatewayRequestContext.Id,
-                "U8 连接成功"));
+                    Success = false,
+                    Code = exception.Code,
+                    Message = exception.Message,
+                    RequestId = GatewayRequestContext.Id,
+                    ServerTime = BusinessClock.Now
+                });
+            }
         }
 
         [HttpPost]
@@ -278,6 +292,7 @@ namespace U8Gateway.Api.Controllers
                 DefaultMaker = input.DefaultMaker?.Trim(),
                 OperationArchiveRoot = input.OperationArchiveRoot?.Trim(),
                 EnableTestWrites = input.EnableTestWrites,
+                EnableProductionWrites = input.EnableProductionWrites,
                 WriteAllowedDatabase = input.WriteAllowedDatabase?.Trim(),
                 WriteAllowedAccountId = input.WriteAllowedAccountId?.Trim()
             };
@@ -292,6 +307,7 @@ namespace U8Gateway.Api.Controllers
                 ["database"] = settings.SqlDatabase,
                 ["accountId"] = AccountCode(settings.U8AccountId),
                 ["writesEnabled"] = settings.EnableTestWrites,
+                ["productionWritesEnabled"] = settings.EnableProductionWrites,
                 ["backup"] = backup
             });
             return Ok(ApiResponse<object>.Ok(new
@@ -364,9 +380,23 @@ namespace U8Gateway.Api.Controllers
         {
             if (!settings.EnableTestWrites)
             {
+                if (settings.EnableProductionWrites)
+                {
+                    throw new HttpResponseException(RequestError(
+                        HttpStatusCode.BadRequest, "请同时开启 Gateway 写入。"));
+                }
                 return;
             }
-            if (!string.Equals(settings.EnvironmentName, "test", StringComparison.OrdinalIgnoreCase) ||
+            bool test = string.Equals(
+                settings.EnvironmentName, "test", StringComparison.OrdinalIgnoreCase);
+            bool production = string.Equals(
+                settings.EnvironmentName, "production", StringComparison.OrdinalIgnoreCase);
+            if (settings.EnableProductionWrites && !production)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.BadRequest, "生产写入开关只能用于生产环境。"));
+            }
+            if ((!test && !(production && settings.EnableProductionWrites)) ||
                 string.IsNullOrWhiteSpace(settings.WriteAllowedDatabase) ||
                 string.IsNullOrWhiteSpace(settings.WriteAllowedAccountId) ||
                 !string.Equals(settings.SqlDatabase, settings.WriteAllowedDatabase, StringComparison.OrdinalIgnoreCase) ||
@@ -377,10 +407,13 @@ namespace U8Gateway.Api.Controllers
             {
                 throw new HttpResponseException(RequestError(
                     HttpStatusCode.BadRequest,
-                    "写入仅允许绑定测试环境、指定测试数据库和测试账套。"));
+                    "写入必须绑定当前环境、指定数据库和账套。"));
             }
-            string expected = "ENABLE " + AccountCode(settings.WriteAllowedAccountId) + " " +
-                settings.WriteAllowedDatabase;
+            string expected = production
+                ? "ENABLE PRODUCTION " + AccountCode(settings.WriteAllowedAccountId) + " " +
+                  settings.WriteAllowedDatabase
+                : "ENABLE " + AccountCode(settings.WriteAllowedAccountId) + " " +
+                  settings.WriteAllowedDatabase;
             if (!string.Equals(confirmation?.Trim(), expected, StringComparison.Ordinal))
             {
                 throw new HttpResponseException(RequestError(

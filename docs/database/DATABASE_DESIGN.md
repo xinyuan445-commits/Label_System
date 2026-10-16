@@ -709,3 +709,4 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 - 调拨及货位调整的部分移动分为来源扣减和打印目标标签两个独立同步事件；打印前 `PENDING_PRINT` 仍允许无 Code，禁止向 `TraceBackOnlyCode` 写空值或临时码。
 - 详细读取、写入、索引和退出方案见 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
 - 888 的只读数据量、字段类型、重复值、现有索引和代表性实际执行计划使用 `TRACEBACK_INDEX_ASSESSMENT_888.sql` 核查。脚本只输出候选索引，不执行建索引；生产账套必须重新独立评估。
+- 2026-10-16 已将 Business API 运行连接切换到 `LabelSystem_Prod`，迁移 001–015 齐全。首次正式扫码只在 `product_label` 建立 TraceBack 镜像，未写入 U8 单据或新的 TraceBack 流水。
