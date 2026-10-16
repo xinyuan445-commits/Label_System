@@ -120,11 +120,14 @@ namespace U8Gateway.Persistence.Configuration
                 settings.AdminPasswordSalt = prior.AdminPasswordSalt;
                 if (string.IsNullOrWhiteSpace(settings.AdminPasswordHash))
                 {
-                    if (string.IsNullOrWhiteSpace(newAdminPassword) ||
-                        newAdminPassword.Length < 12)
+                    if (string.IsNullOrEmpty(newAdminPassword))
                     {
-                        throw new InvalidOperationException("首次配置必须设置至少 12 位的管理密码。");
+                        throw new InvalidOperationException("首次配置必须设置管理密码。");
                     }
+                    SetAdminPassword(settings, newAdminPassword);
+                }
+                else if (!string.IsNullOrEmpty(newAdminPassword))
+                {
                     SetAdminPassword(settings, newAdminPassword);
                 }
                 settings.Revision = prior.Revision + 1;
