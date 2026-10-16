@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-16 13:35 Gateway `0.9.0` 的本机部署管理页已增加开发 / 888 与生产 / 008 配置模板。生产模板中的 Business API 环境为 `production`、标签数据库为 `LabelSystem_Prod`、ERP 账套为 008、ERP 数据库为 `UFDATA_008_2021`，并关闭 U8 写入和开发登录。模板不保存标签数据库密码或 Gateway API Key，读取和保存模板不会修改当前 Business API 配置；本次仅生成并验证模板，未应用生产模板。Business API 仍为 `0.10.1`、development、`LabelSystem_Dev` 和原 888 写入状态，健康检查 `ready`、数据库就绪；未回收应用池、执行数据库迁移或写入 U8/TraceBack 数据。
+
 2026-10-16 13:13 Gateway `0.8.0` 已增加服务器本机部署管理页，可读取 Business API 外置配置、测试标签库连接并查看服务健康状态。Business 配置保存采用密码留空保持原值、保存前备份和无密钥审计；生产写入仍硬阻断。为支持 Gateway 管理进程读取和原子替换外置配置，`D:\LabelSystem\Config` 及 `label-api.json` 已按最小范围授予两个 IIS 应用池所需的修改或读取权限。Business API 本体保持 `0.10.1`，健康检查 `ready`、数据库就绪，现有 development / 888 设置和写入开关未改变；本次没有发布 Business API、执行数据库迁移或写入 U8 数据。
 
 2026-10-16 12:54 H5 更新为 `0.2.0-dev.71`，Gateway 更新为 `0.7.1`。调拨和货位调整扫码显示改为按当前仓库、货位编码优先使用 U8 基础档案名称，缓存缺失时才回退 TraceBack 名称快照；Gateway 后续写入最新 `TraceBackGoods` 时同时更新目标编码和名称。已确认测试标签旧 Goods 的目标编码为 `JML_B1 / 361`、旧名称快照仍为 `1139`，U8 单据始终使用正确编码；修复后页面显示当前名称 `J004`。H5 构建通过并在 5173 提供 `0.2.0-dev.71`，Gateway 健康检查 `running` / `0.7.1.0`；`validateOnly` 临时流水已回滚，未新增测试数据。Business API 和数据库结构不变。

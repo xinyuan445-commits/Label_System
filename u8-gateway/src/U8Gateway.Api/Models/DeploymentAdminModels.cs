@@ -20,4 +20,17 @@ namespace U8Gateway.Api.Models
     {
         public string Code { get; set; }
     }
+
+    public sealed class DeploymentTemplateInput
+    {
+        public string Key { get; set; }
+        public AdminSettingsInput Gateway { get; set; }
+        public BusinessSettingsInput Business { get; set; }
+    }
+
+    public sealed class ApplyDeploymentTemplateInput
+    {
+        public string Key { get; set; }
+        public string Confirmation { get; set; }
+    }
 }

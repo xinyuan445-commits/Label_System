@@ -107,6 +107,69 @@ namespace U8Gateway.Api.Controllers
             }
         }
 
+        [HttpGet]
+        [Route("api/templates")]
+        public IHttpActionResult GetTemplates()
+        {
+            EnsureAuthorized(requireExistingAdmin: true);
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    DeploymentAdminService.ReadTemplates(), GatewayRequestContext.Id));
+            }
+            catch (Exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.ServiceUnavailable, "配置模板读取失败。"));
+            }
+        }
+
+        [HttpPost]
+        [Route("api/templates/save")]
+        public IHttpActionResult SaveTemplate(DeploymentTemplateInput input)
+        {
+            EnsureAuthorized(requireExistingAdmin: true);
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    DeploymentAdminService.SaveTemplate(input),
+                    GatewayRequestContext.Id, "配置模板已保存"));
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.BadRequest, exception.Message));
+            }
+        }
+
+        [HttpPost]
+        [Route("api/templates/apply")]
+        public IHttpActionResult ApplyTemplate(ApplyDeploymentTemplateInput input)
+        {
+            EnsureAuthorized(requireExistingAdmin: true);
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    DeploymentAdminService.ApplyTemplate(input),
+                    GatewayRequestContext.Id, "配置模板已应用"));
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.BadRequest, exception.Message));
+            }
+            catch (SqlException)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.BadRequest, "模板数据库连接测试失败。"));
+            }
+            catch (Exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.ServiceUnavailable, "配置模板应用失败。"));
+            }
+        }
+
         [HttpPost]
         [Route("api/traceback-check")]
         public IHttpActionResult TraceBackCheck(TraceBackCheckInput input)
