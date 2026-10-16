@@ -13,6 +13,7 @@ public sealed class MaterialOutboundExecutionService(
     U8GatewayClient gateway,
     UserRepository users,
     TraceBackSnapshotService traceBack,
+    TraceBackSyncService traceBackSync,
     IOptionsMonitor<LabelSystemOptions> options)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -52,6 +53,15 @@ public sealed class MaterialOutboundExecutionService(
         foreach (var item in prepared)
         {
             if (item.Operation.Status == "SUCCESS") continue;
+            if (item.Operation.Status == "NEEDS_RECONCILIATION" &&
+                item.Operation.ErpStatus == "SUCCESS")
+            {
+                if (!await traceBackSync.TrySyncOperationAsync(
+                        item.Operation, requestId, cancellationToken)) break;
+                if (request.AutoApprove && item.Operation.ApprovalStatus != "NOT_REQUIRED" &&
+                    !await ApproveAsync(item, null, requestId, cancellationToken)) break;
+                continue;
+            }
             if (item.Operation.Status == "PENDING_APPROVAL")
             {
                 if (!request.AutoApprove)
@@ -99,9 +109,15 @@ public sealed class MaterialOutboundExecutionService(
                 }
                 var rows = ReadErpRows(item.Operation.ErpDocumentType, result.Document);
                 EnsureErpRows(item.Operation, rows);
+                var traceBackTasks = TraceBackSyncPlanner.Build(
+                    item.Operation, result, item.RedVoucher, rows,
+                    item.Request.OperatorName, options.CurrentValue.ErpAccountId);
                 await executionRepository.CompleteAsync(
                     item.Operation, result, item.RedVoucher, request.AutoApprove,
-                    rows, requestId, cancellationToken);
+                    rows, traceBackTasks, requestId, cancellationToken);
+                if (traceBackTasks.Count > 0 &&
+                    !await traceBackSync.TrySyncOperationAsync(
+                        item.Operation, requestId, cancellationToken)) break;
                 if (request.AutoApprove &&
                     !await ApproveAsync(item, result, requestId, cancellationToken)) break;
             }
@@ -120,6 +136,24 @@ public sealed class MaterialOutboundExecutionService(
                 break;
             }
         }
+        return await operations.GetGroupAsync(groupId, user.Id, false, cancellationToken);
+    }
+
+    public async Task<OperationGroupResult> RetryTraceBackAsync(
+        string groupId,
+        SessionUser user,
+        string requestId,
+        CancellationToken cancellationToken)
+    {
+        var plan = await executionRepository.GetPlanAsync(groupId, user.Id, cancellationToken);
+        var candidates = plan.Where(item =>
+            item.Status == "NEEDS_RECONCILIATION" && item.ErpStatus == "SUCCESS").ToArray();
+        if (candidates.Length == 0)
+            throw new ApiException(StatusCodes.Status409Conflict,
+                "TRACEBACK_SYNC_NOT_PENDING", "没有待恢复的标签同步。");
+        foreach (var operation in candidates)
+            if (!await traceBackSync.TrySyncOperationAsync(operation, requestId, cancellationToken))
+                break;
         return await operations.GetGroupAsync(groupId, user.Id, false, cancellationToken);
     }
 

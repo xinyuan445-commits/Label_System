@@ -19,6 +19,9 @@ namespace U8Gateway.TraceBackContractSmokeTest
                 RejectsInvalidJson();
                 RejectsCodeIdentityConflict();
                 AllowsMissingOrderWithoutGuessingSource();
+                RejectsInvalidSyncQuantity();
+                RejectsMissingSyncTarget();
+                BlocksNonTestWriteAccount();
                 Console.WriteLine("traceback contract smoke passed");
                 return 0;
             }
@@ -115,6 +118,54 @@ namespace U8Gateway.TraceBackContractSmokeTest
             Equal("AVAILABLE", result.Status);
             Equal(null, result.SourceBusinessType);
         }
+
+        private static void RejectsInvalidSyncQuantity()
+        {
+            TraceBackSyncException error = ThrowsSync(Request("MATERIAL_ISSUE", 1m));
+            Equal("TRACEBACK_EVENT_QUANTITY_INVALID", error.Code);
+        }
+
+        private static void BlocksNonTestWriteAccount()
+        {
+            TraceBackSyncException error = ThrowsSync(Request("MATERIAL_ISSUE", -1m));
+            Equal("TRACEBACK_WRITE_ACCOUNT_BLOCKED", error.Code);
+        }
+
+        private static void RejectsMissingSyncTarget()
+        {
+            TraceBackSyncException error = ThrowsSync(Request("MATERIAL_RETURN", 1m));
+            Equal("TRACEBACK_TARGET_MISSING", error.Code);
+        }
+
+        private static TraceBackSyncException ThrowsSync(TraceBackSyncEventRequest request)
+        {
+            try
+            {
+                new TraceBackSyncWriter("server", "production", "user", "password").Apply(request);
+            }
+            catch (TraceBackSyncException error)
+            {
+                return error;
+            }
+            throw new InvalidOperationException("expected sync error");
+        }
+
+        private static TraceBackSyncEventRequest Request(string role, decimal quantity) =>
+            new TraceBackSyncEventRequest
+            {
+                EventKey = "test-event",
+                EventRole = role,
+                Code = "008|MAT-01|B01|10.00|2601010001",
+                Quantity = quantity,
+                ExpectedLatestFlowId = 20,
+                ExpectedBalance = 12m,
+                OrderUuid = "22222222-2222-2222-2222-222222222222",
+                GoodsUuid = "33333333-3333-3333-3333-333333333333",
+                OrderType = "材料出库",
+                PdaDocumentNo = "PDA1",
+                ErpDocumentNo = "MO1",
+                OperatorName = "tester"
+            };
 
         private static TraceBackLabelSnapshot Map(decimal balance) =>
             TraceBackSnapshotMapper.Map(Flow(balance), new[] { Goods() }, new[] { Order() });

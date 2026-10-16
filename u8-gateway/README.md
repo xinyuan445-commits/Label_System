@@ -2,7 +2,7 @@
 
 ## 测试账套写入
 
-`0.6.0` 增加并已部署 TraceBack 产品标签只读快照：按完整 Code 合计 `TraceBackOnlyCode.sum`，取最大流水 ID 关联 Goods 和 Order，并返回结构化异常。单次批量最多 100 张；不写旧三表，不处理托盘。
+`0.7.0` 在既有 TraceBack 产品标签快照上增加测试账套同步事件：材料出库原标签负/正流水、调拨和货位调整全量零流水及部分移动来源负流水，均在账套单一事务中写入 Order、Goods 和 OnlyCode。事件使用确定性 UUID 幂等恢复，生产账套硬阻断；托盘仍不进入旧三表。
 
 `0.5.8` 将调拨审核视为一个联动状态：先审核调拨单，再审核 U8 生成的其他出库单和其他入库单；弃审按其他入库单、其他出库单、调拨单的顺序执行。每一步都按实际状态跳过已完成项并回查，因此明确失败后可以安全重试。审核列表只有在三类单据全部审核后才显示“已审核”。
 
@@ -19,7 +19,7 @@
 PDA / H5
   -> 标签系统业务后端
      -> U8 Gateway（本项目）
-        -> U8 COM / U8 SQL 只读查询
+        -> U8 COM / 受控 U8 SQL 查询与 TraceBack 同步
 ```
 
 - H5 不直接持有 U8 Gateway 的密钥。
@@ -84,8 +84,10 @@ u8-gateway/
 - [字段合同](document-contracts/README.md)
 - [U8 来源映射](document-contracts/u8-source-map.json)
 
-## TraceBack 三表只读接口
+## TraceBack 三表接口
 
-Gateway `0.6.0` 提供 `GET /api/v1/traceback/labels/{code}` 和 `POST /api/v1/traceback/labels/snapshots`。批量请求最多 100 个完整 Code，响应顺序与去重后的请求顺序一致。读取前校验三张表及必要关联字段；负余额、数量无效、Goods 缺失或重复、JSON 无效和 Code 身份冲突均返回结构化异常状态。Order 关联异常只使来源字段留空，不猜测业务来源。
+Gateway `0.7.0` 提供 `GET /api/v1/traceback/labels/{code}` 和 `POST /api/v1/traceback/labels/snapshots`。批量请求最多 100 个完整 Code，响应顺序与去重后的请求顺序一致。读取前校验三张表及必要关联字段；负余额、数量无效、Goods 缺失或重复、JSON 无效和 Code 身份冲突均返回结构化异常状态。Order 关联异常只使来源字段留空，不猜测业务来源。
 
-本阶段不包含托盘，也不提供旧三表写接口。后续同步包必须在账套数据库单一事务中提交，并通过确定性 Order/Goods UUID 防止超时重试重复插入。详细数据口径、实际样本和迁移边界见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
+`POST /api/v1/traceback/labels/sync-events` 接收单个稳定同步事件。Gateway 先锁定事件和 Order UUID，复核原 Code 的最新流水 ID 与余额，再在一个 SQL 事务中写入缺失的 Order、Goods 和 OnlyCode；相同 Goods UUID 的完全一致重试直接返回已完成结果，不一致则返回冲突。写接口只允许 `UFDATA_888_2021`，其他账套在连接数据库前即返回 `TRACEBACK_WRITE_ACCOUNT_BLOCKED`。诊断用 `validateOnly=true` 会完整执行并回滚，不保留旧表数据。
+
+当前不包含托盘。部分移动的目标标签和无标签红字在首次打印前保持无 Code 的 `PENDING_PRINT`，因此本阶段只写来源事件，打印目标正流水待打印平台接入。详细口径见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。

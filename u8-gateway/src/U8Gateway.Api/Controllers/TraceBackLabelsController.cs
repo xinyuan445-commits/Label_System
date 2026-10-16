@@ -36,6 +36,47 @@ namespace U8Gateway.Api.Controllers
             return Ok(ApiResponse<object>.Ok(Read(request.Codes), GatewayRequestContext.Id));
         }
 
+        [HttpPost]
+        [Route("sync-events")]
+        public IHttpActionResult Sync(TraceBackSyncEventRequest request)
+        {
+            try
+            {
+                try { AppRuntime.EnsureU8WriteAllowed(); }
+                catch (InvalidOperationException exception)
+                {
+                    throw new TraceBackSyncException("TRACEBACK_WRITE_DISABLED", exception.Message);
+                }
+                GatewaySettings settings = AppRuntime.CurrentSettings;
+                var writer = new TraceBackSyncWriter(
+                    settings.SqlServer, settings.SqlDatabase, settings.SqlUser, settings.SqlPassword);
+                TraceBackSyncEventResult result = writer.Apply(request);
+                return Ok(ApiResponse<TraceBackSyncEventResult>.Ok(result, GatewayRequestContext.Id));
+            }
+            catch (TraceBackSyncException exception)
+            {
+                return Content(HttpStatusCode.Conflict, new ApiResponse<object>
+                {
+                    Success = false,
+                    Code = exception.Code,
+                    Message = exception.Message,
+                    RequestId = GatewayRequestContext.Id,
+                    ServerTime = BusinessClock.Now
+                });
+            }
+            catch (Exception)
+            {
+                return Content(HttpStatusCode.InternalServerError, new ApiResponse<object>
+                {
+                    Success = false,
+                    Code = "TRACEBACK_SYNC_FAILED",
+                    Message = "追溯同步失败。",
+                    RequestId = GatewayRequestContext.Id,
+                    ServerTime = BusinessClock.Now
+                });
+            }
+        }
+
         private IList<TraceBackLabelSnapshot> Read(IList<string> codes)
         {
             try { return Reader().GetSnapshots(codes); }

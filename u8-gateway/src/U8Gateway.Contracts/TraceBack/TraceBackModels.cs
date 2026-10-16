@@ -37,4 +37,33 @@ namespace U8Gateway.Contracts.TraceBack
         public string Status { get; set; }
         public IList<TraceBackAnomaly> Anomalies { get; set; }
     }
+
+    public sealed class TraceBackSyncEventRequest
+    {
+        public string EventKey { get; set; }
+        public string EventRole { get; set; }
+        public string Code { get; set; }
+        public decimal Quantity { get; set; }
+        public long ExpectedLatestFlowId { get; set; }
+        public decimal ExpectedBalance { get; set; }
+        public string OrderUuid { get; set; }
+        public string GoodsUuid { get; set; }
+        public string OrderType { get; set; }
+        public string PdaDocumentNo { get; set; }
+        public string ErpDocumentNo { get; set; }
+        public string ErpDetailId { get; set; }
+        public string OperatorName { get; set; }
+        public string TargetWarehouseCode { get; set; }
+        public string TargetLocationCode { get; set; }
+        public bool ValidateOnly { get; set; }
+    }
+
+    public sealed class TraceBackSyncEventResult
+    {
+        public string EventKey { get; set; }
+        public bool AlreadyApplied { get; set; }
+        public long FlowId { get; set; }
+        public decimal Balance { get; set; }
+        public TraceBackLabelSnapshot Snapshot { get; set; }
+    }
 }

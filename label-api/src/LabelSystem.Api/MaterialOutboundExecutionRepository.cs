@@ -205,6 +205,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         bool redVoucher,
         bool approvalRequired,
         IReadOnlyDictionary<int, (string? LineId, string? PositionId)> erpRows,
+        IReadOnlyList<TraceBackSyncTaskDraft> traceBackTasks,
         string requestId,
         CancellationToken cancellationToken)
     {
@@ -252,16 +253,23 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             }
         }
 
+        foreach (var task in traceBackTasks)
+            await InsertTraceBackTaskAsync(connection, transaction, task, cancellationToken);
+        var hasTraceBackTasks = traceBackTasks.Count > 0;
+
         await using (var update = new SqlCommand("""
             UPDATE dbo.business_operation
-            SET status=@status,erp_status='SUCCESS',erp_document_id=@document_id,
+            SET status=CASE WHEN @traceback_pending=1 THEN 'NEEDS_RECONCILIATION' ELSE @status END,
+                erp_status='SUCCESS',erp_document_id=@document_id,
                 erp_document_no=@document_no,erp_version_after=@version,
                 approval_status=@approval_status,
                 erp_confirmed_at=DATEADD(HOUR,8,SYSUTCDATETIME()),
                 lock_acquired_at=NULL,heartbeat_at=NULL,lock_expires_at=NULL,
-                error_code=NULL,error_message=NULL,
+                error_code=CASE WHEN @traceback_pending=1 THEN 'TRACEBACK_SYNC_PENDING' ELSE NULL END,
+                error_message=CASE WHEN @traceback_pending=1 THEN N'ERP 已生成，标签同步中。' ELSE NULL END,
                 updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()),
-                completed_at=CASE WHEN @approval_required=1 THEN NULL ELSE DATEADD(HOUR,8,SYSUTCDATETIME()) END
+                completed_at=CASE WHEN @approval_required=1 OR @traceback_pending=1
+                                  THEN NULL ELSE DATEADD(HOUR,8,SYSUTCDATETIME()) END
             WHERE id=@id AND status='WRITING_ERP' AND erp_status='WRITING';
             """, connection, transaction))
         {
@@ -273,13 +281,20 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             update.Parameters.Add("@approval_status", SqlDbType.VarChar, 20).Value =
                 approvalRequired ? "PENDING" : "NOT_REQUIRED";
             update.Parameters.Add("@approval_required", SqlDbType.Bit).Value = approvalRequired;
+            update.Parameters.Add("@traceback_pending", SqlDbType.Bit).Value = hasTraceBackTasks;
             update.Parameters.Add("@id", SqlDbType.BigInt).Value = operation.Id;
             if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
                 throw new InvalidOperationException("业务操作状态已变化。");
         }
         await InsertEventAsync(connection, transaction, operation.Id, "U8_CONFIRMED", "SUCCESS",
             requestId, $"U8 单据已确认：{result.VoucherCode}", cancellationToken);
-        if (approvalRequired)
+        if (hasTraceBackTasks)
+        {
+            await InsertEventAsync(connection, transaction, operation.Id,
+                "TRACEBACK_SYNC_PENDING", "INFO", requestId,
+                "ERP 已生成，标签同步中。", cancellationToken);
+        }
+        else if (approvalRequired)
         {
             await InsertEventAsync(connection, transaction, operation.Id, "APPROVAL_PENDING", "INFO",
                 requestId, "U8 单据等待自动审核。", cancellationToken);
@@ -294,6 +309,37 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                 requestId, cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task InsertTraceBackTaskAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        TraceBackSyncTaskDraft task,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("""
+            INSERT INTO dbo.traceback_sync_task
+                (event_key,operation_id,operation_line_id,label_id,event_phase,event_role,
+                 traceback_code,pda_order_uuid,pda_goods_uuid,erp_document_type,erp_document_no,
+                 payload_json,payload_hash,status)
+            VALUES
+                (@event_key,@operation_id,@line_id,@label_id,'ERP_SOURCE',@event_role,
+                 @code,@order_uuid,@goods_uuid,@document_type,@document_no,
+                 @payload,@payload_hash,'PENDING');
+            """, connection, transaction);
+        command.Parameters.Add("@event_key", SqlDbType.VarChar, 200).Value = task.EventKey;
+        command.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = task.OperationId;
+        command.Parameters.Add("@line_id", SqlDbType.BigInt).Value = task.OperationLineId;
+        command.Parameters.Add("@label_id", SqlDbType.BigInt).Value = task.LabelId;
+        command.Parameters.Add("@event_role", SqlDbType.VarChar, 40).Value = task.EventRole;
+        command.Parameters.Add("@code", SqlDbType.NVarChar, 100).Value = task.TraceBackCode;
+        command.Parameters.Add("@order_uuid", SqlDbType.UniqueIdentifier).Value = task.PdaOrderUuid;
+        command.Parameters.Add("@goods_uuid", SqlDbType.UniqueIdentifier).Value = task.PdaGoodsUuid;
+        command.Parameters.Add("@document_type", SqlDbType.VarChar, 50).Value = task.ErpDocumentType;
+        command.Parameters.Add("@document_no", SqlDbType.NVarChar, 100).Value = task.ErpDocumentNo;
+        command.Parameters.Add("@payload", SqlDbType.NVarChar, -1).Value = task.PayloadJson;
+        command.Parameters.Add("@payload_hash", SqlDbType.Char, 64).Value = task.PayloadHash;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task CompleteApprovalAsync(

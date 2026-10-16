@@ -117,10 +117,14 @@ Gateway `0.5.8` 起，调拨审核和弃审会联动 U8 自动生成的其他出
 
 `0.9.0` 完成并部署 TraceBack 并行第一阶段：已有产品标签扫码由 Gateway 实时读取旧三表并建立 `product_label`/`inventory_flow` 镜像；材料出库、调拨和货位调整在建档前及 U8 调用前分别复核最新流水、余额、身份和位置。迁移 015 已在三套 LabelSystem 数据库执行，增加镜像游标与 `traceback_sync_task`。本阶段不写旧三表。
 
+`0.10.0` 接入旧三表来源侧写入：U8 新增并回查成功后，在同一本地事务中保存 ERP 结果和稳定 TraceBack 同步任务，再同步写入旧三表；全部事件完成后才释放标签锁并进入成功或待审核状态。同步失败保留 ERP 成功结果、任务和锁，操作进入 `NEEDS_RECONCILIATION`，重试只补旧三表，不重复生成 U8 单据。写能力只允许测试账套 888。
+
 2026-10-13 材料出库端到端验证已通过：同一生产订单按仓库拆成 U8 单据 `CLCKD20263349` 和 `CLCKD20263350`，业务组成功后写入 3 条 `MATERIAL_OUTBOUND` 流水并释放全部标签锁。两张 U8 单据保持未审核，符合 `autoApprove=false`。
 
 ## TraceBack 并行运行
 
-材料出库、调拨和货位调整已在本地代码接入 U8 账套的 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode` 只读快照。迁移期内，已有产品标签扫码余额和当前位置以旧三表实时查询为准，本地 `product_label`、`inventory_flow` 用作业务镜像、锁、待打印和审计；托盘暂不纳入该兼容范围。
+材料出库、调拨和货位调整已接入 U8 账套的 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode` 快照和来源事件写入。迁移期内，已有产品标签扫码余额和当前位置以旧三表实时查询为准，本地 `product_label`、`inventory_flow` 用作业务镜像、锁、待打印和审计；托盘暂不纳入该兼容范围。
 
-Business API 在扫码、建档前和 U8 写入前通过 Gateway 复核旧表最新流水。当前 `0.9.0` 只实现读取、异常隔离、镜像和复核，不创建 TraceBack 写任务，不向旧三表写数据。后续写入失败恢复仍按根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md` 实施。
+Business API 在扫码、建档前和 U8 写入前通过 Gateway 复核旧表最新流水。`0.10.0` 在 ERP 成功后创建同步任务：蓝字材料出库写负流水，原标签红字退料写正流水，调拨和货位调整全量写零流水、部分移动写原 Code 负流水。`POST /api/v1/operations/groups/{groupId}/traceback/retry` 恢复失败任务并沿用原 ERP 结果和确定性 UUID。
+
+无标签红字以及部分移动的目标 `PENDING_PRINT` 在正式打印前不向旧三表写空 Code；打印平台尚未接入，所以目标 Code 的首次正流水仍是下一阶段。审核和弃审不重复改变 TraceBack 数量。

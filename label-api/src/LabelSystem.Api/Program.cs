@@ -20,6 +20,8 @@ builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<LabelSystemRepository>();
 builder.Services.AddScoped<TraceBackMirrorRepository>();
 builder.Services.AddScoped<TraceBackSnapshotService>();
+builder.Services.AddScoped<TraceBackSyncRepository>();
+builder.Services.AddScoped<TraceBackSyncService>();
 builder.Services.AddScoped<MaterialOutboundRepository>();
 builder.Services.AddScoped<MaterialOutboundService>();
 builder.Services.AddScoped<MaterialOutboundExecutionRepository>();
@@ -962,6 +964,14 @@ app.MapPost("/api/v1/operations/groups/{groupId}/execute", async (
         groupId, request, RequestContext.User(context),
         RequestContext.Id(context), cancellationToken));
 });
+
+app.MapPost("/api/v1/operations/groups/{groupId}/traceback/retry", async (
+    HttpContext context,
+    string groupId,
+    MaterialOutboundExecutionService service,
+    CancellationToken cancellationToken) =>
+    ApiResults.Ok(context, await service.RetryTraceBackAsync(
+        groupId, RequestContext.User(context), RequestContext.Id(context), cancellationToken)));
 
 app.MapPost("/api/v1/operations/groups/{groupId}/cancel", async (
     HttpContext context,

@@ -174,10 +174,16 @@ GET  /api/v1/reference-data/document-master-data
 
 U8 登录许可饱和返回 `U8_LICENSE_UNAVAILABLE`；反射或参数绑定发生在保存前时返回明确失败。COM 调用抛错后仍按预取单号和返回 ID 进行短时回查，查到单据按成功处理，无法判断是否写入才进入 `RECONCILIATION_REQUIRED`。
 
-## 9. TraceBack 标签只读接口（0.6.0）
+## 9. TraceBack 标签读取与同步接口（0.7.0）
 
 `GET /api/v1/traceback/labels/{code}` 查询单张，`POST /api/v1/traceback/labels/snapshots` 使用 `{"codes":[...]}` 查询最多 100 张。读取规则为：按完整 `traceBackCode` 汇总 `TraceBackOnlyCode.sum`，取最大 `id` 关联 `TraceBackGoods`，再按 `pdaOrderUuid` 关联 `TraceBackOrder`。响应包含 Code、SN、余额、最新流水 ID、Goods/Order UUID、物料、批次、单位、仓库、货位、来源业务、PDA/ERP 单号、身份摘要、状态和异常列表。
 
 状态为 `AVAILABLE`、`USED_UP`、`RECONCILIATION_REQUIRED` 或 `NOT_FOUND`。负余额、数量不可转换、Goods 缺失或重复、JSON 无效、必要身份字段缺失、Code 与 Goods 料号或批号冲突均进入待核对。Order 关联缺失或不唯一时来源字段留空，不猜测业务来源。结构缺失返回 `503 TRACEBACK_CONTRACT_INVALID`，SQL 查询失败返回 `503 TRACEBACK_QUERY_FAILED`，请求为空、超过 100 张或 Code 过长返回 `400 TRACEBACK_CODES_INVALID`。
 
-本阶段严格只读，不接受客户端 SQL，不写三表，托盘不进入接口。后续写入包仍按材料出库负/正流水、全量零流水、部分移动来源负流水和首次打印目标正流水区分事件角色。888 已完成数据量、重复值、真实字段类型和实际执行计划核查；由于关联键均为 `varchar(3500)`，本次未创建原字段索引，后续哈希索引方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
+`POST /api/v1/traceback/labels/sync-events` 写入一个稳定事件，请求字段包括 `eventKey`、`eventRole`、完整 `code`、有符号 `quantity`、`expectedLatestFlowId`、`expectedBalance`、确定性 `orderUuid`/`goodsUuid`、业务与 ERP 单号、操作人和可选目标位置。事件角色固定为：`MATERIAL_ISSUE` 负数、`MATERIAL_RETURN` 正数、`FULL_MOVE` 零、`PARTIAL_SOURCE` 负数、`PRINT_TARGET` 正数。正数退回、打印目标和全量移动必须提供目标仓库。
+
+Gateway 使用 `sp_getapplock` 和 `Serializable` 事务，先复核最新流水 ID、余额、Goods 唯一性及 JSON，再原子写入 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode`。相同确定性 Goods UUID 且内容完全一致的重试返回 `alreadyApplied=true`；内容不同返回 `TRACEBACK_EVENT_CONFLICT`。来源变化返回 `TRACEBACK_SNAPSHOT_CHANGED`，写后负余额返回 `TRACEBACK_NEGATIVE_BALANCE`。`validateOnly=true` 只用于部署诊断，完整执行后回滚并且 `snapshot` 为空。
+
+写接口在代码中硬限制数据库为 `UFDATA_888_2021`，其他数据库返回 `TRACEBACK_WRITE_ACCOUNT_BLOCKED`；它仍受全局内部 API Key 保护，不接受客户端 SQL。托盘不进入接口。部分移动和无标签红字的目标正流水要等正式打印生成 Code 后才能调用，本阶段尚未接入打印入口。
+
+888 已完成数据量、重复值、真实字段类型和实际执行计划核查；由于关联键均为 `varchar(3500)`，本次未创建原字段索引，后续哈希索引方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。

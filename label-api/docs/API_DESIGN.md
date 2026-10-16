@@ -259,10 +259,14 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 
 打印平台后续必须使用内部 `id` 发起首次打印，在同一事务中分配流水、生成 Code、回填标签并登记唯一哈希。Code 一经分配即不可回收；打印失败只能复用原 Code 重试。现有按 `{labelCode}/confirm` 的接口仅兼容迁移前已经提前分配 Code 的待打印记录。
 
-## TraceBack 产品标签读取（0.9.0）
+## TraceBack 产品标签读取与同步（0.10.0）
 
 迁移期产品标签查询由 Business API 编排 Gateway 的 TraceBack 快照接口。稳定对外响应继续使用现有 `InventoryLookupResult`，不向 H5 暴露旧表 JSON、数据库字段或 UUID。扫码成功会以 `TRACEBACK_MIRROR` 操作和库存流水建立或刷新本地镜像；托盘查询仍只读本地表。
 
 材料出库、调拨和货位调整在建档前重新查询快照；操作建立后、调用 Gateway 写 U8 前再查询一次，并比较归档的最新流水 ID、余额、身份和位置。蓝字与移动要求余额足够；原标签红字允许零余额且使用本次退回位置。快照变化返回 `TRACEBACK_SNAPSHOT_CHANGED`，旧业务没有归档外部版本时返回 `TRACEBACK_SNAPSHOT_VERSION_MISSING`，异常返回 `TRACEBACK_RECONCILIATION_REQUIRED`，余额不足返回 `LABEL_QUANTITY_INSUFFICIENT`。
 
-Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`、`TRACEBACK_CONTRACT_INVALID` 或 `TRACEBACK_QUERY_FAILED`。无标签红字及部分移动产生的 `PENDING_PRINT` 在首次打印前不向 `TraceBackOnlyCode` 写空 Code。当前阶段不写旧三表；同步任务和恢复合同留到下一阶段。
+Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`、`TRACEBACK_CONTRACT_INVALID` 或 `TRACEBACK_QUERY_FAILED`。U8 新增回查成功后，Business API 与本地库存变更在同一事务内保存 `traceback_sync_task`：蓝字材料出库为 `MATERIAL_ISSUE`，原标签红字为 `MATERIAL_RETURN`，全量调拨/货位调整为 `FULL_MOVE`，部分移动来源为 `PARTIAL_SOURCE`。事件键、Order UUID 和 Goods UUID 均由账套、业务操作、明细、角色和 ERP 单号稳定生成。
+
+同步任务完成前，操作保持 `NEEDS_RECONCILIATION`、`erp_status=SUCCESS` 并保留标签锁；同步完成后刷新本地镜像的最新外部流水 ID、余额和身份摘要，再进入 `SUCCESS` 或 `PENDING_APPROVAL`。失败时记录尝试次数、错误和下次重试时间，不重新创建 U8 单据。`POST /operations/groups/{groupId}/traceback/retry` 由原操作人恢复本组待处理任务；重复调用依赖 Gateway 的确定性 UUID 幂等核对。
+
+无标签红字及部分移动产生的 `PENDING_PRINT` 在首次打印前不向 `TraceBackOnlyCode` 写空 Code。打印平台尚未接入，因此 `PRINT_TARGET` 合同已保留但 Business API 当前不产生该阶段任务。

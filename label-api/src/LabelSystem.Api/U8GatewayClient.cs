@@ -185,6 +185,45 @@ public sealed class U8GatewayClient(
         }
     }
 
+    public async Task<TraceBackSyncEventResult> SyncTraceBackEventAsync(
+        TraceBackSyncEventRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var message = CreateRequest(HttpMethod.Post, "/api/v1/traceback/labels/sync-events");
+            message.Content = JsonContent.Create(request, options: JsonOptions);
+            using var response = await Client().SendAsync(message, cancellationToken);
+            var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<TraceBackSyncEventResult>>(
+                JsonOptions, cancellationToken);
+            if (response.IsSuccessStatusCode && envelope?.Success == true && envelope.Data is not null)
+                return envelope.Data;
+            throw new ApiException(
+                (int)response.StatusCode,
+                envelope?.Code ?? "TRACEBACK_SYNC_FAILED",
+                envelope?.Message ?? "追溯同步失败。");
+        }
+        catch (ApiException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new ApiException(StatusCodes.Status504GatewayTimeout,
+                "TRACEBACK_SYNC_TIMEOUT", "追溯同步超时。");
+        }
+        catch (HttpRequestException)
+        {
+            throw new ApiException(StatusCodes.Status503ServiceUnavailable,
+                "U8_GATEWAY_UNAVAILABLE", "标签服务暂时不可用。");
+        }
+        catch (JsonException)
+        {
+            throw new ApiException(StatusCodes.Status502BadGateway,
+                "U8_GATEWAY_RESPONSE_INVALID", "标签服务返回异常。");
+        }
+    }
+
     public async Task ValidateDocumentAsync(
         string documentType,
         GatewayDocumentRequest request,

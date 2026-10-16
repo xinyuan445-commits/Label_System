@@ -703,6 +703,7 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 
 - 现有产品标签的外部权威数据来自账套库 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode`；本地 `product_label` 和 `inventory_flow` 保存业务镜像、锁、待打印状态及新系统审计。托盘继续完全由本地表管理。
 - 迁移 015 保存每张外部标签最后同步的 `TraceBackOnlyCode.id`、余额、同步时间和身份摘要，并新增 `traceback_sync_task` 保存稳定事件键、尝试次数、最后错误和完成时间；已于 2026-10-15 在三套数据库执行。
+- Business API `0.10.0` 开始实际使用 `traceback_sync_task`：ERP 成功和任务创建属于同一本地事务，任务按 `PENDING`、`PROCESSING`、`FAILED`、`COMPLETED` 演进；完成后以 Gateway 返回快照刷新 `product_label` 的外部游标、余额、身份摘要和同步时间。失败任务保留原操作锁，恢复时沿用原事件键和 UUID。
 - 一个外部 Code 的余额由全部可转换为十进制的 `sum` 合计；最新 `id` 对应 Goods 是当前身份和位置来源。负余额、无法转换的数量、关联缺失或 JSON 冲突进入异常状态，不能覆盖为本地正常标签。
 - U8 成功后的旧表写入与本地镜像提交必须可恢复：旧表未确认成功时保留业务锁和同步任务；确认成功后才更新本地最终余额、位置和操作状态。结果未知时按稳定 UUID 查证，不重复插入。
 - 调拨及货位调整的部分移动分为来源扣减和打印目标标签两个独立同步事件；打印前 `PENDING_PRINT` 仍允许无 Code，禁止向 `TraceBackOnlyCode` 写空值或临时码。
