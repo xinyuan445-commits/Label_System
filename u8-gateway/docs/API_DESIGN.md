@@ -1,5 +1,9 @@
 # U8 Gateway API 设计
 
+## 本机部署管理（0.8.0）
+
+`GET /admin/config` 提供仅服务器本机可访问的部署管理页，所有管理 API 都要求现有管理密码。`GET /admin/api/overview` 汇总 Gateway、Business API、标签数据库迁移和双层写入状态；`GET /admin/api/business-config` 返回不含密码和 API Key 的 Business API 外置配置视图；`POST /admin/api/test-business-sql` 测试候选标签数据库；`POST /admin/api/save-business` 原子保存并备份 Business API 外置配置；`POST /admin/api/traceback-check` 只读检查 TraceBack 三表及可选产品标签快照。Gateway 与 Business API 开启写入时均要求 `ENABLE 账套 数据库` 确认文字，生产写入仍由代码硬阻断。配置审计不记录密码、连接串或内部 API Key。
+
 ## 单据基础档案只读接口（0.4.0）
 
 `GET /api/v1/reference-data/document-master-data` 使用固定 SQL 读取 `PurchaseType`、`SaleType`、`foreigncurrency` 和 `exch`，返回采购类型、销售类型、币种及最新可用汇率。接口不接受客户端表名、字段名或 SQL，不写 U8；888 已只读验证返回 16 个采购类型、11 个销售类型和 4 个币种。

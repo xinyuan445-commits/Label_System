@@ -19,6 +19,7 @@ namespace U8Gateway.Api.Models
         public bool EnableTestWrites { get; set; }
         public string WriteAllowedDatabase { get; set; }
         public string WriteAllowedAccountId { get; set; }
+        public string WriteConfirmation { get; set; }
         public string NewAdminPassword { get; set; }
     }
 }

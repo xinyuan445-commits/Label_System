@@ -44,6 +44,88 @@ namespace U8Gateway.Api.Controllers
                 GatewayRequestContext.Id));
         }
 
+        [HttpGet]
+        [Route("api/overview")]
+        public IHttpActionResult GetOverview()
+        {
+            EnsureAuthorized();
+            return Ok(ApiResponse<object>.Ok(
+                DeploymentAdminService.Overview(), GatewayRequestContext.Id));
+        }
+
+        [HttpGet]
+        [Route("api/business-config")]
+        public IHttpActionResult GetBusinessConfig()
+        {
+            EnsureAuthorized();
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    DeploymentAdminService.ReadBusinessView(), GatewayRequestContext.Id));
+            }
+            catch (Exception exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.ServiceUnavailable, exception.Message));
+            }
+        }
+
+        [HttpPost]
+        [Route("api/test-business-sql")]
+        public IHttpActionResult TestBusinessSql(BusinessSettingsInput input)
+        {
+            EnsureAuthorized();
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    DeploymentAdminService.TestBusinessSql(input),
+                    GatewayRequestContext.Id,
+                    "标签数据库连接成功"));
+            }
+            catch (Exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.BadRequest, "标签数据库连接失败。"));
+            }
+        }
+
+        [HttpPost]
+        [Route("api/save-business")]
+        public IHttpActionResult SaveBusiness(BusinessSettingsInput input)
+        {
+            EnsureAuthorized(requireExistingAdmin: true);
+            try
+            {
+                object result = DeploymentAdminService.SaveBusiness(input);
+                return Ok(ApiResponse<object>.Ok(
+                    result, GatewayRequestContext.Id, "Business API 配置已保存"));
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.BadRequest, exception.Message));
+            }
+        }
+
+        [HttpPost]
+        [Route("api/traceback-check")]
+        public IHttpActionResult TraceBackCheck(TraceBackCheckInput input)
+        {
+            EnsureAuthorized(requireExistingAdmin: true);
+            try
+            {
+                return Ok(ApiResponse<object>.Ok(
+                    DeploymentAdminService.TraceBackCheck(input?.Code),
+                    GatewayRequestContext.Id,
+                    "TraceBack 检查完成"));
+            }
+            catch (Exception)
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.ServiceUnavailable, "TraceBack 检查失败。"));
+            }
+        }
+
         [HttpPost]
         [Route("api/test-sql")]
         public IHttpActionResult TestSql(AdminSettingsInput input)
@@ -136,14 +218,24 @@ namespace U8Gateway.Api.Controllers
                 WriteAllowedDatabase = input.WriteAllowedDatabase?.Trim(),
                 WriteAllowedAccountId = input.WriteAllowedAccountId?.Trim()
             };
-            EnsureWriteSafety(settings);
+            EnsureWriteSafety(settings, input.WriteConfirmation);
+            string backup = DeploymentAdminService.BackupGatewaySettings();
             string generatedKey = AppRuntime.Settings.Save(
                 settings,
                 input.NewAdminPassword);
+            DeploymentAdminService.Audit("GATEWAY_CONFIG_SAVED", new Newtonsoft.Json.Linq.JObject
+            {
+                ["environment"] = settings.EnvironmentName,
+                ["database"] = settings.SqlDatabase,
+                ["accountId"] = AccountCode(settings.U8AccountId),
+                ["writesEnabled"] = settings.EnableTestWrites,
+                ["backup"] = backup
+            });
             return Ok(ApiResponse<object>.Ok(new
             {
                 config = AppRuntime.Settings.GetView(),
-                internalApiKey = generatedKey
+                internalApiKey = generatedKey,
+                backup
             }, GatewayRequestContext.Id, "配置已保存"));
         }
 
@@ -205,7 +297,7 @@ namespace U8Gateway.Api.Controllers
             }
         }
 
-        private static void EnsureWriteSafety(GatewaySettings settings)
+        private static void EnsureWriteSafety(GatewaySettings settings, string confirmation)
         {
             if (!settings.EnableTestWrites)
             {
@@ -223,6 +315,13 @@ namespace U8Gateway.Api.Controllers
                 throw new HttpResponseException(RequestError(
                     HttpStatusCode.BadRequest,
                     "写入仅允许绑定测试环境、指定测试数据库和测试账套。"));
+            }
+            string expected = "ENABLE " + AccountCode(settings.WriteAllowedAccountId) + " " +
+                settings.WriteAllowedDatabase;
+            if (!string.Equals(confirmation?.Trim(), expected, StringComparison.Ordinal))
+            {
+                throw new HttpResponseException(RequestError(
+                    HttpStatusCode.BadRequest, "写入确认文字不匹配。"));
             }
         }
 

@@ -3,78 +3,72 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>U8 Gateway 配置</title>
+  <title>标签系统部署管理</title>
   <style>
-    *{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#172033;font:14px/1.5 "Microsoft YaHei",sans-serif}.page{width:min(980px,calc(100% - 32px));margin:28px auto}.bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}h1{font-size:22px;margin:0}.status{min-height:22px;color:#52627a}.card{background:#fff;border:1px solid #dce4ef;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 4px 16px rgba(35,58,91,.05)}h2{font-size:16px;margin:0 0 16px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px}.field{display:flex;flex-direction:column;gap:6px}.wide{grid-column:1/-1}.check{flex-direction:row;align-items:center;padding-top:24px}.check input{width:18px;height:18px;padding:0}label{color:#44536a}input,select{height:40px;border:1px solid #cbd6e4;border-radius:8px;padding:0 11px;background:#fff;color:#172033;outline:none}input:focus,select:focus{border-color:#4778c7;box-shadow:0 0 0 3px rgba(71,120,199,.12)}.actions{display:flex;gap:10px;justify-content:flex-end}.actions button{height:40px;border:0;border-radius:8px;padding:0 18px;cursor:pointer}.primary{background:#245da8;color:#fff}.secondary{background:#e9eff7;color:#213b5f}.actions button:disabled{opacity:.45;cursor:not-allowed}.key{margin-top:12px;padding:12px;background:#fff8dd;border:1px solid #eedb8b;border-radius:8px;word-break:break-all;display:none}@media(max-width:680px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.page{width:min(100% - 20px,980px);margin:14px auto}.card{padding:16px}}
+    *{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#172033;font:14px/1.5 "Microsoft YaHei",sans-serif}.page{width:min(1100px,calc(100% - 32px));margin:24px auto}.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}h1{font-size:22px;margin:0}h2{font-size:16px;margin:0 0 14px}.status{min-height:22px;color:#52627a}.card{background:#fff;border:1px solid #dce4ef;border-radius:12px;padding:18px;margin-bottom:14px;box-shadow:0 4px 16px rgba(35,58,91,.05)}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.summary div{padding:12px;background:#f7f9fc;border-radius:8px}.summary small{display:block;color:#65748b}.summary strong{display:block;margin-top:3px;word-break:break-all}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px}.field{display:flex;flex-direction:column;gap:5px}.wide{grid-column:1/-1}.check{flex-direction:row;align-items:center;padding-top:23px}.check input{width:18px;height:18px;padding:0}label{color:#44536a}input,select{height:40px;border:1px solid #cbd6e4;border-radius:8px;padding:0 11px;background:#fff;color:#172033;outline:none}input:focus,select:focus{border-color:#4778c7;box-shadow:0 0 0 3px rgba(71,120,199,.12)}.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end;margin-top:14px}.actions button,.bar button{height:40px;border:0;border-radius:8px;padding:0 16px;cursor:pointer}.primary{background:#245da8;color:#fff}.secondary{background:#e9eff7;color:#213b5f}.actions button:disabled{opacity:.45;cursor:not-allowed}.result{margin-top:12px;padding:12px;background:#f7f9fc;border-radius:8px;white-space:pre-wrap;word-break:break-all;display:none}.key{background:#fff8dd;border:1px solid #eedb8b}.hint{color:#65748b;margin:0 0 12px}.locked{color:#a12a20}.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px}@media(max-width:760px){.grid,.summary{grid-template-columns:1fr}.wide{grid-column:auto}.page{width:min(100% - 20px,1100px);margin:12px auto}.card{padding:15px}}
   </style>
 </head>
 <body>
   <main class="page">
-    <div class="bar"><h1>U8 Gateway 配置</h1><div id="status" class="status"></div></div>
-    <form id="form">
-      <section class="card">
-        <h2>运行</h2>
-        <div class="grid">
-          <div class="field"><label for="environmentName">环境</label><select id="environmentName"><option value="development">开发</option><option value="test">测试</option><option value="production">生产</option></select></div>
-          <div class="field"><label for="businessTimeZone">时区</label><input id="businessTimeZone" value="China Standard Time" readonly></div>
-          <div class="field wide"><label for="operationArchiveRoot">操作凭证目录</label><input id="operationArchiveRoot" value="D:\U8GatewayData\operation-archive"></div>
-          <div class="field check"><input id="enableTestWrites" type="checkbox"><label for="enableTestWrites">允许测试写入</label></div>
-          <div></div>
-          <div class="field"><label for="writeAllowedDatabase">限定数据库</label><input id="writeAllowedDatabase" autocomplete="off"></div>
-          <div class="field"><label for="writeAllowedAccountId">限定账套</label><input id="writeAllowedAccountId" autocomplete="off"></div>
-        </div>
-      </section>
-      <section class="card">
-        <h2>数据库</h2>
-        <div class="grid">
-          <div class="field"><label for="sqlServer">服务器</label><input id="sqlServer" autocomplete="off"></div>
-          <div class="field"><label for="sqlDatabase">数据库</label><input id="sqlDatabase" autocomplete="off"></div>
-          <div class="field"><label for="sqlUser">账号</label><input id="sqlUser" autocomplete="off"></div>
-          <div class="field"><label for="sqlPassword">密码</label><input id="sqlPassword" type="password" autocomplete="new-password"></div>
-        </div>
-      </section>
-      <section class="card">
-        <h2>U8</h2>
-        <div class="grid">
-          <div class="field"><label for="u8Server">服务器</label><input id="u8Server" autocomplete="off"></div>
-          <div class="field"><label for="u8AccountId">账套</label><input id="u8AccountId" autocomplete="off"></div>
-          <div class="field"><label for="u8Year">年度</label><input id="u8Year" inputmode="numeric"></div>
-          <div class="field"><label for="u8Subsystem">子系统</label><input id="u8Subsystem" value="ST"></div>
-          <div class="field"><label for="u8User">账号</label><input id="u8User" autocomplete="off"></div>
-          <div class="field"><label for="u8Password">密码</label><input id="u8Password" type="password" autocomplete="new-password"></div>
-          <div class="field"><label for="defaultMaker">制单人</label><input id="defaultMaker"></div>
-        </div>
-      </section>
-      <section class="card">
-        <h2>管理</h2>
-        <div class="grid">
-          <div class="field"><label for="adminPassword">当前管理密码</label><input id="adminPassword" type="password" autocomplete="current-password"></div>
-          <div class="field"><label for="newAdminPassword">首次管理密码</label><input id="newAdminPassword" type="password" autocomplete="new-password"></div>
-        </div>
-      </section>
-      <section class="card">
-        <div class="actions">
-          <button class="secondary" type="button" id="testSql">测试 SQL</button>
-          <button class="secondary" type="button" id="testU8">测试 U8</button>
-          <button class="primary" type="submit">保存</button>
-        </div>
-        <div id="key" class="key"></div>
-      </section>
+    <div class="bar"><div><h1>标签系统部署管理</h1><div id="status" class="status">请输入管理密码</div></div><button class="secondary" type="button" id="refresh">刷新</button></div>
+    <section class="card"><div class="grid"><div class="field"><label for="adminPassword">管理密码</label><input id="adminPassword" type="password" autocomplete="current-password"></div><div class="field"><label>访问范围</label><input value="仅服务器本机" readonly></div></div></section>
+    <section class="card">
+      <div class="section-title"><h2>运行状态</h2><span id="productionGate" class="locked"></span></div>
+      <div class="summary"><div><small>Gateway</small><strong id="gatewaySummary">--</strong></div><div><small>Business API</small><strong id="businessSummary">--</strong></div><div><small>标签数据库</small><strong id="databaseSummary">--</strong></div><div><small>写入状态</small><strong id="writeSummary">--</strong></div></div>
+    </section>
+    <form id="gatewayForm" class="card">
+      <h2>Gateway 与 U8</h2>
+      <div class="grid">
+        <div class="field"><label for="environmentName">环境</label><select id="environmentName"><option value="development">开发</option><option value="test">测试</option><option value="production">生产</option></select></div>
+        <div class="field"><label for="operationArchiveRoot">操作凭证目录</label><input id="operationArchiveRoot"></div>
+        <div class="field"><label for="sqlServer">U8 SQL 服务器</label><input id="sqlServer" autocomplete="off"></div><div class="field"><label for="sqlDatabase">U8 数据库</label><input id="sqlDatabase" autocomplete="off"></div>
+        <div class="field"><label for="sqlUser">SQL 账号</label><input id="sqlUser" autocomplete="off"></div><div class="field"><label for="sqlPassword">SQL 密码</label><input id="sqlPassword" type="password" autocomplete="new-password"></div>
+        <div class="field"><label for="u8Server">U8 服务器</label><input id="u8Server" autocomplete="off"></div><div class="field"><label for="u8AccountId">U8 账套</label><input id="u8AccountId" autocomplete="off"></div>
+        <div class="field"><label for="u8Year">年度</label><input id="u8Year" inputmode="numeric"></div><div class="field"><label for="u8Subsystem">子系统</label><input id="u8Subsystem"></div>
+        <div class="field"><label for="u8User">U8 账号</label><input id="u8User" autocomplete="off"></div><div class="field"><label for="u8Password">U8 密码</label><input id="u8Password" type="password" autocomplete="new-password"></div>
+        <div class="field"><label for="defaultMaker">默认制单人</label><input id="defaultMaker"></div><div class="field"><label for="writeAllowedDatabase">限定数据库</label><input id="writeAllowedDatabase"></div>
+        <div class="field"><label for="writeAllowedAccountId">限定账套</label><input id="writeAllowedAccountId"></div><div class="field check"><input id="enableTestWrites" type="checkbox"><label for="enableTestWrites">允许 Gateway 写入</label></div>
+        <div class="field"><label for="gatewayWriteConfirmation">开启确认</label><input id="gatewayWriteConfirmation" placeholder="ENABLE 账套 数据库"></div><div class="field"><label for="newAdminPassword">首次管理密码</label><input id="newAdminPassword" type="password" autocomplete="new-password"></div>
+      </div>
+      <div class="actions"><button class="secondary" type="button" id="testSql">测试 SQL</button><button class="secondary" type="button" id="testU8">测试 U8</button><button class="primary" type="submit">保存 Gateway</button></div><div id="gatewayResult" class="result"></div>
     </form>
+    <form id="businessForm" class="card">
+      <h2>Business API</h2><p class="hint">生产环境只能先保存为只读。</p>
+      <div class="grid">
+        <div class="field"><label for="bEnvironmentName">环境</label><select id="bEnvironmentName"><option value="development">开发</option><option value="test">测试</option><option value="production">生产</option></select></div><div class="field"><label for="bGatewayBaseUrl">Gateway 地址</label><input id="bGatewayBaseUrl"></div>
+        <div class="field"><label for="bLabelSqlServer">标签 SQL 服务器</label><input id="bLabelSqlServer"></div><div class="field"><label for="bLabelSqlDatabase">标签数据库</label><input id="bLabelSqlDatabase"></div>
+        <div class="field"><label for="bLabelSqlUser">SQL 账号</label><input id="bLabelSqlUser"></div><div class="field"><label for="bLabelSqlPassword">SQL 密码</label><input id="bLabelSqlPassword" type="password" autocomplete="new-password"></div>
+        <div class="field"><label for="bErpAccountId">ERP 账套</label><input id="bErpAccountId"></div><div class="field"><label for="bErpYear">年度</label><input id="bErpYear" inputmode="numeric"></div>
+        <div class="field"><label for="bErpDatabaseName">ERP 数据库</label><input id="bErpDatabaseName"></div><div class="field check"><input id="bEnableDevelopmentLogin" type="checkbox"><label for="bEnableDevelopmentLogin">开发登录</label></div>
+        <div class="field check"><input id="bU8WritesEnabled" type="checkbox"><label for="bU8WritesEnabled">允许 Business API 写入</label></div><div class="field"><label for="businessWriteConfirmation">开启确认</label><input id="businessWriteConfirmation" placeholder="ENABLE 账套 数据库"></div>
+      </div>
+      <div class="actions"><button class="secondary" type="button" id="testBusinessSql">测试标签数据库</button><button class="primary" type="submit">保存 Business API</button></div><div id="businessResult" class="result"></div>
+    </form>
+    <section class="card">
+      <h2>TraceBack 只读检查</h2><div class="grid"><div class="field wide"><label for="traceCode">产品标签 Code（可不填）</label><input id="traceCode"></div></div>
+      <div class="actions"><button class="secondary" type="button" id="traceCheck">检查三表</button></div><div id="traceResult" class="result"></div>
+    </section>
   </main>
   <script>
-    const ids=['environmentName','businessTimeZone','sqlServer','sqlDatabase','sqlUser','sqlPassword','u8Server','u8AccountId','u8Year','u8Subsystem','u8User','u8Password','defaultMaker','operationArchiveRoot','writeAllowedDatabase','writeAllowedAccountId','newAdminPassword'];
     const statusEl=document.getElementById('status');
-    const keyEl=document.getElementById('key');
-    function headers(){const value=document.getElementById('adminPassword').value;return {'Content-Type':'application/json',...(value?{'X-Admin-Password':value}:{})}}
-    function payload(){return {...Object.fromEntries(ids.map(id=>[id,document.getElementById(id).value])),enableTestWrites:document.getElementById('enableTestWrites').checked}}
+    const gatewayIds=['environmentName','sqlServer','sqlDatabase','sqlUser','sqlPassword','u8Server','u8AccountId','u8Year','u8Subsystem','u8User','u8Password','defaultMaker','operationArchiveRoot','writeAllowedDatabase','writeAllowedAccountId','newAdminPassword'];
+    function headers(){const password=document.getElementById('adminPassword').value;return {'Content-Type':'application/json',...(password?{'X-Admin-Password':password}:{})}}
     function message(value,error=false){statusEl.textContent=value||'';statusEl.style.color=error?'#b42318':'#28713d'}
-    async function read(){try{const response=await fetch('/admin/api/config',{headers:headers()});if(response.status===401){message('请输入当前管理密码');return}if(!response.ok)throw new Error('读取失败');const body=await response.json();const data=body.data;for(const id of ids){if(id==='sqlPassword'||id==='u8Password'||id==='newAdminPassword')continue;if(data[id]!==undefined&&data[id]!==null)document.getElementById(id).value=data[id]}document.getElementById('enableTestWrites').checked=!!data.enableTestWrites;document.getElementById('sqlPassword').placeholder=data.hasSqlPassword?'已配置，留空不变':'';document.getElementById('u8Password').placeholder=data.hasU8Password?'已配置，留空不变':'';message(data.configured?'已配置':'首次配置')}catch(error){message(error.message,true)}}
-    document.getElementById('adminPassword').addEventListener('change',read);
-    document.getElementById('testSql').addEventListener('click',async()=>{try{message('连接中');const response=await fetch('/admin/api/test-sql',{method:'POST',headers:headers(),body:JSON.stringify(payload())});if(!response.ok)throw new Error((await response.text())||'连接失败');message('SQL 连接成功')}catch(error){message(error.message,true)}});
-    document.getElementById('testU8').addEventListener('click',async()=>{try{message('连接中');const response=await fetch('/admin/api/test-u8',{method:'POST',headers:headers(),body:JSON.stringify(payload())});if(!response.ok)throw new Error((await response.text())||'连接失败');message('U8 连接成功')}catch(error){message(error.message,true)}});
-    document.getElementById('form').addEventListener('submit',async event=>{event.preventDefault();try{message('保存中');const response=await fetch('/admin/api/save',{method:'POST',headers:headers(),body:JSON.stringify(payload())});if(!response.ok)throw new Error((await response.text())||'保存失败');const body=await response.json();message('配置已保存');if(body.data.internalApiKey){keyEl.textContent='内部密钥：'+body.data.internalApiKey;keyEl.style.display='block'}document.getElementById('sqlPassword').value='';document.getElementById('u8Password').value='';document.getElementById('newAdminPassword').value=''}catch(error){message(error.message,true)}});
-    read();
+    function show(id,value,key=false){const el=document.getElementById(id);el.textContent=typeof value==='string'?value:JSON.stringify(value,null,2);el.classList.toggle('key',key);el.style.display='block'}
+    async function api(path,options={}){const response=await fetch(path,{...options,headers:{...headers(),...(options.headers||{})}});const text=await response.text();let body=null;try{body=text?JSON.parse(text):null}catch{}if(!response.ok)throw new Error(body?.message||body?.Message||text||'请求失败');return body}
+    function gatewayPayload(){return {...Object.fromEntries(gatewayIds.map(id=>[id,document.getElementById(id).value])),enableTestWrites:document.getElementById('enableTestWrites').checked,writeConfirmation:document.getElementById('gatewayWriteConfirmation').value,businessTimeZone:'China Standard Time'}}
+    function businessPayload(){return {environmentName:document.getElementById('bEnvironmentName').value,labelSqlServer:document.getElementById('bLabelSqlServer').value,labelSqlDatabase:document.getElementById('bLabelSqlDatabase').value,labelSqlUser:document.getElementById('bLabelSqlUser').value,labelSqlPassword:document.getElementById('bLabelSqlPassword').value,erpAccountId:document.getElementById('bErpAccountId').value,erpYear:Number(document.getElementById('bErpYear').value),erpDatabaseName:document.getElementById('bErpDatabaseName').value,gatewayBaseUrl:document.getElementById('bGatewayBaseUrl').value,enableDevelopmentLogin:document.getElementById('bEnableDevelopmentLogin').checked,u8WritesEnabled:document.getElementById('bU8WritesEnabled').checked,writeConfirmation:document.getElementById('businessWriteConfirmation').value}}
+    async function loadGateway(){const body=await api('/admin/api/config');const data=body.data;for(const id of gatewayIds){if(['sqlPassword','u8Password','newAdminPassword'].includes(id))continue;if(data[id]!==undefined&&data[id]!==null)document.getElementById(id).value=data[id]}document.getElementById('enableTestWrites').checked=!!data.enableTestWrites;document.getElementById('sqlPassword').placeholder=data.hasSqlPassword?'已配置，留空不变':'';document.getElementById('u8Password').placeholder=data.hasU8Password?'已配置，留空不变':''}
+    async function loadBusiness(){const body=await api('/admin/api/business-config');const d=body.data;document.getElementById('bEnvironmentName').value=d.environmentName||'development';document.getElementById('bLabelSqlServer').value=d.labelSqlServer||'';document.getElementById('bLabelSqlDatabase').value=d.labelSqlDatabase||'';document.getElementById('bLabelSqlUser').value=d.labelSqlUser||'';document.getElementById('bLabelSqlPassword').placeholder=d.hasLabelSqlPassword?'已配置，留空不变':'';document.getElementById('bErpAccountId').value=d.erpAccountId||'';document.getElementById('bErpYear').value=d.erpYear||'';document.getElementById('bErpDatabaseName').value=d.erpDatabaseName||'';document.getElementById('bGatewayBaseUrl').value=d.gatewayBaseUrl||'';document.getElementById('bEnableDevelopmentLogin').checked=!!d.enableDevelopmentLogin;document.getElementById('bU8WritesEnabled').checked=!!d.u8WritesEnabled}
+    async function loadOverview(){const body=await api('/admin/api/overview');const d=body.data;document.getElementById('gatewaySummary').textContent=`${d.gateway.version} · ${d.gateway.environment} · ${d.gateway.accountId}`;document.getElementById('businessSummary').textContent=d.businessHealth.reachable?`${d.businessHealth.version} · ${d.businessHealth.status}`:'不可用';document.getElementById('databaseSummary').textContent=d.migrations.ready?`${d.business.labelSqlDatabase} · 迁移 ${d.migrations.latest}`:`${d.business.labelSqlDatabase||'--'} · 未就绪`;document.getElementById('writeSummary').textContent=`Gateway ${d.gateway.writesEnabled?'开':'关'} / API ${d.business.u8WritesEnabled?'开':'关'}`;document.getElementById('productionGate').textContent=d.productionWritesSupported?'':'生产写入锁定'}
+    async function loadAll(){if(!document.getElementById('adminPassword').value){message('请输入管理密码');return}try{message('读取中');await Promise.all([loadGateway(),loadBusiness(),loadOverview()]);message('已连接')}catch(error){message(error.message,true)}}
+    document.getElementById('adminPassword').addEventListener('change',loadAll);document.getElementById('refresh').addEventListener('click',loadAll);
+    document.getElementById('testSql').addEventListener('click',async()=>{try{message('连接中');await api('/admin/api/test-sql',{method:'POST',body:JSON.stringify(gatewayPayload())});message('U8 SQL 连接成功')}catch(error){message(error.message,true)}});
+    document.getElementById('testU8').addEventListener('click',async()=>{try{message('连接中');await api('/admin/api/test-u8',{method:'POST',body:JSON.stringify(gatewayPayload())});message('U8 连接成功')}catch(error){message(error.message,true)}});
+    document.getElementById('gatewayForm').addEventListener('submit',async event=>{event.preventDefault();try{message('保存中');const body=await api('/admin/api/save',{method:'POST',body:JSON.stringify(gatewayPayload())});message('Gateway 配置已保存');show('gatewayResult',body.data.internalApiKey?'内部密钥仅显示一次：'+body.data.internalApiKey:'备份：'+(body.data.backup||'首次配置'),!!body.data.internalApiKey);document.getElementById('sqlPassword').value='';document.getElementById('u8Password').value='';document.getElementById('newAdminPassword').value='';document.getElementById('gatewayWriteConfirmation').value='';await loadAll()}catch(error){message(error.message,true)}});
+    document.getElementById('testBusinessSql').addEventListener('click',async()=>{try{message('连接中');const body=await api('/admin/api/test-business-sql',{method:'POST',body:JSON.stringify(businessPayload())});message('标签数据库连接成功');show('businessResult',body.data)}catch(error){message(error.message,true)}});
+    document.getElementById('businessForm').addEventListener('submit',async event=>{event.preventDefault();try{message('保存中');const body=await api('/admin/api/save-business',{method:'POST',body:JSON.stringify(businessPayload())});message('Business API 配置已保存');show('businessResult','备份：'+body.data.backup);document.getElementById('bLabelSqlPassword').value='';document.getElementById('businessWriteConfirmation').value='';await loadAll()}catch(error){message(error.message,true)}});
+    document.getElementById('traceCheck').addEventListener('click',async()=>{try{message('检查中');const body=await api('/admin/api/traceback-check',{method:'POST',body:JSON.stringify({code:document.getElementById('traceCode').value})});message('TraceBack 检查完成');show('traceResult',body.data)}catch(error){message(error.message,true)}});
   </script>
 </body>
 </html>
