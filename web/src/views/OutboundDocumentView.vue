@@ -532,15 +532,15 @@ function materialNameFor(line: OutboundLine): string {
 }
 
 function warehouseNameFor(code: string, snapshotName = ''): string {
-  return snapshotName || warehousePositionOptions.value.find(
+  return warehousePositionOptions.value.find(
     (item) => item.warehouseCode === code,
-  )?.warehouseName || code
+  )?.warehouseName || snapshotName || code
 }
 
 function locationNameFor(warehouse: string, code: string, snapshotName = ''): string {
-  return snapshotName || warehousePositionOptions.value.find(
+  return warehousePositionOptions.value.find(
     (item) => item.warehouseCode === warehouse && item.positionCode === code,
-  )?.positionName || code
+  )?.positionName || snapshotName || code
 }
 
 function bodyDisplayValue(line: OutboundLine, key: string): string | number {

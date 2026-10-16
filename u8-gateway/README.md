@@ -2,6 +2,8 @@
 
 ## 测试账套写入
 
+`0.7.1` 修正调拨和货位调整写入最新 TraceBackGoods 时只更新位置编码、仍保留旧仓库或旧货位名称的问题。全量移动及带目标位置的事件现在从当前 U8 基础档案解析名称，并同步更新 Goods JSON 的仓库、货位编码和名称；生产账套仍硬阻断。
+
 `0.7.0` 在既有 TraceBack 产品标签快照上增加测试账套同步事件：材料出库原标签负/正流水、调拨和货位调整全量零流水及部分移动来源负流水，均在账套单一事务中写入 Order、Goods 和 OnlyCode。事件使用确定性 UUID 幂等恢复，生产账套硬阻断；托盘仍不进入旧三表。
 
 `0.5.8` 将调拨审核视为一个联动状态：先审核调拨单，再审核 U8 生成的其他出库单和其他入库单；弃审按其他入库单、其他出库单、调拨单的顺序执行。每一步都按实际状态跳过已完成项并回查，因此明确失败后可以安全重试。审核列表只有在三类单据全部审核后才显示“已审核”。
@@ -86,7 +88,7 @@ u8-gateway/
 
 ## TraceBack 三表接口
 
-Gateway `0.7.0` 提供 `GET /api/v1/traceback/labels/{code}` 和 `POST /api/v1/traceback/labels/snapshots`。批量请求最多 100 个完整 Code，响应顺序与去重后的请求顺序一致。读取前校验三张表及必要关联字段；负余额、数量无效、Goods 缺失或重复、JSON 无效和 Code 身份冲突均返回结构化异常状态。Order 关联异常只使来源字段留空，不猜测业务来源。
+Gateway `0.7.1` 提供 `GET /api/v1/traceback/labels/{code}` 和 `POST /api/v1/traceback/labels/snapshots`。批量请求最多 100 个完整 Code，响应顺序与去重后的请求顺序一致。读取前校验三张表及必要关联字段；负余额、数量无效、Goods 缺失或重复、JSON 无效和 Code 身份冲突均返回结构化异常状态。Order 关联异常只使来源字段留空，不猜测业务来源。
 
 `POST /api/v1/traceback/labels/sync-events` 接收单个稳定同步事件。Gateway 先锁定事件和 Order UUID，复核原 Code 的最新流水 ID 与余额，再在一个 SQL 事务中写入缺失的 Order、Goods 和 OnlyCode；相同 Goods UUID 的完全一致重试直接返回已完成结果，不一致则返回冲突。写接口只允许 `UFDATA_888_2021`，其他账套在连接数据库前即返回 `TRACEBACK_WRITE_ACCOUNT_BLOCKED`。诊断用 `validateOnly=true` 会完整执行并回滚，不保留旧表数据。
 

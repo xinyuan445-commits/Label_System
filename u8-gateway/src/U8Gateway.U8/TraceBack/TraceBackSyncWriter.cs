@@ -303,21 +303,35 @@ VALUES(@json,@uuid,@order_type,GETDATE());", connection, transaction))
                 request.EventRole, "FULL_MOVE", StringComparison.OrdinalIgnoreCase)
                 ? request.ExpectedBalance
                 : Math.Abs(request.Quantity);
+            TargetNames target = ReadTargetNames(connection, transaction, request);
             json["quantity"] = quantity;
             if (json["countQuantity"] != null)
                 json["countQuantity"] = quantity;
             json["pdaOrderNumber"] = request.PdaDocumentNo ?? string.Empty;
             if (!string.IsNullOrWhiteSpace(request.TargetWarehouseCode))
+            {
                 json["warehouseCode"] = request.TargetWarehouseCode;
+                json["warehouseName"] = target.WarehouseName;
+            }
             if (request.TargetLocationCode != null)
+            {
                 json["storageLocationCode"] = request.TargetLocationCode;
+                json["locationName"] = target.LocationName;
+            }
             JObject inventory = json["inventory"] as JObject;
             if (inventory != null)
             {
                 if (!string.IsNullOrWhiteSpace(request.TargetWarehouseCode))
+                {
                     inventory["warehouseId"] = request.TargetWarehouseCode;
+                    inventory["warehouse"] = target.WarehouseName;
+                }
                 if (request.TargetLocationCode != null)
+                {
+                    inventory["storageLocationId"] = request.TargetLocationCode;
                     inventory["storageLocationCode"] = request.TargetLocationCode;
+                    inventory["storageLocation"] = target.LocationName;
+                }
             }
             using (var insert = new SqlCommand(@"
 INSERT INTO dbo.TraceBackGoods
@@ -336,6 +350,39 @@ VALUES(@json,@uuid,GETDATE(),@erp_no,@machine,@account,@detail,@box,@from_type);
                 AddNullableVarchar(insert, "@box", source.BindBoxCode, 1000);
                 AddNullableVarchar(insert, "@from_type", source.FromDataType, 1000);
                 insert.ExecuteNonQuery();
+            }
+        }
+
+        private static TargetNames ReadTargetNames(
+            SqlConnection connection, SqlTransaction transaction,
+            TraceBackSyncEventRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.TargetWarehouseCode))
+                return new TargetNames();
+            using (var command = new SqlCommand(@"
+SELECT
+    (SELECT TOP (1) cWhName FROM dbo.Warehouse WHERE cWhCode=@warehouse),
+    CASE WHEN NULLIF(@location,N'') IS NULL THEN N'' ELSE
+        (SELECT TOP (1) cPosName FROM dbo.Position
+         WHERE cWhCode=@warehouse AND cPosCode=@location) END;", connection, transaction))
+            {
+                command.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value =
+                    request.TargetWarehouseCode;
+                command.Parameters.Add("@location", SqlDbType.NVarChar, 100).Value =
+                    (object)request.TargetLocationCode ?? DBNull.Value;
+                using (SqlDataReader reader = command.ExecuteReader())
+                {
+                    reader.Read();
+                    return new TargetNames
+                    {
+                        WarehouseName = reader.IsDBNull(0)
+                            ? request.TargetWarehouseCode
+                            : reader.GetString(0).Trim(),
+                        LocationName = reader.IsDBNull(1)
+                            ? request.TargetLocationCode ?? string.Empty
+                            : reader.GetString(1).Trim()
+                    };
+                }
             }
         }
 
@@ -397,6 +444,12 @@ VALUES(@code,@type,@order_uuid,@goods_uuid,@sn,@quantity,GETDATE(),@user);",
             public string BindBoxCode { get; set; }
             public string FromDataType { get; set; }
             public string SerialNo { get; set; }
+        }
+
+        private sealed class TargetNames
+        {
+            public string WarehouseName { get; set; }
+            public string LocationName { get; set; }
         }
     }
 }

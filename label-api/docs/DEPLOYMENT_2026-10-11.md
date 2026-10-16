@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-16 12:54 H5 更新为 `0.2.0-dev.71`，Gateway 更新为 `0.7.1`。调拨和货位调整扫码显示改为按当前仓库、货位编码优先使用 U8 基础档案名称，缓存缺失时才回退 TraceBack 名称快照；Gateway 后续写入最新 `TraceBackGoods` 时同时更新目标编码和名称。已确认测试标签旧 Goods 的目标编码为 `JML_B1 / 361`、旧名称快照仍为 `1139`，U8 单据始终使用正确编码；修复后页面显示当前名称 `J004`。H5 构建通过并在 5173 提供 `0.2.0-dev.71`，Gateway 健康检查 `running` / `0.7.1.0`；`validateOnly` 临时流水已回滚，未新增测试数据。Business API 和数据库结构不变。
+
 2026-10-16 12:03 已发布 Business API `0.10.1` 到 `D:\LabelSystem\Api\releases\20261016_120236`，外置配置备份为 `D:\LabelSystem\Config\backups\label-api.pre-0.10.1.20261016_120317.json`。修复材料出库提交前读取 TraceBack 本地镜像时，SQL 未投影 `traceback_latest_flow_id` 和 `mirror_source`、映射器仍读取对应字段而触发的 `IndexOutOfRangeException`。自动化测试 8 项通过；发布后健康检查为 `ready` / `0.10.1`、数据库就绪、888 测试写入开启，H5 返回 200。失败请求发生在 U8 新增和 TraceBack 同步任务建立前；复核材料出库业务操作、库存流水和 TraceBack 同步任务均为 0，仅保留扫码建立的镜像操作。本次未提交 U8 单据，也未向 TraceBack 三表写入数据。应用池回收后需重新登录。
 
 2026-10-16 11:38 已发布 Gateway `0.7.0` 和 Business API `0.10.0`。Gateway 站点发布前备份为 `D:\U8Gateway\backups\20261016_113315-pre-final-0.7.0\site`；Business API 原发布目录备份为 `D:\LabelSystem\Api\backups\20261016_113315-pre-final-0.10.0\site`，最终发布目录为 `D:\LabelSystem\Api\releases\20261016_113838`。新增材料出库原标签负/正流水、调拨和货位调整全量零流水与部分移动来源负流水，以及稳定任务、确定性 UUID 幂等和按业务组恢复；生产账套仍硬阻断写入。部署后 Gateway `running` / `0.7.0.0`、Business API `ready` / `0.10.0`、development、数据库就绪、888 写入开启，H5 `http://172.16.10.45:5173` 返回 200。最终发布包使用 `validateOnly` 在 888 完整执行三表事务后回滚，临时流水 ID 为 54008，回滚前后三表仍为 OnlyCode 52,398、Goods 50,123、Order 29,555；未保留测试数据，也未提交 U8 单据或修改索引。应用池回收后需重新登录。
