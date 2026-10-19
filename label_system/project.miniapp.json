@@ -1,8 +1,8 @@
 {
   "miniVersion": "v2",
   "name": "标签管理系统",
-  "version": "0.5.2",
-  "versionCode": 108,
+  "version": "0.5.3",
+  "versionCode": 109,
   "i18nFilePath": "i18n",
   "mini-ohos": {
     "sdkVersion": "0.5.1"
@@ -19,10 +19,10 @@
       "xweb": false
     },
     "icons": {
-      "hdpi": "",
-      "xhdpi": "",
-      "xxhdpi": "",
-      "xxxhdpi": ""
+      "hdpi": "miniapp/android/nativeResources/res/mipmap-hdpi/ic_launcher.png",
+      "xhdpi": "miniapp/android/nativeResources/res/mipmap-xhdpi/ic_launcher.png",
+      "xxhdpi": "miniapp/android/nativeResources/res/mipmap-xxhdpi/ic_launcher.png",
+      "xxxhdpi": "miniapp/android/nativeResources/res/mipmap-xxxhdpi/ic_launcher.png"
     },
     "splashscreen": {
       "hdpi": "",

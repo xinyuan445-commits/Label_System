@@ -32,8 +32,8 @@ const defaultConfig: ShellConfig = {
   scanSound: 'short',
   scanFeedbackMode: 'tone',
   bridgeVersion: 'pda-bridge-v1',
-  apkVersion: '0.5.2',
-  apkVersionCode: 108,
+  apkVersion: '0.5.3',
+  apkVersionCode: 109,
 }
 
 function isEnvironment(value: unknown): value is ShellEnvironment {

@@ -106,7 +106,12 @@ if (-not $baseApk) {
     throw 'WeChat DevTools did not produce a base APK.'
 }
 
-& $java -jar $apktool d -f $baseApk.FullName -o $decodedDir
+if ($BaseApkPath) {
+    # 复用固定包名的既有壳包时，只解码资源，避免重编译整个第三方运行时 DEX。
+    & $java -jar $apktool d -s $baseApk.FullName -o $decodedDir
+} else {
+    & $java -jar $apktool d $baseApk.FullName -o $decodedDir
+}
 if ($LASTEXITCODE -ne 0) { throw 'APK decode failed.' }
 
 $manifestPath = Join-Path $decodedDir 'AndroidManifest.xml'
@@ -116,6 +121,7 @@ if (-not $generatedPackageName) { throw 'APK manifest has no package name.' }
 
 # 微信后台可能调整生成包名。发布壳必须保持固定 applicationId，才能覆盖升级并保留本地配置。
 if ($generatedPackageName -ne $PackageName) {
+    if ($BaseApkPath) { throw 'Base APK must already use the fixed package name for resource-only rebuilds.' }
     $generatedPackagePath = $generatedPackageName.Replace('.', '/')
     $packagePath = $PackageName.Replace('.', '/')
     $rewriteFiles = @($manifestPath) + @(
@@ -143,6 +149,18 @@ $manifest.DocumentElement.SetAttribute('versionCode', $androidNamespace, $versio
 $application = $manifest.SelectSingleNode('/manifest/application')
 if (-not $application) { throw 'APK manifest has no application element.' }
 $application.SetAttribute('usesCleartextTraffic', $androidNamespace, 'true')
+$application.SetAttribute('icon', $androidNamespace, '@mipmap/ic_launcher')
+$application.SetAttribute('roundIcon', $androidNamespace, '@mipmap/ic_launcher')
+
+# 覆盖升级包也可作基包，先去掉旧桥注册，避免重复 provider 和扫码接收器。
+foreach ($node in @($application.ChildNodes)) {
+    if ($node.LocalName -in @('receiver','provider') -and
+        $node.GetAttribute('name', $androidNamespace) -in @(
+            'com.xinyuan.labelbridge.Ct58cScanReceiver',
+            'com.xinyuan.labelbridge.Ct58cBridgeInitializer')) {
+        [void]$application.RemoveChild($node)
+    }
+}
 
 $receiver = $manifest.CreateElement('receiver')
 $receiver.SetAttribute('name', $androidNamespace, 'com.xinyuan.labelbridge.Ct58cScanReceiver')
@@ -167,6 +185,13 @@ $provider.SetAttribute('initOrder', $androidNamespace, '100')
 
 $utf8NoBom = New-Object Text.UTF8Encoding($false)
 [IO.File]::WriteAllText($manifestPath, $manifest.OuterXml, $utf8NoBom)
+
+$apktoolConfig = Join-Path $decodedDir 'apktool.yml'
+$yaml = [IO.File]::ReadAllText($apktoolConfig)
+$yaml = [regex]::Replace($yaml, '(?m)^  versionCode:.*$', "  versionCode: $versionCode")
+$yaml = [regex]::Replace($yaml, '(?m)^  versionName:.*$', "  versionName: $version")
+[IO.File]::WriteAllText($apktoolConfig, $yaml, $utf8NoBom)
+& (Join-Path $PSScriptRoot 'apply_apk_branding.ps1') -DecodedDir $decodedDir
 
 & $java -jar $apktool b --jobs 2 $decodedDir -o $rebuiltApk
 if ($LASTEXITCODE -ne 0) { throw 'APK rebuild failed.' }
@@ -214,6 +239,7 @@ $entries = & $jar tf $signedApk
 if ($entries -notcontains 'classes3.dex') { throw 'Final APK is missing classes3.dex.' }
 if ($entries -notcontains 'assets/scan_success_zh_female.wav') { throw 'Final APK is missing scan_success_zh_female.wav.' }
 if ($entries -notcontains 'assets/scan_error_zh_female.wav') { throw 'Final APK is missing scan_error_zh_female.wav.' }
+& (Join-Path $PSScriptRoot 'verify_apk_branding.ps1') -ApkPath $signedApk -ExpectedVersion $version -ExpectedVersionCode $versionCode
 Copy-Item -Force -LiteralPath $signedApk -Destination $finalApk
 
 $file = Get-Item -LiteralPath $finalApk
