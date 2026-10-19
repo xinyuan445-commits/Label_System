@@ -1,0 +1,13 @@
+{
+  "Printing": {
+    "Enabled": false,
+    "AllowNewDispatch": false,
+    "RecoveryEnabled": false,
+    "Namespace": "",
+    "RootPath": "runtime-data/printing",
+    "SigningKeyPath": "",
+    "RendererUrl": "http://127.0.0.1:18780",
+    "RendererApiKey": "",
+    "RendererVersion": "label-renderer/1"
+  }
+}

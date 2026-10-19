@@ -1,0 +1,175 @@
+{
+  "database": "LabelSystem_Dev",
+  "migration": [
+    {
+      "migration_id": "017",
+      "script_checksum": "8E6FEE2FE6CA541A4968710C4E1D6DAE9C357DF9A3818EE7026C8254CC53911F"
+    }
+  ],
+  "technicalTables": [
+    {
+      "name": "label_print_asset"
+    },
+    {
+      "name": "label_print_device"
+    },
+    {
+      "name": "label_print_rule_binding"
+    },
+    {
+      "name": "label_print_template"
+    },
+    {
+      "name": "label_print_template_version"
+    },
+    {
+      "name": "label_print_template_version_asset"
+    }
+  ],
+  "printColumns": [
+    {
+      "tableName": "business_operation",
+      "columnName": "print_job_id"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_scope"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_phase"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_printer"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_template_version_id"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_device_id"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_manifest_relative_path"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_manifest_sha256"
+    },
+    {
+      "tableName": "business_operation",
+      "columnName": "print_manifest_json"
+    },
+    {
+      "tableName": "business_operation_event",
+      "columnName": "operation_line_id"
+    },
+    {
+      "tableName": "business_operation_event",
+      "columnName": "print_attempt_id"
+    },
+    {
+      "tableName": "business_operation_event",
+      "columnName": "event_key"
+    },
+    {
+      "tableName": "business_operation_line",
+      "columnName": "print_output_id"
+    },
+    {
+      "tableName": "business_operation_line",
+      "columnName": "print_kind"
+    },
+    {
+      "tableName": "business_operation_line",
+      "columnName": "print_origin_line_id"
+    },
+    {
+      "tableName": "business_operation_line",
+      "columnName": "print_output_phase"
+    },
+    {
+      "tableName": "business_operation_line",
+      "columnName": "print_snapshot_json"
+    },
+    {
+      "tableName": "inventory_flow",
+      "columnName": "print_output_line_id"
+    }
+  ],
+  "uniqueIndexes": [
+    {
+      "name": "UX_print_event_key",
+      "is_unique": true,
+      "is_disabled": false
+    },
+    {
+      "name": "UX_print_flow_output",
+      "is_unique": true,
+      "is_disabled": false
+    },
+    {
+      "name": "UX_print_initial_registration",
+      "is_unique": true,
+      "is_disabled": false
+    },
+    {
+      "name": "UX_print_job",
+      "is_unique": true,
+      "is_disabled": false
+    },
+    {
+      "name": "UX_print_label_first",
+      "is_unique": true,
+      "is_disabled": false
+    },
+    {
+      "name": "UX_print_output",
+      "is_unique": true,
+      "is_disabled": false
+    }
+  ],
+  "checks": [
+    {
+      "name": "CK_print_flow_zero",
+      "is_disabled": false,
+      "is_not_trusted": false
+    },
+    {
+      "name": "CK_print_line",
+      "is_disabled": false,
+      "is_not_trusted": false
+    },
+    {
+      "name": "CK_print_manifest",
+      "is_disabled": false,
+      "is_not_trusted": false
+    },
+    {
+      "name": "CK_print_operation",
+      "is_disabled": false,
+      "is_not_trusted": false
+    },
+    {
+      "name": "CK_print_target_identity",
+      "is_disabled": false,
+      "is_not_trusted": false
+    }
+  ],
+  "counts": {
+    "printJobs": 0,
+    "printOutputs": 0,
+    "printFlows": 0,
+    "initialRegistrationTasks": 0,
+    "formalCodes": 0,
+    "templates": 1,
+    "publishedVersions": 1,
+    "assets": 1,
+    "pairedDevices": 0,
+    "currentRuleBindings": 0
+  },
+  "readOnly": true
+}

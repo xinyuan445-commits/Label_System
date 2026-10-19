@@ -183,7 +183,7 @@ public sealed class TraceBackSyncRepository(SqlConnectionFactory connections)
         const string sql = """
             SELECT id,operation_id,label_id,event_key,payload_json
             FROM dbo.traceback_sync_task
-            WHERE operation_id=@operation_id AND status<>'COMPLETED'
+            WHERE operation_id=@operation_id AND event_phase='ERP_SOURCE' AND status<>'COMPLETED'
             ORDER BY id;
             """;
         await using var connection = connections.Create();
@@ -208,7 +208,7 @@ public sealed class TraceBackSyncRepository(SqlConnectionFactory connections)
         await using var connection = connections.Create();
         await connection.OpenAsync(cancellationToken);
         await using var command = new SqlCommand(
-            "SELECT COUNT_BIG(*) FROM dbo.traceback_sync_task WHERE operation_id=@id;", connection);
+            "SELECT COUNT_BIG(*) FROM dbo.traceback_sync_task WHERE operation_id=@id AND event_phase='ERP_SOURCE';", connection);
         command.Parameters.Add("@id", SqlDbType.BigInt).Value = operationId;
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
@@ -361,9 +361,13 @@ public sealed class TraceBackSyncRepository(SqlConnectionFactory connections)
                 await using var release = new SqlCommand($"""
                     UPDATE dbo.{table}
                     SET locked_operation_id=NULL,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
-                    WHERE locked_operation_id=@root_id;
+                    WHERE locked_operation_id=@root_id
+                      AND NOT EXISTS (
+                        SELECT 1 FROM dbo.business_operation WITH(UPDLOCK,HOLDLOCK)
+                        WHERE submission_group_id=@group_id AND status<>'SUCCESS');
                     """, connection, transaction);
                 release.Parameters.Add("@root_id", SqlDbType.BigInt).Value = operation.RootOperationId;
+                release.Parameters.Add("@group_id", SqlDbType.VarChar, 100).Value = operation.SubmissionGroupId;
                 await release.ExecuteNonQueryAsync(cancellationToken);
             }
             await CompleteDraftIfTerminalAsync(

@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="161.8901.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
       <PrivateAssets>all</PrivateAssets>
@@ -15,8 +16,8 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="..\..\..\docs\database\052_label_print_phase1.sql" Link="migrations\052_label_print_phase1.sql" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="..\..\src\LabelSystem.Api\LabelSystem.Api.csproj" />
-    <Content Include="..\..\..\docs\database\001_label_business_schema_draft.sql;..\..\..\docs\database\002_seed_settings_and_source_reservation_index.sql;..\..\..\docs\database\003_cache_u8_rd_style.sql;..\..\..\docs\database\004_fix_reference_data_sync_time_constraint.sql;..\..\..\docs\database\049_cache_u8_materials.sql"
-             Link="migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\docs\database\001_label_business_schema_draft.sql;..\..\..\docs\database\002_seed_settings_and_source_reservation_index.sql;..\..\..\docs\database\003_cache_u8_rd_style.sql;..\..\..\docs\database\004_fix_reference_data_sync_time_constraint.sql;..\..\..\docs\database\049_cache_u8_materials.sql" Link="migrations\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

@@ -276,6 +276,25 @@ public sealed class MaterialOutboundRepository(SqlConnectionFactory connections)
         if (!manageAll && !string.Equals(operatorId, userId, StringComparison.OrdinalIgnoreCase))
             throw new ApiException(StatusCodes.Status403Forbidden,
                 "OPERATION_FORBIDDEN", "只能确认本人创建的标签。");
+        // Migration 017 is optional until explicitly installed. Keep old deployments query-compatible.
+        await using (var schema = new SqlCommand(
+            "SELECT COUNT(*) FROM dbo.schema_migration WHERE migration_id='017';", connection, transaction))
+        {
+            if (Convert.ToInt32(await schema.ExecuteScalarAsync(cancellationToken)) != 0)
+            {
+                if(labelStatus=="PENDING_PRINT")
+                    throw new ApiException(StatusCodes.Status409Conflict,
+                        "PRINT_NEW_WORKFLOW_REQUIRED","请通过打印工作台完成首次打印。");
+                await using var protectedPrint = new SqlCommand("""
+                    SELECT COUNT(*) FROM dbo.business_operation_line
+                    WHERE label_id=@label AND print_output_id IS NOT NULL;
+                    """, connection, transaction);
+                protectedPrint.Parameters.Add("@label", SqlDbType.BigInt).Value = labelId;
+                if (Convert.ToInt32(await protectedPrint.ExecuteScalarAsync(cancellationToken)) != 0)
+                    throw new ApiException(StatusCodes.Status409Conflict,
+                        "PRINT_NEW_WORKFLOW_REQUIRED", "请通过打印工作台恢复原任务。");
+            }
+        }
         if (labelStatus == "ACTIVE")
         {
             await transaction.CommitAsync(cancellationToken);

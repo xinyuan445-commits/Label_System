@@ -1,0 +1,754 @@
+{
+  "at": "2026-10-19T18:14:43.537917+08:00",
+  "passed": true,
+  "account": "888",
+  "labelDatabase": "LabelSystem_Dev",
+  "tracebackDatabase": "UFDATA_888_2021",
+  "migrationsExecuted": false,
+  "newSqlDatabaseCreated": false,
+  "production008BusinessAccessed": false,
+  "realPrintStarted": false,
+  "screenshotsTaken": false,
+  "browser": {
+    "passed": true,
+    "at": "2026-10-19T18:11:30.877484+08:00",
+    "entry": "http://127.0.0.1:9110/app/",
+    "engine": "Microsoft Edge",
+    "screenshotsTaken": false,
+    "realPrintStarted": false,
+    "checks": [
+      {
+        "check": "desktop-entry-shared-labelsystem-login",
+        "passed": true,
+        "permissions": 26
+      },
+      {
+        "check": "888-rule-derived-with-original-008-rule-preserved",
+        "passed": true,
+        "ruleId": 7,
+        "quantityDecimalScale": 2,
+        "uniqueLength": 10
+      },
+      {
+        "check": "browser-rule-preview-no-code-allocation",
+        "passed": true,
+        "sample": "888|DEMO-888|B001|100.00|2609270062"
+      },
+      {
+        "check": "browser-activate-and-single-current-rule",
+        "passed": true
+      },
+      {
+        "check": "browser-unchanged-designer-publish-reuses-version",
+        "passed": true,
+        "versionId": 2
+      },
+      {
+        "check": "browser-formal-pdf-preview",
+        "passed": true,
+        "bytes": 21629,
+        "browserBlobBytes": 21628,
+        "widthMm": 76.2,
+        "heightMm": 50.8,
+        "browserPreviewStatus": 200
+      },
+      {
+        "check": "original-template-editor-loads",
+        "passed": true,
+        "canvasCount": 1
+      },
+      {
+        "check": "browser-register-installed-v2-helper",
+        "passed": true,
+        "deviceId": "c169e264-08f4-4835-a93a-ea3ae2007035"
+      },
+      {
+        "check": "browser-repeat-pairing-does-not-duplicate-device",
+        "passed": true
+      },
+      {
+        "check": "browser-device-disable-enable-with-row-version",
+        "passed": true
+      },
+      {
+        "check": "browser-first-selection-disabled-before-formal-code",
+        "passed": true,
+        "pendingTargets": 1,
+        "windowsPrinters": 12
+      },
+      {
+        "check": "browser-reprint-original-code-balance-35-paper-100-disabled",
+        "passed": true,
+        "copies": 2
+      },
+      {
+        "check": "browser-job-recovery-list-current-scope",
+        "passed": true,
+        "existingSqlAcceptanceSeparateScope": true
+      },
+      {
+        "check": "browser-legacy-write-routes-remain-closed-helper-disabled",
+        "passed": true
+      },
+      {
+        "check": "original-rule-unchanged-and-no-browser-javascript-errors",
+        "passed": true
+      }
+    ]
+  },
+  "session": {
+    "passed": true,
+    "unauthenticatedProtectedPageRedirect": true,
+    "sharedLogin": true,
+    "sessionHttpOnly": true,
+    "meDoesNotExposeToken": true,
+    "u8Account": "888",
+    "u8QueryOnly": true,
+    "logoutRevokesSession": true,
+    "logoutProtectedPageRedirect": true
+  },
+  "installation": {
+    "version": "0.7.0",
+    "deviceId": "c169e264-08f4-4835-a93a-ea3ae2007035",
+    "capabilities": [
+      "driver-labels-v2"
+    ],
+    "printDispatchEnabled": false,
+    "packageBinarySha256": "CABAE626A4709BF2F0CF5D7C7F313DA137073EB1A44743863135358264701E9B",
+    "installed": true,
+    "reinstalled": true,
+    "identityPreserved": true,
+    "ledgerPreserved": true,
+    "existingLedgerFiles": 0,
+    "loopbackOnly": true,
+    "startupEntry": true,
+    "desktopEntry": true
+  },
+  "freshInitialization": {
+    "passed": true,
+    "powerShellVersion": "5.1.19041.6456",
+    "initializationExecuted": true,
+    "utf8ChineseName": true,
+    "privateKeyCreated": true,
+    "realPrintingStarted": false
+  },
+  "browserSimulatedWorkflow": {
+    "passed": true,
+    "allPrintAndHelperRequestsIntercepted": true,
+    "sqlWrites": false,
+    "realPrinterCalls": 0,
+    "publicGatesChanged": false,
+    "scenarios": [
+      {
+        "scenario": "first-and-reprint",
+        "passed": true,
+        "driverCalls": 2,
+        "helperQueries": 0,
+        "receiptSubmissions": 2,
+        "retrySync": 0,
+        "distinctMockReceiptEvents": 2,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/first"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/de6d6c78-f994-4760-9d41-fec1c280f853"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/de6d6c78-f994-4760-9d41-fec1c280f853/bundle"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/de6d6c78-f994-4760-9d41-fec1c280f853/dispatch-authorizations"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/de6d6c78-f994-4760-9d41-fec1c280f853/receipts"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "POST",
+            "path": "labels/resolve"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/reprint"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/a84c1eb5-b576-426c-bd0e-48e55a2e4886"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/a84c1eb5-b576-426c-bd0e-48e55a2e4886/bundle"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/a84c1eb5-b576-426c-bd0e-48e55a2e4886/dispatch-authorizations"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/a84c1eb5-b576-426c-bd0e-48e55a2e4886/receipts"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          }
+        ]
+      },
+      {
+        "scenario": "lost-helper-and-receipt-response",
+        "passed": true,
+        "driverCalls": 1,
+        "helperQueries": 1,
+        "receiptSubmissions": 1,
+        "retrySync": 0,
+        "distinctMockReceiptEvents": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/first"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/953e9a49-396b-45a9-aa36-e8db9763d631"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/953e9a49-396b-45a9-aa36-e8db9763d631/bundle"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/953e9a49-396b-45a9-aa36-e8db9763d631/dispatch-authorizations"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/953e9a49-396b-45a9-aa36-e8db9763d631"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/953e9a49-396b-45a9-aa36-e8db9763d631"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/953e9a49-396b-45a9-aa36-e8db9763d631/receipts"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/953e9a49-396b-45a9-aa36-e8db9763d631"
+          }
+        ]
+      },
+      {
+        "scenario": "traceback-registration-failure",
+        "passed": true,
+        "driverCalls": 1,
+        "helperQueries": 0,
+        "receiptSubmissions": 1,
+        "retrySync": 1,
+        "distinctMockReceiptEvents": 1,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/first"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/b362521b-d103-4926-a08e-146cd46f1ae5"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/b362521b-d103-4926-a08e-146cd46f1ae5/bundle"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/b362521b-d103-4926-a08e-146cd46f1ae5/dispatch-authorizations"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/b362521b-d103-4926-a08e-146cd46f1ae5/receipts"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          },
+          {
+            "method": "GET",
+            "path": "jobs/b362521b-d103-4926-a08e-146cd46f1ae5"
+          },
+          {
+            "method": "POST",
+            "path": "jobs/b362521b-d103-4926-a08e-146cd46f1ae5/retry-sync"
+          },
+          {
+            "method": "GET",
+            "path": "capabilities"
+          },
+          {
+            "method": "GET",
+            "path": "pending-labels"
+          },
+          {
+            "method": "GET",
+            "path": "jobs"
+          },
+          {
+            "method": "GET",
+            "path": "templates"
+          },
+          {
+            "method": "GET",
+            "path": "devices"
+          },
+          {
+            "method": "GET",
+            "path": "code-rule"
+          },
+          {
+            "method": "GET",
+            "path": "source-summary"
+          }
+        ]
+      }
+    ]
+  },
+  "sqlVerification": {
+    "tableChanges": {
+      "business_operation_event": {
+        "before": 72,
+        "after": 72,
+        "unchanged": true
+      },
+      "label_print_rule_binding": {
+        "before": 0,
+        "after": 1,
+        "unchanged": false
+      },
+      "label_print_asset": {
+        "before": 2,
+        "after": 2,
+        "unchanged": true
+      },
+      "label_code_sequence": {
+        "before": 3,
+        "after": 3,
+        "unchanged": true
+      },
+      "label_print_template_version": {
+        "before": 5,
+        "after": 5,
+        "unchanged": true
+      },
+      "business_operation": {
+        "before": 20,
+        "after": 20,
+        "unchanged": true
+      },
+      "traceback_sync_task": {
+        "before": 11,
+        "after": 11,
+        "unchanged": true
+      },
+      "label_print_device": {
+        "before": 3,
+        "after": 4,
+        "unchanged": false
+      },
+      "business_operation_line": {
+        "before": 21,
+        "after": 21,
+        "unchanged": true
+      },
+      "inventory_flow": {
+        "before": 22,
+        "after": 22,
+        "unchanged": true
+      },
+      "label_code_registry": {
+        "before": 5,
+        "after": 5,
+        "unchanged": true
+      },
+      "product_label": {
+        "before": 8,
+        "after": 8,
+        "unchanged": true
+      },
+      "label_print_template": {
+        "before": 4,
+        "after": 4,
+        "unchanged": true
+      }
+    },
+    "protectedProductionHashesUnchanged": true,
+    "protectedProductionFiles": 6,
+    "publicAllowNewDispatch": false,
+    "u8Writes": false,
+    "automaticRecovery": false,
+    "counts": {
+      "labels": 8,
+      "flows": 22,
+      "operations": 20,
+      "printJobs": 6,
+      "registeredCodes": 5
+    },
+    "priorRealSqlEvidence": "2026-10-19-print-development-sql-evidence.json"
+  },
+  "rule": {
+    "code": "INV888_PRINT_DEVELOPMENT",
+    "id": 7,
+    "objectType": "PRODUCT_LABEL",
+    "current": true,
+    "quantityDecimalScale": 2,
+    "uniqueLength": 10,
+    "originalDevelopment008RuleUnchanged": true,
+    "previewAllocatesCode": false
+  },
+  "template": {
+    "id": 2,
+    "versionId": 2,
+    "widthMm": 76.2,
+    "heightMm": 50.8,
+    "mediaBoxPoints": [
+      0,
+      0,
+      216,
+      144
+    ],
+    "publicationReused": true
+  },
+  "sourceChecks": {
+    "frontendTestsPassed": 39,
+    "frontendTestsSkipped": 1,
+    "typeScriptBuild": true,
+    "eslint": true,
+    "backendTargetedTests": true,
+    "pythonBasicLint": true
+  },
+  "limitations": [
+    "Hardware printing and physical scanning not executed",
+    "Windows sign-out/sign-in startup not executed",
+    "Existing local V2 ledger contains zero historical files",
+    "Browser simulated workflow intercepts all print API/helper traffic and is not real SQL proof",
+    "Original rule retains two quantity decimals; higher precision requires separately reviewed rule version",
+    "AOCI validation unavailable; index may lag source"
+  ]
+}

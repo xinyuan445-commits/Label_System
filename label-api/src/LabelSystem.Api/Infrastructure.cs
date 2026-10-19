@@ -155,6 +155,8 @@ public sealed class DevelopmentSessionStore
 
 public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
 {
+    public static string CookieName(HttpContext context) =>
+        context.RequestServices?.GetService<IConfiguration>()?["Session:CookieName"] ?? "LabelSystem.Session";
     private static readonly string[] PublicPaths = ["/api/v1/health", "/api/v1/auth/login"];
 
     public async Task InvokeAsync(
@@ -192,7 +194,7 @@ public sealed class SessionAuthenticationMiddleware(RequestDelegate next)
         var authorization = context.Request.Headers.Authorization.FirstOrDefault();
         if (!string.IsNullOrWhiteSpace(authorization) && authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             return authorization[7..].Trim();
-        return context.Request.Cookies["LabelSystem.Session"];
+        return context.Request.Cookies[CookieName(context)];
     }
 }
 

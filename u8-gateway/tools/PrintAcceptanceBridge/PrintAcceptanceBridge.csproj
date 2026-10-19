@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/U8Gateway.Api/U8Gateway.Api.csproj" /><Reference Include="System.Net.Http" /></ItemGroup>
+</Project>

@@ -1,5 +1,54 @@
 # Label System API
 
+2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
+
+以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
+
+2026-10-19打印明细位置合同：来源标签创建把目标仓库、货位写入`business_operation_line`；拆包写当时位置；FIRST/REPRINT把准备发送时的当前位置同时写入来源和目标字段。补打纸面快照继续沿用首打内容，可能与补打时当前位置不同。此变更不增加库存数量，不生成第二个Code，也不新增旧三表登记。
+
+2026-10-19真实SQL后续：现有开发库/888已通过新版独立系统首打、补打、丢回执、三表失败及提交后丢响应恢复；14张表原有行摘要一致，保留验收记录后全库标签8/流水22/操作20、任务6/Code5。临时模拟宿主与公共站点配置分离，公共门禁仍关闭，没有生产008或迁移操作，详见[真实SQL验收](../../New_Label_Print_System/docs/LabelSystem真实SQL验收.md)。
+
+2026-10-19接入复核：独立系统经固定Flask白名单使用现有业务API及三表幂等合同；未新增第二套写账接口。现有开发HTTP、模拟恢复与真实SQL未完成范围见[联调记录](../../New_Label_Print_System/docs/LabelSystem联调复核.md)；本轮接口合同及迁移未改。
+
+## 开发中：电脑端打印第一阶段（2026-10-19）
+
+最新：原New_Label_Print_System独立应用18003已补齐规则管理/当前规则、017正式发布、目标/任务/原码补打和V2回执恢复接口；实际验证规则读取/预览、带图片正式发布和重复发布复用，真实发送与业务写入保持关闭。原54项隔离证据与新版真实SQL全过程验收分开记录。原应用转接前缀/api/labelsystem/print及rules，接口仍为本文件现有合同，发布适配保留来源标记和旧发布指针以恢复中断。见[实施报告](../../New_Label_Print_System/docs/LabelSystem接入实施.md)。
+
+`GET /api/v1/print/assets/{id}/metadata`：沿用登录及print.view权限，返回id、sha256、mediaType、widthPx、heightPx、sizeBytes，不返回存储路径；供模板导出读取服务端摘要。导入在服务端图片校验/落盘后比对返回摘要，错误时不建模板，可能留下未引用技术图片。模板新建/请求号使用getRandomValues生成UUID，局域网HTTP可用。
+
+以下路由已在专用开发9891部署；生产9890未更新。001–017先在临时库验证并清理，随后现有开发库安装017。生产运行版本不能据此视为已支持，见开发部署及 [隔离报告](../../docs/test-builds/2026-10-19-print-phase1-isolated.md)。
+
+首打、补打、签名回执恢复及retry-sync已按合成数据通过；三表拒写或已提交丢响应时保留原任务，只重试原事件。渲染内部请求现以明确Content-Length发送UTF-8 JSON，与Python HTTP服务兼容。IIS/浏览器/现场网络路径仍未验证。
+完整请求、状态、签名合同见 [打印规格](../../docs/PRINT_PHASE1_SPEC.md)，
+验证及限制见 [开发记录](../../docs/PRINT_PHASE1_IMPLEMENTATION.md)。
+
+- 基址 /api/v1/print，沿用 Bearer 或 LabelSystem.Session、统一 envelope、启用用户及全局功能/ALLOW/DENY。
+- GET capabilities / pending-labels / source-summary / jobs / jobs/{id}：查询；列表上限100，尚无分页。
+- POST labels/resolve：完整 Code 实时旧快照及本地镜像；返回 labelId/十六进制 rowVersion，不能当纯预览 GET。
+- POST labels/legacy-baseline：特殊权限核验原始打印依据，写 LEGACY_FIRST_PRINT_BASELINE，不伪造 PRINT 或旧 +Q。
+- POST previews：templateVersionId/variables，返回示例 PDF，不分配 Code；GET/POST barcode-preview 返回示例 PNG。
+- POST jobs/first / jobs/reprint：200 PrintJob；GUID clientRequestId 防重。首打前端不传数量，补打取原快照。
+- POST jobs/{id}/render：恢复原准备任务；GET bundle / pages/{outputId} 取得原归档文件。
+- POST jobs/{id}/dispatch-authorizations：GUID clientRequestId、expectedRowVersion、outputIds；
+  返回 {payload,signature}，原设备和摘要从服务器取，不接受客户端任意替换。
+- POST jobs/{id}/receipts 及 confirmations：均接收原设备签名 {payload,signature}；
+  submitted 自动写零数量 PRINT/REPRINT，首打同事务建 PRINT_TARGET 并尝试原三表登记。
+- POST jobs/{id}/retry-sync：只恢复原初始登记，不发送、取号或重复累计。
+- POST jobs/{id}/cancel / resume：GUID clientRequestId、expectedRowVersion；
+  只处理明确未发送，保留原 Code、输出身份和历史，不按超时解锁未知任务。
+- POST jobs/{id}/reconciliations：管理员及 print.reconcile；核对说明和可选原签名回执；
+  无签名备注不会记成功、认定未发送或解锁。
+- GET/POST templates、GET/PUT templates/{id}、POST templates/{id}/publish；
+  POST assets、GET assets/{id}：草稿 CAS，版本和资源不可变。模板包导入/导出在工作台完成。
+- GET/PUT code-rule：复用规则四表并原子切换唯一绑定，管理员操作；
+  GET/POST devices、PUT devices/{id}：管理员配对/停启，公钥不覆盖，停用不拒绝历史回执验证。
+
+新码、首打事件和回执分别去重；新协议 PRINT/REPRINT change_qty=0，成功数置1而非累加。
+兼容登记失败保持 LOCAL 镜像原约束和打印锁；确认真实旧表快照后再切 TRACEBACK，不覆盖数量。
+安装017后旧 issued-labels/confirm 拒绝待首打或新协议标签旁路确认。
+Printing.Enabled、AllowNewDispatch、RecoveryEnabled 默认关闭；暂停新发送仍可恢复原任务。
+U8WritesEnabled 与 Gateway 精确账套/数据库白名单继续约束旧表写入。
+
 ## 审核接口（0.5.2）
 
 - `GET /api/v1/approval-documents`：登录用户查询 U8 审核列表；H5 单据编码由 Business API 映射为 Gateway 编码。
@@ -115,7 +164,7 @@ H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API �
 
 新规则只产生 V1 草稿。启用版本不可原位修改；保存新草稿会生成下一版本，启用时把原启用版本转为历史停用。目录包含当前启用和历史版本，使旧标签仍可解析。同一规则优先启用版本，再按版本号回退；不同规则按较小优先级数值优先，同优先级同时命中返回 `409 LABEL_CODE_RULE_AMBIGUOUS`。账套校验命中但不一致返回 `422 ERP_ACCOUNT_MISMATCH`，优先于其他宽泛规则的成功结果。
 
-目录响应包含内容指纹 `catalogVersion`，规则元数据、版本状态或规则 JSON 变化都会生成新值。当前 H5 按环境缓存目录；服务端解析为正式结果，离线解析尚未接入扫码链路。本阶段不分配正式流水、不登记 Code、不创建产品或托盘标签。
+目录响应包含内容指纹 `catalogVersion`，规则元数据、版本状态或规则 JSON 变化都会生成新值。当前 H5 按环境缓存目录；服务端解析为正式结果，离线解析尚未接入扫码链路。规则目录、编辑及样例预览接口不分配正式流水、不登记 Code、不创建产品或托盘标签；正式首打取号另由打印接口按事务执行。
 
 ## 草稿同步
 
@@ -264,7 +313,7 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 
 业务完成产生的 `PENDING_PRINT` 产品标签允许 `label_code=null`。`issuedLabels` 返回 `id`、可空 `code`、物料、批次、数量、仓库、货位和状态；H5 对空 Code 显示“待生成”，不提供“确认已贴标”。业务完成阶段不更新 `label_code_sequence`，也不写入 `label_code_registry`。
 
-打印平台后续必须使用内部 `id` 发起首次打印，在同一事务中分配流水、生成 Code、回填标签并登记唯一哈希。Code 一经分配即不可回收；打印失败只能复用原 Code 重试。现有按 `{labelCode}/confirm` 的接口仅兼容迁移前已经提前分配 Code 的待打印记录。
+打印平台使用内部 `id` 显式发起首次打印，由`POST /api/v1/print/jobs/first`在同一事务中分配流水、生成 Code、回填标签并登记唯一哈希。Code 一经分配即不可回收；发送失败只能恢复原任务及原 Code。现有按 `{labelCode}/confirm` 的接口仅兼容迁移前已经提前分配 Code 的待打印记录，不能绕过新任务签名回执或释放未决锁。
 
 ## TraceBack 产品标签读取与同步（0.10.0）
 
@@ -276,4 +325,23 @@ Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`�
 
 同步任务完成前，操作保持 `NEEDS_RECONCILIATION`、`erp_status=SUCCESS` 并保留标签锁；同步完成后刷新本地镜像的最新外部流水 ID、余额和身份摘要，再进入 `SUCCESS` 或 `PENDING_APPROVAL`。失败时记录尝试次数、错误和下次重试时间，不重新创建 U8 单据。`POST /operations/groups/{groupId}/traceback/retry` 由原操作人恢复本组待处理任务；重复调用依赖 Gateway 的确定性 UUID 幂等核对。
 
-无标签红字及部分移动产生的 `PENDING_PRINT` 在首次打印前不向 `TraceBackOnlyCode` 写空 Code。打印平台尚未接入，因此 `PRINT_TARGET` 合同已保留但 Business API 当前不产生该阶段任务。
+无标签红字及部分移动产生的 `PENDING_PRINT` 在首次打印前不向 `TraceBackOnlyCode` 写空 Code。当前源码已实现017首次打印：收到有效发送成功回执后，本地零数量PRINT流水和唯一`PRINT_TARGET`同事务登记，再恢复同一初始三表事件；补打不创建该阶段任务。独立18003已接入这些接口，但开发发送/U8写门禁关闭，公共站点未开放实际发送；本轮专用模拟宿主已经完成四组真实SQL验收并留下独立scope记录（全库任务6/Code5），实际三表登记和恢复证据见真实SQL报告，不能把scope列表为空理解为全库无任务。
+
+
+### 2026-10-19 888模拟打印专用接口
+
+- `GET /api/v1/print/capabilities`增加`simulationOnly/simulationDeviceId/simulationDeviceKeyHash`，公开设备公钥摘要，不含私钥或令牌。
+- `POST /api/v1/print/simulation/labels`：管理员+`print.first`，请求`clientRequestId/quantity`；只在精确开发888模拟模式创建合成已落账来源，按请求身份防重，不调用U8制单。
+- `GET /api/v1/print/simulation/labels/{id}`：`print.view`及原来源所有权，返回首打/补打事件数、打印数量增减、旧初始正数及余额；仅支持SIM888来源。
+- 模拟配置关闭或环境/数据库/固定设备/公钥不符时拒绝。首打、补打、原回执、retry-sync仍使用017原接口和幂等约束。
+- Flask新增已登录且CSRF保护的`/api/labelsystem/simulation/helper/*`、`/mode`、`/restart-helper`；只允许模拟V2路径，不接受任意URL、SQL或物理驱动。
+
+
+### 2026-10-19 正常打印及PDF补充合同
+
+- `GET /api/v1/print/capabilities`增加`sourceEnabled`，来源预约与模拟门禁解耦，仍限定当前精确开发888库并验证来源签名。
+- 首打允许精确目标`Microsoft Print to PDF`；V2包该目标采用真实PDF及PDF摘要，其余标签打印目标仍使用PNG。预览保持无正式编码、无落账。
+- `POST jobs/reprint`增加可选`deviceId/printer`，绑定当前有效设备；原Code、原纸面数量和不可变快照/模板保持。
+- `GET templates`只列启用模板。历史已发布模板保留不可变，验收专用模板停用。
+- 旧`/api/labelsystem/simulation/helper/*`、mode及restart-helper已从独立Flask移除，返回404。API合成种子方法属于历史自动化工具，当前SimulationOnly=false时关闭，不作为正常用户功能。
+- `source-print/{kind}`转接请求带本机`deviceId`与`printer`，先校验再预约；首打、补打和恢复继续使用原017唯一事件。

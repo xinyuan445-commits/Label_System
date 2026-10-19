@@ -1,0 +1,661 @@
+{
+  "at": "2026-10-19T17:21:31.026999+08:00",
+  "runId": "4eec1364e4a3",
+  "passed": true,
+  "labelDatabase": "LabelSystem_Dev",
+  "tracebackDatabase": "UFDATA_888_2021",
+  "account": "888",
+  "realSql": true,
+  "newDatabaseCreated": false,
+  "migrationsExecuted": false,
+  "originalFlaskRoutes": true,
+  "originalFrontendFunctions": true,
+  "productGoV2MockDriver": true,
+  "realPrinterStarted": false,
+  "production008Accessed": false,
+  "publicServiceGatesChanged": false,
+  "assertions": [
+    {
+      "check": "original-designer-publishes-once-to-existing-017",
+      "passed": true,
+      "details": {
+        "reused": false,
+        "templateId": 4,
+        "versionId": 5
+      }
+    },
+    {
+      "check": "read-current-target-first",
+      "passed": true,
+      "details": {
+        "seeded": {
+          "labelId": 10,
+          "originLineId": 87,
+          "sourceFlowId": 37,
+          "rowVersion": "000000000000A012"
+        },
+        "selected": {
+          "batchNo": "ACPT4eec1364e4a3",
+          "code": null,
+          "labelId": 10,
+          "locationCode": "",
+          "materialCode": "0199002",
+          "originLineId": 87,
+          "quantity": 100,
+          "recoveryJobId": null,
+          "rowVersion": "000000000000A012",
+          "sourceDocumentNo": "DEVPRINT-4eec1364e4a3-first",
+          "unitCode": "0101",
+          "warehouseCode": "JML_B1_FBX"
+        }
+      }
+    },
+    {
+      "check": "first-plus-ten-concurrent-receipts-no-duplicate-ledger",
+      "passed": true,
+      "details": {
+        "labelId": 10,
+        "code": "888|0199002|ACPT4eec1364e4a3|100.000000|1792401666",
+        "quantity": 100,
+        "status": "ACTIVE",
+        "rowVersion": "000000000000A024",
+        "lockOwner": null,
+        "sourceFlows": 1,
+        "printFlows": 1,
+        "reprintFlows": 0,
+        "printDelta": 0,
+        "registeredCodes": 1,
+        "targetTasks": 1,
+        "targetStatus": "COMPLETED",
+        "targetEvent": "print-initial:15E85F27325D83889D0F7B911254B1FC23A23919AAA3F991D4CDFC07703029AD",
+        "sequence": 1792401666,
+        "traceback": {
+          "flows": 1,
+          "balance": 100,
+          "positives": 1,
+          "goods": 1,
+          "orders": 1
+        },
+        "initialRows": {
+          "orders": 1,
+          "goods": 1,
+          "flows": 1
+        },
+        "driverCalls": 1
+      }
+    },
+    {
+      "check": "two-reprints-retain-paper-100-balance-35-without-new-code-or-positive",
+      "passed": true,
+      "details": {
+        "labelId": 10,
+        "code": "888|0199002|ACPT4eec1364e4a3|100.000000|1792401666",
+        "quantity": 35,
+        "status": "ACTIVE",
+        "rowVersion": "000000000000A041",
+        "lockOwner": null,
+        "sourceFlows": 1,
+        "printFlows": 1,
+        "reprintFlows": 2,
+        "printDelta": 0,
+        "registeredCodes": 1,
+        "targetTasks": 1,
+        "targetStatus": "COMPLETED",
+        "targetEvent": "print-initial:15E85F27325D83889D0F7B911254B1FC23A23919AAA3F991D4CDFC07703029AD",
+        "sequence": 1792401666,
+        "traceback": {
+          "flows": 2,
+          "balance": 35,
+          "positives": 1,
+          "goods": 2,
+          "orders": 2
+        },
+        "initialRows": {
+          "orders": 1,
+          "goods": 1,
+          "flows": 1
+        }
+      }
+    },
+    {
+      "check": "read-current-target-lost-receipt",
+      "passed": true,
+      "details": {
+        "seeded": {
+          "labelId": 11,
+          "originLineId": 92,
+          "sourceFlowId": 42,
+          "rowVersion": "000000000000A047"
+        },
+        "selected": {
+          "batchNo": "ACPT4eec1364e4a3",
+          "code": null,
+          "labelId": 11,
+          "locationCode": "",
+          "materialCode": "0199002",
+          "originLineId": 92,
+          "quantity": 12.5,
+          "recoveryJobId": null,
+          "rowVersion": "000000000000A047",
+          "sourceDocumentNo": "DEVPRINT-4eec1364e4a3-lost-receipt",
+          "unitCode": "0101",
+          "warehouseCode": "JML_B1_FBX"
+        }
+      }
+    },
+    {
+      "check": "lost-helper-and-committed-receipt-responses-restart-recovery-once",
+      "passed": true,
+      "details": {
+        "beforeReceipt": {
+          "labelId": 11,
+          "code": "888|0199002|ACPT4eec1364e4a3|12.500000|1792401667",
+          "quantity": 12.5,
+          "status": "PENDING_PRINT",
+          "rowVersion": "000000000000A04C",
+          "lockOwner": 72,
+          "sourceFlows": 1,
+          "printFlows": 0,
+          "reprintFlows": 0,
+          "printDelta": 0,
+          "registeredCodes": 1,
+          "targetTasks": 0,
+          "targetStatus": null,
+          "targetEvent": null,
+          "sequence": 1792401667,
+          "traceback": {
+            "flows": 0,
+            "balance": 0,
+            "positives": 0,
+            "goods": 0,
+            "orders": 0
+          },
+          "initialRows": {
+            "orders": 0,
+            "goods": 0,
+            "flows": 0
+          }
+        },
+        "committed": {
+          "labelId": 11,
+          "code": "888|0199002|ACPT4eec1364e4a3|12.500000|1792401667",
+          "quantity": 12.5,
+          "status": "ACTIVE",
+          "rowVersion": "000000000000A059",
+          "lockOwner": null,
+          "sourceFlows": 1,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printDelta": 0,
+          "registeredCodes": 1,
+          "targetTasks": 1,
+          "targetStatus": "COMPLETED",
+          "targetEvent": "print-initial:DD1E5C1C34D7781578413B1A6EE783142C7CBADBE5B3B682B69ACD6D7201D9D1",
+          "sequence": 1792401667,
+          "traceback": {
+            "flows": 1,
+            "balance": 12.5,
+            "positives": 1,
+            "goods": 1,
+            "orders": 1
+          },
+          "initialRows": {
+            "orders": 1,
+            "goods": 1,
+            "flows": 1
+          }
+        },
+        "recovered": {
+          "labelId": 11,
+          "code": "888|0199002|ACPT4eec1364e4a3|12.500000|1792401667",
+          "quantity": 12.5,
+          "status": "ACTIVE",
+          "rowVersion": "000000000000A059",
+          "lockOwner": null,
+          "sourceFlows": 1,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printDelta": 0,
+          "registeredCodes": 1,
+          "targetTasks": 1,
+          "targetStatus": "COMPLETED",
+          "targetEvent": "print-initial:DD1E5C1C34D7781578413B1A6EE783142C7CBADBE5B3B682B69ACD6D7201D9D1",
+          "sequence": 1792401667,
+          "traceback": {
+            "flows": 1,
+            "balance": 12.5,
+            "positives": 1,
+            "goods": 1,
+            "orders": 1
+          },
+          "initialRows": {
+            "orders": 1,
+            "goods": 1,
+            "flows": 1
+          }
+        },
+        "driverCalls": 3
+      }
+    },
+    {
+      "check": "read-current-target-three-table-failure",
+      "passed": true,
+      "details": {
+        "seeded": {
+          "labelId": 12,
+          "originLineId": 94,
+          "sourceFlowId": 44,
+          "rowVersion": "000000000000A05F"
+        },
+        "selected": {
+          "batchNo": "ACPT4eec1364e4a3",
+          "code": null,
+          "labelId": 12,
+          "locationCode": "",
+          "materialCode": "0199002",
+          "originLineId": 94,
+          "quantity": 7,
+          "recoveryJobId": null,
+          "rowVersion": "000000000000A05F",
+          "sourceDocumentNo": "DEVPRINT-4eec1364e4a3-three-table-failure",
+          "unitCode": "0101",
+          "warehouseCode": "JML_B1_FBX"
+        }
+      }
+    },
+    {
+      "check": "actual-onlycode-insert-failure-rolls-back-all-three-then-restores-once",
+      "passed": true,
+      "details": {
+        "rolledBack": {
+          "labelId": 12,
+          "code": "888|0199002|ACPT4eec1364e4a3|7.000000|1792401668",
+          "quantity": 7,
+          "status": "ACTIVE",
+          "rowVersion": "000000000000A06A",
+          "lockOwner": 74,
+          "sourceFlows": 1,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printDelta": 0,
+          "registeredCodes": 1,
+          "targetTasks": 1,
+          "targetStatus": "UNKNOWN",
+          "targetEvent": "print-initial:4F57A494BE1443E0CFFF8EF122441ECB723E0A8B510AB88916FCBC08EDD7142C",
+          "sequence": 1792401668,
+          "traceback": {
+            "flows": 0,
+            "balance": 0,
+            "positives": 0,
+            "goods": 0,
+            "orders": 0
+          },
+          "initialRows": {
+            "orders": 0,
+            "goods": 0,
+            "flows": 0
+          }
+        },
+        "restored": {
+          "labelId": 12,
+          "code": "888|0199002|ACPT4eec1364e4a3|7.000000|1792401668",
+          "quantity": 7,
+          "status": "ACTIVE",
+          "rowVersion": "000000000000A074",
+          "lockOwner": null,
+          "sourceFlows": 1,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printDelta": 0,
+          "registeredCodes": 1,
+          "targetTasks": 1,
+          "targetStatus": "COMPLETED",
+          "targetEvent": "print-initial:4F57A494BE1443E0CFFF8EF122441ECB723E0A8B510AB88916FCBC08EDD7142C",
+          "sequence": 1792401668,
+          "traceback": {
+            "flows": 1,
+            "balance": 7,
+            "positives": 1,
+            "goods": 1,
+            "orders": 1
+          },
+          "initialRows": {
+            "orders": 1,
+            "goods": 1,
+            "flows": 1
+          }
+        },
+        "driverCalls": 4
+      }
+    },
+    {
+      "check": "read-current-target-legacy-commit-response-lost",
+      "passed": true,
+      "details": {
+        "seeded": {
+          "labelId": 13,
+          "originLineId": 96,
+          "sourceFlowId": 46,
+          "rowVersion": "000000000000A07D"
+        },
+        "selected": {
+          "batchNo": "ACPT4eec1364e4a3",
+          "code": null,
+          "labelId": 13,
+          "locationCode": "",
+          "materialCode": "0199002",
+          "originLineId": 96,
+          "quantity": 9,
+          "recoveryJobId": null,
+          "rowVersion": "000000000000A07D",
+          "sourceDocumentNo": "DEVPRINT-4eec1364e4a3-legacy-commit-response-lost",
+          "unitCode": "0101",
+          "warehouseCode": "JML_B1_FBX"
+        }
+      }
+    },
+    {
+      "check": "actual-three-table-commit-response-lost-recovery-no-second-positive",
+      "passed": true,
+      "details": {
+        "oldCommitted": {
+          "labelId": 13,
+          "code": "888|0199002|ACPT4eec1364e4a3|9.000000|1792401669",
+          "quantity": 9,
+          "status": "ACTIVE",
+          "rowVersion": "000000000000A088",
+          "lockOwner": 76,
+          "sourceFlows": 1,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printDelta": 0,
+          "registeredCodes": 1,
+          "targetTasks": 1,
+          "targetStatus": "UNKNOWN",
+          "targetEvent": "print-initial:921DF7B50D68E593EFA437F7A6398342EA8869DCF9874653A6E1A53FAB9B1706",
+          "sequence": 1792401669,
+          "traceback": {
+            "flows": 1,
+            "balance": 9,
+            "positives": 1,
+            "goods": 1,
+            "orders": 1
+          },
+          "initialRows": {
+            "orders": 1,
+            "goods": 1,
+            "flows": 1
+          }
+        },
+        "wireRestored": {
+          "labelId": 13,
+          "code": "888|0199002|ACPT4eec1364e4a3|9.000000|1792401669",
+          "quantity": 9,
+          "status": "ACTIVE",
+          "rowVersion": "000000000000A090",
+          "lockOwner": null,
+          "sourceFlows": 1,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printDelta": 0,
+          "registeredCodes": 1,
+          "targetTasks": 1,
+          "targetStatus": "COMPLETED",
+          "targetEvent": "print-initial:921DF7B50D68E593EFA437F7A6398342EA8869DCF9874653A6E1A53FAB9B1706",
+          "sequence": 1792401669,
+          "traceback": {
+            "flows": 1,
+            "balance": 9,
+            "positives": 1,
+            "goods": 1,
+            "orders": 1
+          },
+          "initialRows": {
+            "orders": 1,
+            "goods": 1,
+            "flows": 1
+          }
+        },
+        "driverCalls": 5
+      }
+    },
+    {
+      "check": "all-four-targets-complete-with-five-mock-driver-dispatches",
+      "passed": true,
+      "details": {
+        "labels": [
+          10,
+          11,
+          12,
+          13
+        ],
+        "driverCalls": 5,
+        "realPrinterStarted": false
+      }
+    }
+  ],
+  "final": {
+    "runId": "4eec1364e4a3",
+    "originalRowsUnchanged": {
+      "product_label": true,
+      "inventory_flow": true,
+      "business_operation": true,
+      "business_operation_line": true,
+      "business_operation_event": true,
+      "traceback_sync_task": true,
+      "label_code_registry": true,
+      "label_print_template": true,
+      "label_print_template_version": true,
+      "label_print_asset": true,
+      "label_print_device": true,
+      "TraceBackOrder": true,
+      "TraceBackGoods": true,
+      "TraceBackOnlyCode": true
+    },
+    "hashEvidence": {
+      "product_label": {
+        "beforeSha256": "37AF20491CC66FB62F19C65BAE2C921EE3FE689E16040DFFF8DD3F95C44269F4",
+        "afterSha256": "37AF20491CC66FB62F19C65BAE2C921EE3FE689E16040DFFF8DD3F95C44269F4",
+        "baselineMaxId": 9
+      },
+      "inventory_flow": {
+        "beforeSha256": "2C83DE5F122590206A3828F9721EA39DB5B1B3EFD8F86B26EBC9A8E26514E351",
+        "afterSha256": "2C83DE5F122590206A3828F9721EA39DB5B1B3EFD8F86B26EBC9A8E26514E351",
+        "baselineMaxId": 36
+      },
+      "business_operation": {
+        "beforeSha256": "801C115133C39B9EB6EAA180C4DB590D36D53B469AA4FA082C31D039FDA6DF30",
+        "afterSha256": "801C115133C39B9EB6EAA180C4DB590D36D53B469AA4FA082C31D039FDA6DF30",
+        "baselineMaxId": 66
+      },
+      "business_operation_line": {
+        "beforeSha256": "E2845FE23982A5D32C7582857E582D2980E3D2FB37EE65FA0155E11935776200",
+        "afterSha256": "E2845FE23982A5D32C7582857E582D2980E3D2FB37EE65FA0155E11935776200",
+        "baselineMaxId": 86
+      },
+      "business_operation_event": {
+        "beforeSha256": "B9097AE07FE6B4036242776324F01D564D16C179D9BF89C5D64057DD93A3C7AA",
+        "afterSha256": "B9097AE07FE6B4036242776324F01D564D16C179D9BF89C5D64057DD93A3C7AA",
+        "baselineMaxId": 245
+      },
+      "traceback_sync_task": {
+        "beforeSha256": "B2D443DC6FFF44075D506DD29AADB60808E2DA6FFACEC09BBEAC857032483328",
+        "afterSha256": "B2D443DC6FFF44075D506DD29AADB60808E2DA6FFACEC09BBEAC857032483328",
+        "baselineMaxId": 7
+      },
+      "label_code_registry": {
+        "beforeSha256": "83891D2EA472FA1097E8A05629EAA90EE762A870716AE2A8892F9791432B50DE",
+        "afterSha256": "83891D2EA472FA1097E8A05629EAA90EE762A870716AE2A8892F9791432B50DE",
+        "baselineMaxId": 5
+      },
+      "label_print_template": {
+        "beforeSha256": "5635F229FB4856CC84640C14B73936CDB2A59CAED00CC1C705C44A33DF63315F",
+        "afterSha256": "5635F229FB4856CC84640C14B73936CDB2A59CAED00CC1C705C44A33DF63315F",
+        "baselineMaxId": 3
+      },
+      "label_print_template_version": {
+        "beforeSha256": "C2313EC1A93BBF3DEC0C8775576F211E0361563FB54BEA82FC8C53A8662C46F7",
+        "afterSha256": "C2313EC1A93BBF3DEC0C8775576F211E0361563FB54BEA82FC8C53A8662C46F7",
+        "baselineMaxId": 4
+      },
+      "label_print_asset": {
+        "beforeSha256": "BF7BD078200948AE512E7520CF69BF10058465A7A39700D88BC522E759C01236",
+        "afterSha256": "BF7BD078200948AE512E7520CF69BF10058465A7A39700D88BC522E759C01236",
+        "baselineMaxId": 2
+      },
+      "label_print_device": {
+        "beforeSha256": "5EFD68AE3AE9FB39EC32D22FDD9BE1A30250B1FABD36F4DC4758CC67409A05BE",
+        "afterSha256": "5EFD68AE3AE9FB39EC32D22FDD9BE1A30250B1FABD36F4DC4758CC67409A05BE",
+        "baselineMaxId": 0
+      },
+      "TraceBackOrder": {
+        "beforeSha256": "ECFB795D02A75AA1F17F5E4726321D6289FE37263DFDD92C834943BA6DABEA79",
+        "afterSha256": "ECFB795D02A75AA1F17F5E4726321D6289FE37263DFDD92C834943BA6DABEA79",
+        "baselineMaxId": 0
+      },
+      "TraceBackGoods": {
+        "beforeSha256": "A922BD766A31B0E38343F7F65C8A3171E5AF5BB5A145D4854183CB8C4851326B",
+        "afterSha256": "A922BD766A31B0E38343F7F65C8A3171E5AF5BB5A145D4854183CB8C4851326B",
+        "baselineMaxId": 0
+      },
+      "TraceBackOnlyCode": {
+        "beforeSha256": "F4EC1C7AD568CD47FE6AEE5B1D396CF5FE66A7323D5AC9685AD1D19C9021D8B1",
+        "afterSha256": "F4EC1C7AD568CD47FE6AEE5B1D396CF5FE66A7323D5AC9685AD1D19C9021D8B1",
+        "baselineMaxId": 54016
+      }
+    },
+    "ruleBindingRestored": true,
+    "faultTriggerRemoved": true,
+    "remainingOwnedLocks": 0,
+    "ownedLabels": [
+      10,
+      11,
+      12,
+      13
+    ],
+    "retainedSyntheticRecords": true,
+    "deviceDisabled": true,
+    "ruleDisabled": true
+  },
+  "scope": "Requested four live development SQL scenarios plus lost legacy commit response",
+  "postReadOnly": {
+    "account": "888",
+    "database": "LabelSystem_Dev",
+    "sqlTotals": {
+      "allRegisteredCodes": 5,
+      "ruleBindingCount": 0,
+      "targetTasks": 4,
+      "completedTasks": 4,
+      "codes": 4,
+      "remainingLocks": 0,
+      "printDelta": 0.0,
+      "allLabels": 8,
+      "printFlows": 4,
+      "allFlows": 22,
+      "reprintFlows": 2,
+      "allOperations": 20,
+      "allPrintJobs": 6
+    },
+    "tracebackTotals": {
+      "faultTriggers": 0,
+      "balance": 63.5,
+      "positives": 4,
+      "flows": 5
+    },
+    "remainingOwnedLocks": 0,
+    "faultTriggers": 0,
+    "ruleBindingCount": 0,
+    "publicDispatch": false,
+    "publicU8Writes": false,
+    "production008Read": false
+  },
+  "publicProtectionBefore": {
+    "account": "888",
+    "allowNewDispatch": false,
+    "u8Writes": false,
+    "recovery": false,
+    "productionFiles": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true
+      }
+    ]
+  },
+  "publicProtectionAfter": {
+    "account": "888",
+    "allowNewDispatch": false,
+    "u8Writes": false,
+    "recovery": false,
+    "productionFiles": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true
+      }
+    ]
+  },
+  "originalRunnerPassed": false,
+  "reportRecovery": {
+    "reason": "Windows GBK stdout could not emit the Vitest success checkmark after scenarios had passed",
+    "frontendLogPassed": true,
+    "sqlProofPassed": true,
+    "newSqlWritesDuringRecovery": false,
+    "originalResultPreserved": true,
+    "stdoutEncodingFixed": true,
+    "frontendLogSha256": "c1c252f7ef578ce5d6caa0e7ac8d9dd682a69117182eb724763412bba74bf91a"
+  },
+  "sourceSha256": {
+    "label-api/tools/PrintDevelopmentAcceptance/Program.cs": "5b979f99ca9e228a15dcd11cf50050d5c3ea724cc325b46f51ce0e352afdac67",
+    "u8-gateway/tools/PrintDevelopmentAcceptanceBridge/Program.cs": "0f9998f89137b514a27a07259f209439dfb6b7850051359d1b9a872295edeb6d",
+    "New_Label_Print_System/frontend/src/lib/labelSystem.sql-acceptance.test.ts": "fe88a5300afac44bd92d1377f507b328996927ddbec2c693cad234a6ccc14108",
+    "New_Label_Print_System/frontend/src/lib/labelSystem.ts": "2997aad390d888b316fdcbe588e2b00bd4482b615be7396d49a7f223549801d0",
+    "New_Label_Print_System/backend/app/routes/labelsystem_print.py": "60a426dd9d013332c634f3ff601ea518ea1075c1af763b79c9feffef0d6dce4d",
+    "New_Label_Print_System/connector/labeljobs_v2.go": "fcb92f971abdb74f2cc3142542dc20a420668ec8393e9afca215f0009dbec4a4",
+    "New_Label_Print_System/connector/development_acceptance_bridge_test.go": "474a7467a753562dad9f398392bb46a5552e03ab49c072ea923c0022343658da"
+  },
+  "notVerified": [
+    "Employee browser full UI",
+    "Physical printer and loopback network policy",
+    "All historical label and movement fixtures",
+    "Backup restoration"
+  ]
+}

@@ -1,0 +1,181 @@
+{
+  "at": "2026-10-19T16:46:46.528089+08:00",
+  "environment": "development",
+  "account": "888",
+  "scope": "real HTTP reads/previews and blocked-write probes; no successful business writes",
+  "checks": [
+    {
+      "check": "unauthenticated-rules-denied",
+      "passed": true
+    },
+    {
+      "check": "development-login",
+      "passed": true
+    },
+    {
+      "check": "shared-authority-and-closed-legacy-dispatch",
+      "passed": true
+    },
+    {
+      "check": "independent-spa-/printing",
+      "passed": true
+    },
+    {
+      "check": "independent-spa-/print-rules",
+      "passed": true
+    },
+    {
+      "check": "independent-spa-/print-templates",
+      "passed": true
+    },
+    {
+      "check": "017-read-capabilities",
+      "passed": true,
+      "count": null
+    },
+    {
+      "check": "server-dispatch-disabled",
+      "passed": true
+    },
+    {
+      "check": "017-read-pending-labels",
+      "passed": true,
+      "count": 1
+    },
+    {
+      "check": "017-read-source-summary",
+      "passed": true,
+      "count": 1
+    },
+    {
+      "check": "017-read-jobs",
+      "passed": true,
+      "count": 0
+    },
+    {
+      "check": "no-formal-jobs-created",
+      "passed": true
+    },
+    {
+      "check": "017-read-templates",
+      "passed": true,
+      "count": 2
+    },
+    {
+      "check": "017-read-devices",
+      "passed": true,
+      "count": 0
+    },
+    {
+      "check": "017-read-code-rule",
+      "passed": true,
+      "count": null
+    },
+    {
+      "check": "no-implicit-rule-selection",
+      "passed": true
+    },
+    {
+      "check": "rules-readable",
+      "passed": true
+    },
+    {
+      "check": "rule-preview-without-formal-allocation",
+      "passed": true
+    },
+    {
+      "check": "formal-template-preview",
+      "passed": true
+    },
+    {
+      "check": "formal-preview-size-text-image",
+      "passed": true
+    },
+    {
+      "check": "new-write-gate-jobs/first",
+      "passed": true,
+      "status": 409,
+      "error": "PRINT_WRITES_BLOCKED"
+    },
+    {
+      "check": "new-write-gate-jobs/reprint",
+      "passed": true,
+      "status": 409,
+      "error": "PRINT_DISPATCH_DISABLED"
+    },
+    {
+      "check": "old-write-disabled-/api/u8/print",
+      "passed": true
+    },
+    {
+      "check": "old-write-disabled-/api/u8/stock/print",
+      "passed": true
+    },
+    {
+      "check": "old-write-disabled-/api/u8/reprint",
+      "passed": true
+    },
+    {
+      "check": "old-write-disabled-/api/u8/print/acceptance-no-such-job/complete",
+      "passed": true
+    },
+    {
+      "check": "old-write-disabled-/api/u8/print/acceptance-no-such-job/register",
+      "passed": true
+    },
+    {
+      "check": "old-write-disabled-/api/print-jobs",
+      "passed": true
+    },
+    {
+      "check": "old-device-or-arbitrary-proxy-rejected-/api/agent/jobs",
+      "passed": true
+    },
+    {
+      "check": "old-device-or-arbitrary-proxy-rejected-/api/labelsystem/print/jobs?target=http://invalid",
+      "passed": true
+    },
+    {
+      "check": "old-device-or-arbitrary-proxy-rejected-/api/labelsystem/print/unknown",
+      "passed": true
+    },
+    {
+      "check": "assistant-download",
+      "passed": true
+    },
+    {
+      "check": "assistant-package-integrity",
+      "passed": true
+    },
+    {
+      "check": "assistant-disabled-and-public-key-pinned",
+      "passed": true
+    },
+    {
+      "check": "embedded-hosting-disabled-/",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "check": "embedded-hosting-disabled-/printing/",
+      "passed": true,
+      "status": 401
+    },
+    {
+      "check": "logout",
+      "passed": true
+    },
+    {
+      "check": "revoked-session-denied",
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "assistantSha256": "cabae626a4709bf2f0cf5d7c7f313da137073eb1a44743863135358264701e9b",
+  "helperStarted": false,
+  "realPrinterStarted": false,
+  "production008Accessed": false,
+  "migrationsExecuted": false,
+  "newDatabasesCreated": false,
+  "fullNewChainSqlFaultMatrixExecuted": false
+}

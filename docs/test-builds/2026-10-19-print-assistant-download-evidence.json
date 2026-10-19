@@ -1,0 +1,73 @@
+{
+  "deployment": {
+    "release": "D:\\NewLabelPrintDevelopment\\releases\\20261019_152833",
+    "binaryBytes": 8448000,
+    "binarySha256": "337BFAD450BDAC53EBB4E0B811CBCC2E2CF3BDD0E4CDAF3D93765F48E5FBC455",
+    "PSComputerName": "172.16.1.159",
+    "RunspaceId": "909df192-708f-4c0b-801f-25b44cc06d0c",
+    "PSShowComputerName": true
+  },
+  "note": "The installer and assistant were not executed. Windows employee installation and original-app 017 receipt integration remain unverified.",
+  "verification": {
+    "counts": {
+      "registeredCodes": 0,
+      "printJobs": 0,
+      "flows": 9,
+      "operations": 8,
+      "labels": 3
+    },
+    "productionHashes": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true
+      }
+    ],
+    "apiOnly": true,
+    "newDispatch": false,
+    "u8Writes": false
+  },
+  "download": {
+    "downloadStatus": 200,
+    "unauthenticatedStatus": 401,
+    "zipIntegrity": true,
+    "zipBytes": 3542905,
+    "executableBytes": 8448000,
+    "sha256": "337bfad450bdac53ebb4e0b811cbcc2e2cf3bdd0e4cdaf3d93765f48e5fbc455",
+    "windowsAmd64": true,
+    "clientOnly": true,
+    "disablePrinting": true,
+    "serverUrl": "http://172.16.1.159:18003",
+    "legacyWriteGates": 409,
+    "assistantLaunched": false,
+    "installerExecuted": false
+  },
+  "tests": {
+    "goTests": "passed",
+    "mypy": "passed",
+    "windowsBuild": "passed",
+    "backend": 412,
+    "ruff": "passed",
+    "downloadedPowerShellSyntax": "passed"
+  },
+  "assistantVersion": "0.6.1"
+}

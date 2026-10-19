@@ -1,0 +1,63 @@
+{
+  "document": "DBD26103204",
+  "queriedAtUtc": "/Date(1792413494522)/",
+  "labelDatabase": "LabelSystem_Dev",
+  "tracebackDatabase": "UFDATA_888_2021",
+  "readOnly": true,
+  "production008Accessed": false,
+  "operations": [
+    {
+      "id": 114,
+      "operation_type": "LABEL_SOURCE",
+      "status": "SUCCESS",
+      "print_phase": null,
+      "created_at": "2026-10-19T20:32:56.132",
+      "completed_at": null
+    },
+    {
+      "id": 115,
+      "operation_type": "PRINT",
+      "status": "SUCCESS",
+      "print_phase": "COMPLETED",
+      "created_at": "2026-10-19T20:32:56.527",
+      "completed_at": "2026-10-19T20:32:59.333"
+    }
+  ],
+  "labelSummary": [
+    {
+      "label_id": 31,
+      "label_code": "888|11103-FOSB-ENF-4918-CKB2330|20260402MY|7.00|0000000013",
+      "local_current_qty": 7.0,
+      "status": "ACTIVE",
+      "code_registry_rows": 1,
+      "first_print_flows": 1,
+      "reprint_flows": 0,
+      "print_quantity_delta": 0.0,
+      "initial_sync_tasks": 1,
+      "legacy_flow_rows": 1,
+      "legacy_positive_rows": 1,
+      "legacy_current_balance": 7.0
+    }
+  ],
+  "initialSyncSummary": [
+    {
+      "sync_task_id": 23,
+      "event_key": "print-initial:A2E8EA4E3862C2008829353972585C34C4119B7E3ED8522838775BC7F5E9B1DD",
+      "status": "COMPLETED",
+      "attempt_count": 0,
+      "traceback_code": "888|11103-FOSB-ENF-4918-CKB2330|20260402MY|7.00|0000000013",
+      "expected_initial_quantity": 7.0,
+      "order_rows": 1,
+      "goods_rows": 1,
+      "initial_onlycode_rows": 1,
+      "registered_initial_quantity": 7.0
+    }
+  ],
+  "oldTableRows": {
+    "TraceBackOrder": 1,
+    "TraceBackGoods": 1,
+    "TraceBackOnlyCode": 1
+  },
+  "reprintObserved": false,
+  "anomalies": []
+}

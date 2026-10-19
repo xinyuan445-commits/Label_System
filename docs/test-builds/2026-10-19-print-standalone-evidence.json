@@ -1,0 +1,155 @@
+{
+  "limitations": [
+    "Original-app 017 immutable template publishing, jobs and receipts are not integrated yet.",
+    "Legacy pending calculations are not 017 print facts.",
+    "No physical printing, U8 writes, production changes, additional SQL migration, or screenshots.",
+    "AOCI unavailable; index not validated."
+  ],
+  "verification": {
+    "counts": {
+      "printJobs": 0,
+      "operations": 8,
+      "labels": 3,
+      "registeredCodes": 0,
+      "flows": 9
+    },
+    "productionHashes": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true
+      }
+    ],
+    "apiOnly": true,
+    "newDispatch": false,
+    "u8Writes": false
+  },
+  "preview": {
+    "templateId": 2,
+    "formatId": 6,
+    "previewStatus": 200,
+    "pdfBytes": 21025,
+    "pages": 1,
+    "widthMm": 76.2,
+    "heightMm": 50.8,
+    "chineseAndVariables": true,
+    "printDispatched": false
+  },
+  "deployment": {
+    "release": "D:\\NewLabelPrintDevelopment\\releases\\20261019_152833",
+    "url": "http://172.16.1.159:18003",
+    "account": "888",
+    "authentication": "Label system",
+    "printDispatch": false
+  },
+  "tests": {
+    "mypyChangedFiles": 7,
+    "frontend": 26,
+    "frontendBuild": "passed",
+    "ruff": "passed",
+    "authorityBoundary": 13,
+    "powershellSyntax": "passed",
+    "backend": 409,
+    "eslint": "passed",
+    "postRestartLoginFlagsAndEntryGates": "passed"
+  },
+  "http": {
+    "/": 200,
+    "/login": 200,
+    "/templates": 200,
+    "/api/me": 401,
+    "login": 200,
+    "me": {
+      "status": 200,
+      "source": "labelsystem",
+      "dispatch": false,
+      "permissions": {
+        "bills": true,
+        "history": true,
+        "library": true,
+        "printers": true,
+        "templates": true
+      },
+      "userManagement": false
+    },
+    "/api/label-formats": {
+      "status": 200,
+      "formatsCount": 8
+    },
+    "/api/u8/bill-types": {
+      "status": 200,
+      "configured": true,
+      "query_only": true,
+      "barcode_account_code": "888",
+      "bill_typesCount": 11,
+      "favoritesCount": 0
+    },
+    "/api/u8/pending-bills": {
+      "status": 200,
+      "billsCount": 100
+    },
+    "/api/u8/stock": {
+      "status": 200,
+      "stockCount": 300
+    },
+    "/api/u8/bills?bill_type=CGRK&start_date=2026-01-01&end_date=2026-10-19": {
+      "status": 200,
+      "billsCount": 200
+    },
+    "/api/admin/users": {
+      "status": 409,
+      "error": "accounts_managed_by_labelsystem"
+    },
+    "/api/agent/jobs": {
+      "status": 409,
+      "error": "print_dispatch_disabled"
+    },
+    "/api/u8/print": 409,
+    "/api/u8/reprint": 409,
+    "/api/u8/stock/print": 409,
+    "/api/u8/print/example/complete": 409,
+    "/api/u8/print/example/register": 409,
+    "/api/print-jobs": 409
+  },
+  "deployedSource": [
+    {
+      "path": "backend/app/auth/labelsystem.py",
+      "matches": true
+    },
+    {
+      "path": "backend/app/routes/auth.py",
+      "matches": true
+    },
+    {
+      "path": "backend/standalone_labelsystem.py",
+      "matches": true
+    },
+    {
+      "path": "frontend/dist/index.html",
+      "matches": true
+    },
+    {
+      "path": "gateway development write gates",
+      "matches": true
+    }
+  ]
+}

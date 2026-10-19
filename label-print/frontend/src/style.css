@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+:root { font-family: "Microsoft YaHei", system-ui, sans-serif; color: #17365d; background: #f3f6fa; }
+body { margin: 0; } button, input, select, textarea { font: inherit; }
+.workbench { margin: auto; max-width: 1600px; padding: 24px; }
+.workbench header { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; }
+.workbench h1 { font-size: 24px; font-weight: 700; margin-right: auto; }
+nav, .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: center; }
+.workbench button { padding: 8px 14px; border: 1px solid #ccdae9; border-radius: 8px; background: white; cursor: pointer; }
+.workbench button.active, .workbench button.primary { color: white; background: #285ba5; border-color: #285ba5; }
+.workbench button:disabled { opacity: .5; cursor: default; }
+.workbench input:not([type=checkbox]), .workbench select, .workbench textarea { border: 1px solid #ccdae9; border-radius: 6px; padding: 8px; color: #17365d; background: white; }
+.workbench textarea { min-width: 350px; min-height: 110px; }
+.panel { padding: 20px; border-radius: 14px; background: white; box-shadow: 0 5px 22px #17365d0a; margin-top: 16px; }
+.workbench table { width: 100%; border-collapse: collapse; text-align: left; }
+.workbench th { background: #d9eaf7; color: #17365d; font-weight: bold; }
+.workbench th, .workbench td { padding: 12px; border-bottom: 1px solid #e5ebf2; word-break: break-word; }
+.notice { color: #965421; background: #fff3df; padding: 12px; border-radius: 8px; margin: 12px 0; }
+.editor { display: flex; height: 650px; color: #e2e8f0; background: #0f172a; border-radius: 12px; overflow: hidden; }
+.editor button { background: #1e293b; color: #e2e8f0; border-color: #334155; padding: 4px 8px; }
+.editor input:not([type=checkbox]), .editor select { background: #0f172a; color: #e2e8f0; border-color: #334155; max-width: 170px; padding: 4px; }
+small { color: #71829a; } label { display: inline-flex; gap: 8px; align-items: center; }

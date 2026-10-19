@@ -1,0 +1,70 @@
+{
+  "verifiedAt": "2026-10-19T20:53:16+08:00",
+  "scope": {
+    "labelDatabase": "LabelSystem_Dev",
+    "erpAccountId": "888",
+    "erpDatabase": "UFDATA_888_2021",
+    "documentNo": "DBD26103204",
+    "production008Accessed": false
+  },
+  "deployment": {
+    "apiRelease": "20261019_205347_normal",
+    "standaloneRelease": "20261019_205347_normal",
+    "simulationOnly": false,
+    "sourceEnabled": true,
+    "physicalPrintInvoked": false
+  },
+  "backfill": [
+    {
+      "lineId": 135,
+      "operationId": 114,
+      "kind": "LABEL_SOURCE",
+      "batchNo": "20260402MY",
+      "fromWarehouseCode": null,
+      "fromLocationCode": null,
+      "toWarehouseCode": "JML_B1",
+      "toLocationCode": "359"
+    },
+    {
+      "lineId": 136,
+      "operationId": 115,
+      "kind": "FIRST",
+      "batchNo": "20260402MY",
+      "fromWarehouseCode": "JML_B1",
+      "fromLocationCode": "359",
+      "toWarehouseCode": "JML_B1",
+      "toLocationCode": "359"
+    }
+  ],
+  "unchanged": {
+    "labelCode": "888|11103-FOSB-ENF-4918-CKB2330|20260402MY|7.00|0000000013",
+    "localQuantity": 7.0,
+    "printQuantityDelta": 0.0,
+    "ruleSequenceCurrentValue": 13,
+    "operations": true,
+    "productLabels": true,
+    "codeRegistry": true,
+    "inventoryFlows": true,
+    "syncTasks": true,
+    "events": true,
+    "traceBackOrderRows": 1,
+    "traceBackGoodsRows": 1,
+    "traceBackOnlyCodeRows": 1
+  },
+  "verification": {
+    "businessApiTestsPassed": 47,
+    "businessApiTestsSkipped": 1,
+    "databaseAnomalies": 0,
+    "gatewaySnapshotStatus": "AVAILABLE",
+    "gatewaySnapshotBalance": 7.0,
+    "gatewaySnapshotWarehouseCode": "JML_B1",
+    "gatewaySnapshotLocationCode": "359",
+    "idempotentReapplyMatchedLines": 2,
+    "idempotentReapplyUpdatedLines": 0
+  },
+  "notes": [
+    "Only the four warehouse/location columns and SQL Server row_version changed on the repaired lines.",
+    "The public maintenance SQL defaults to preview and requires an explicit session flag to commit.",
+    "No migration was executed and no print job was sent."
+  ]
+}

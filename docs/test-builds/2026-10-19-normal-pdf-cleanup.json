@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-19",
+  "account": "888",
+  "database": "LabelSystem_Dev",
+  "mode": "normal-local-assistant",
+  "physicalPrinterDispatches": 0,
+  "simulationProcesses": 0,
+  "migrationExecuted": false,
+  "productionHashesUnchanged": true,
+  "productionProtectedFiles": 6,
+  "assistant": {
+    "version": "0.7.1",
+    "installed": true,
+    "reinstalled": true,
+    "identityPreserved": true,
+    "ledgerPreserved": true,
+    "loopbackOnly": true,
+    "printDispatchEnabled": true
+  },
+  "pdfFirstReceiptRecovery": true,
+  "pdfReprintSameCode": true,
+  "pdfOutputBytes": 23141,
+  "recoveryRewroteFile": false,
+  "cleanup": {
+    "deleted": {
+      "operations": 40,
+      "labels": 21,
+      "flows": 48,
+      "legacyFlows": 17,
+      "codes": 17
+    },
+    "remaining": {
+      "labels": 3,
+      "operations": 8,
+      "printJobs": 0,
+      "flows": 9,
+      "registry": 17,
+      "voidCodes": 17,
+      "parentQuantity": 2.0
+    },
+    "realBusinessHashesPreserved": true,
+    "sequencePreserved": true
+  },
+  "files": {
+    "artifactDirectoriesArchived": 14,
+    "sqliteBackedUp": true,
+    "mockProcessCount": 0,
+    "verificationPdfsArchived": 2,
+    "deviceKeysAndLedgersPreserved": true
+  },
+  "finalCounts": {
+    "labels": 3,
+    "operations": 8,
+    "flows": 9,
+    "printJobs": 0,
+    "reservedCodes": 17,
+    "voidCodes": 17,
+    "remainingTestLegacyRows": 0,
+    "originalPendingQuantity": 2.0,
+    "retiredFixtureTemplates": 2
+  },
+  "constraintsValid": true,
+  "backupJsonFilesValidated": 14,
+  "template": {
+    "reused": false,
+    "templateId": 2,
+    "versionId": 6
+  },
+  "sourceEnabled": true,
+  "simulationOnly": false,
+  "automaticRecovery": false,
+  "validation": {
+    "frontendPassed": 42,
+    "frontendSkipped": 1,
+    "businessApiPassed": 47,
+    "businessApiSkipped": 1,
+    "pythonPassed": 52,
+    "go": "passed",
+    "frontendBuild": "passed",
+    "frontendLint": "passed"
+  },
+  "note": "PDF核对使用已有合成标签，随后随授权清理删除；保留历史证据，不代表实体打印验收。",
+  "browserFinalReadOnly": {
+    "checks": [
+      {
+        "page": "/bills",
+        "fourTabs": true,
+        "oneSidebarEntry": true,
+        "noSimulationControls": true
+      },
+      {
+        "page": "/stock",
+        "fourTabs": true,
+        "oneSidebarEntry": true,
+        "noSimulationControls": true
+      },
+      {
+        "page": "/reprint",
+        "fourTabs": true,
+        "oneSidebarEntry": true,
+        "noSimulationControls": true
+      },
+      {
+        "page": "/print-records",
+        "fourTabs": true,
+        "oneSidebarEntry": true,
+        "noSimulationControls": true
+      }
+    ],
+    "emptyPrintRecords": true,
+    "preservedPendingLabel": true,
+    "pdfDestinationAvailable": true,
+    "rulesPageAvailable": true,
+    "pageErrors": [],
+    "createdJobs": 0,
+    "physicalPrinterSends": 0
+  }
+}

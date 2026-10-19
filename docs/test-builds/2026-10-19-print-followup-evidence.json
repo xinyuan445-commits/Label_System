@@ -1,0 +1,323 @@
+{
+  "at": "2026-10-19T16:53:00.427484+08:00",
+  "scope": "Current development HTTP, no-write probes, local recovery/concurrency tests and cleanup dependency audit",
+  "account": "888",
+  "database": "LabelSystem_Dev",
+  "passedWithinScope": true,
+  "httpAssertions": 38,
+  "developmentTablesUnchanged": 13,
+  "before": {
+    "account": "888",
+    "database": "LabelSystem_Dev",
+    "apiOnly": true,
+    "allowNewDispatch": false,
+    "u8Writes": false,
+    "automaticRecovery": false,
+    "fingerprints": {
+      "label_print_asset": {
+        "count": 2,
+        "sha256": "3B95F52409D8BD99532A31B6B44257E9E4E02412ACD475E09FEB4326B26B7942"
+      },
+      "business_operation_line": {
+        "count": 8,
+        "sha256": "317BFC77AF7E0513BDE072D5A452E2F7A9FC365E2A94C29456CBFECE94FA14B3"
+      },
+      "label_print_device": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "label_print_template": {
+        "count": 2,
+        "sha256": "42CF3C48F882310BAB45F5783F95748CE66662957E43C77EF1ED2360BA515D8A"
+      },
+      "business_operation_event": {
+        "count": 42,
+        "sha256": "911996530151519DBE49AFAEC1CB8C5D655DBEBA23F04409403FB3451ADED302"
+      },
+      "business_operation": {
+        "count": 8,
+        "sha256": "6BD01C7E52728D9690E55681ACCAA119AB2AFB57AF86AC3FC5D753C552353D0A"
+      },
+      "traceback_sync_task": {
+        "count": 6,
+        "sha256": "2495670E4518DB5061EF7F18D301176EE4CDA6AF3012543031893D7CAF7C132D"
+      },
+      "label_print_template_version": {
+        "count": 2,
+        "sha256": "9282931F776C338B34EF06168A4BDD806B61AC58422AB001DD41889E11D5E2E8"
+      },
+      "label_code_registry": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "label_print_rule_binding": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "label_code_sequence": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "inventory_flow": {
+        "count": 9,
+        "sha256": "5DF02A9B71037DF11D97016F391ADE8D66D7CAAB7E945DFD91125263B398A0AF"
+      },
+      "product_label": {
+        "count": 3,
+        "sha256": "D25D8B450AA2ACF2336A3A995857546F409C49EA7C668196B11ACFF3354C4992"
+      }
+    },
+    "productionHashes": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true
+      }
+    ],
+    "sourceHashes": [
+      {
+        "path": "backend\\app\\routes\\labelsystem_print.py",
+        "sha256": "60A426DD9D013332C634F3FF601EA518EA1075C1AF763B79C9FEFFEF0D6DCE4D"
+      },
+      {
+        "path": "backend\\app\\services\\labelsystem_transport.py",
+        "sha256": "8B438A95F9E715BB658FFC0D2601F1F92135226F6F9E1AF7710E4D9C11D9AC52"
+      },
+      {
+        "path": "backend\\app\\services\\labelsystem_templates.py",
+        "sha256": "F12322D2E0EF94CE0804282F1877D3A62FE2ACCC7A7FE18227654D219C937FEF"
+      },
+      {
+        "path": "backend\\app\\auth\\labelsystem.py",
+        "sha256": "66FB5C8E35727222213150B8151331CF6C9ADED7CAB72BC7A2C75B11520607A7"
+      },
+      {
+        "path": "frontend\\dist\\index.html",
+        "sha256": "9E55F319900995F2DF62A9FE3684DB15FAB7826B8ED91522264A959372501F72"
+      },
+      {
+        "path": "connector\\dist\\blg-connector-windows.exe",
+        "sha256": "CABAE626A4709BF2F0CF5D7C7F313DA137073EB1A44743863135358264701E9B"
+      }
+    ],
+    "tasks": [
+      {
+        "name": "NewLabelPrintDevelopment",
+        "state": "Running"
+      },
+      {
+        "name": "LabelSystemDevPrintRenderer",
+        "state": "Running"
+      }
+    ],
+    "rendererPort": 18781
+  },
+  "after": {
+    "account": "888",
+    "database": "LabelSystem_Dev",
+    "apiOnly": true,
+    "allowNewDispatch": false,
+    "u8Writes": false,
+    "automaticRecovery": false,
+    "fingerprints": {
+      "traceback_sync_task": {
+        "count": 6,
+        "sha256": "2495670E4518DB5061EF7F18D301176EE4CDA6AF3012543031893D7CAF7C132D"
+      },
+      "label_print_rule_binding": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "label_code_registry": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "label_print_template": {
+        "count": 2,
+        "sha256": "42CF3C48F882310BAB45F5783F95748CE66662957E43C77EF1ED2360BA515D8A"
+      },
+      "product_label": {
+        "count": 3,
+        "sha256": "D25D8B450AA2ACF2336A3A995857546F409C49EA7C668196B11ACFF3354C4992"
+      },
+      "business_operation_event": {
+        "count": 42,
+        "sha256": "911996530151519DBE49AFAEC1CB8C5D655DBEBA23F04409403FB3451ADED302"
+      },
+      "label_print_asset": {
+        "count": 2,
+        "sha256": "3B95F52409D8BD99532A31B6B44257E9E4E02412ACD475E09FEB4326B26B7942"
+      },
+      "label_print_template_version": {
+        "count": 2,
+        "sha256": "9282931F776C338B34EF06168A4BDD806B61AC58422AB001DD41889E11D5E2E8"
+      },
+      "inventory_flow": {
+        "count": 9,
+        "sha256": "5DF02A9B71037DF11D97016F391ADE8D66D7CAAB7E945DFD91125263B398A0AF"
+      },
+      "label_print_device": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "label_code_sequence": {
+        "count": 0,
+        "sha256": "5EE9173B1B564E61AFD2359A897C180B5EA83875A91A28537DF4202AAD4B3AA7"
+      },
+      "business_operation": {
+        "count": 8,
+        "sha256": "6BD01C7E52728D9690E55681ACCAA119AB2AFB57AF86AC3FC5D753C552353D0A"
+      },
+      "business_operation_line": {
+        "count": 8,
+        "sha256": "317BFC77AF7E0513BDE072D5A452E2F7A9FC365E2A94C29456CBFECE94FA14B3"
+      }
+    },
+    "productionHashes": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true
+      }
+    ],
+    "sourceHashes": [
+      {
+        "path": "backend\\app\\routes\\labelsystem_print.py",
+        "sha256": "60A426DD9D013332C634F3FF601EA518EA1075C1AF763B79C9FEFFEF0D6DCE4D"
+      },
+      {
+        "path": "backend\\app\\services\\labelsystem_transport.py",
+        "sha256": "8B438A95F9E715BB658FFC0D2601F1F92135226F6F9E1AF7710E4D9C11D9AC52"
+      },
+      {
+        "path": "backend\\app\\services\\labelsystem_templates.py",
+        "sha256": "F12322D2E0EF94CE0804282F1877D3A62FE2ACCC7A7FE18227654D219C937FEF"
+      },
+      {
+        "path": "backend\\app\\auth\\labelsystem.py",
+        "sha256": "66FB5C8E35727222213150B8151331CF6C9ADED7CAB72BC7A2C75B11520607A7"
+      },
+      {
+        "path": "frontend\\dist\\index.html",
+        "sha256": "9E55F319900995F2DF62A9FE3684DB15FAB7826B8ED91522264A959372501F72"
+      },
+      {
+        "path": "connector\\dist\\blg-connector-windows.exe",
+        "sha256": "CABAE626A4709BF2F0CF5D7C7F313DA137073EB1A44743863135358264701E9B"
+      }
+    ],
+    "tasks": [
+      {
+        "name": "NewLabelPrintDevelopment",
+        "state": "Running"
+      },
+      {
+        "name": "LabelSystemDevPrintRenderer",
+        "state": "Running"
+      }
+    ],
+    "rendererPort": 18781
+  },
+  "automatedChecks": [
+    {
+      "suite": "independent Flask backend",
+      "passed": 431,
+      "command": "python -m pytest tests -o addopts= -q"
+    },
+    {
+      "suite": "independent frontend",
+      "passed": 39,
+      "command": "npm test"
+    },
+    {
+      "suite": "frontend ESLint and TypeScript",
+      "passed": true,
+      "command": "npm run lint; npm run typecheck"
+    },
+    {
+      "suite": "changed backend test Ruff and formatting",
+      "passed": true
+    },
+    {
+      "suite": "product Go connector and mobilecore",
+      "passed": true,
+      "command": "go test ./... -count=1",
+      "realDriverReplaced": true
+    },
+    {
+      "suite": "Go V2",
+      "topLevelTests": 8,
+      "evidenceCorruptionSubcases": 2,
+      "passed": true
+    },
+    {
+      "suite": "shared Business API print-filtered tests",
+      "passed": 24,
+      "command": "dotnet test --filter FullyQualifiedName~Print --no-restore"
+    }
+  ],
+  "sourceSha256": {
+    "New_Label_Print_System/backend/tests/test_labelsystem_integration.py": "80f151be583f7ff8bc4eb8cecd388c5937bc84d61ac2f54525e10b1b2666db17",
+    "New_Label_Print_System/frontend/src/lib/labelSystem.test.ts": "3fff15e759940dfa3a475a476c9cfae4bb18d135ee295e2197abd28c403986af",
+    "New_Label_Print_System/connector/labeljobs_v2_test.go": "df5eb1381b3babe129c8adc9e5a94b65ad87112492d41dc448f670475bc14dc0",
+    "label-api/src/LabelSystem.Api/Printing/PrintRepository.Receipts.cs": "0cfc34b862c6090c1ab9a743e6651cb09cd8592b9dc59a1c7e5b2675e3cde724",
+    "label-api/src/LabelSystem.Api/Printing/PrintRepository.Prepare.cs": "acf1f82a4b184184f0e23910188f13366fdf3741202d14e17e7c254b52050b94",
+    "label-api/src/LabelSystem.Api/Printing/PrintRepository.Recovery.cs": "0397860513d0e183dd519a0de60da9b8383e40aea2caacb104d857d352c7b19a",
+    "u8-gateway/src/U8Gateway.U8/TraceBack/TraceBackInitialRegistration.cs": "25b20702925343e399c977b94ea26221aa09e4b3b009f5397b9c5a18e1dd7497",
+    "docs/database/052_label_print_phase1.sql": "8e6fee2fe6ca541a4968710c4e1d6dae9c357df9a3818ee7026c8254cc53911f"
+  },
+  "notExecuted": [
+    "New-chain live SQL first/reprint/TraceBack fault matrix",
+    "Employee browser full UI interaction",
+    "Employee helper installation",
+    "Backup restoration",
+    "AOCI formal maintenance"
+  ],
+  "servicesRestarted": false,
+  "realPrinterStarted": false,
+  "helperServiceStarted": false,
+  "production008BusinessAccessed": false,
+  "migrationsExecuted": false,
+  "newDatabasesCreated": false,
+  "codeOrServiceDeleted": false,
+  "publishedOrCommitted": false,
+  "httpEvidence": "2026-10-19-print-followup-http-evidence.json"
+}

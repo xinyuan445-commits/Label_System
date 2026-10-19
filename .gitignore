@@ -53,3 +53,10 @@ label_system/miniapp/*/i18nInfo.json
 .DS_Store
 Thumbs.db
 desktop.ini
+# Python rendering worker and local print runtime
+__pycache__/
+.pytest_cache/
+.venv/
+runtime-data/
+label-print/connector/config.yaml
+*.private.der

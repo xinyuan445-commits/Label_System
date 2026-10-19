@@ -1,0 +1,25 @@
+{
+  "verifiedAt": "2026-10-19T20:53:16+08:00",
+  "scope": {
+    "labelDatabase": "LabelSystem_Dev",
+    "erpAccountId": "888",
+    "erpDatabase": "UFDATA_888_2021",
+    "documentNo": "DBD26103204",
+    "production008Accessed": false
+  },
+  "result": {
+    "sourceLine135Target": "JML_B1/359",
+    "firstPrintLine136From": "JML_B1/359",
+    "firstPrintLine136To": "JML_B1/359",
+    "labelCodeUnchanged": true,
+    "quantityUnchanged": true,
+    "inventoryFlowsUnchanged": true,
+    "traceBackTablesUnchanged": true,
+    "duplicateAccountingDetected": false,
+    "idempotentReapplyUpdatedLines": 0
+  },
+  "deployment": {
+    "apiRelease": "20261019_205347_normal",
+    "physicalPrintInvoked": false
+  }
+}

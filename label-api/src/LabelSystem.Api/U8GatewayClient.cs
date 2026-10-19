@@ -7,7 +7,7 @@ namespace LabelSystem.Api;
 
 public sealed record ProxyResponse(int StatusCode, string Content, string ContentType);
 
-public sealed class U8GatewayClient(
+public sealed partial class U8GatewayClient(
     IHttpClientFactory clientFactory,
     IOptionsMonitor<U8GatewayOptions> options)
 {

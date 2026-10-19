@@ -1,0 +1,7 @@
+# Versions from the imported repository's uv.lock; isolated renderer environment.
+reportlab==4.5.0
+pillow==12.2.0
+python-barcode==0.16.1
+qrcode==8.2
+python-dateutil==2.9.0.post0
+pypdfium2==5.8.0

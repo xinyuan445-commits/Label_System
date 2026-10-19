@@ -1,0 +1,8 @@
+# Public configuration example only. No real keys or endpoints.
+server_url: https://label.example.invalid
+client_only: true
+listen: 127.0.0.1:9110
+v2_device_id: ""
+v2_private_key_path: ""
+v2_server_public_key: ""
+v2_ledger_dir: ""

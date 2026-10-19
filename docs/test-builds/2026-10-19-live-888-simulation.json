@@ -1,0 +1,257 @@
+{
+  "at": "2026-10-19T18:38:24.809817+08:00",
+  "passed": true,
+  "account": "888",
+  "labelDatabase": "LabelSystem_Dev",
+  "tracebackDatabase": "UFDATA_888_2021",
+  "migrationsExecuted": false,
+  "newSqlDatabaseCreated": false,
+  "production008BusinessAccessed": false,
+  "realPrintStarted": false,
+  "browserResponsesIntercepted": false,
+  "realBrowserWorkflow": {
+    "passed": true,
+    "at": "2026-10-19T18:35:17.119167+08:00",
+    "entry": "http://172.16.1.159:18003/printing",
+    "realSql": true,
+    "httpResponsesMocked": false,
+    "serverGoMockDriver": true,
+    "realPrinterCalls": 0,
+    "localPhysicalHelperRequests": 0,
+    "beforeMockSends": 0,
+    "afterMockSends": 5,
+    "checks": [
+      {
+        "check": "normal-actual-browser-real-sql",
+        "passed": true,
+        "jobId": "aa380231-4a95-4b87-a0f6-74fa9dc5780a",
+        "labelId": 14,
+        "audit": {
+          "code": "888|0199002|SIM88894b762becaf7|100.00|0000000001",
+          "codes": 1,
+          "firstEvents": 1,
+          "labelId": 14,
+          "legacyBalance": 100.0,
+          "legacyPositiveRows": 1,
+          "printQuantityDelta": 0.0,
+          "quantity": 100.0,
+          "reprintEvents": 0,
+          "sourceQuantity": 100.0,
+          "status": "ACTIVE"
+        },
+        "exactReceiptReplayUnchanged": true
+      },
+      {
+        "check": "reprint-two-copies-real-sql",
+        "passed": true,
+        "jobId": "e3bcd1e8-f592-4fe4-8d60-21e339d9a95a",
+        "labelId": 14,
+        "audit": {
+          "code": "888|0199002|SIM88894b762becaf7|100.00|0000000001",
+          "codes": 1,
+          "firstEvents": 1,
+          "labelId": 14,
+          "legacyBalance": 100.0,
+          "legacyPositiveRows": 1,
+          "printQuantityDelta": 0.0,
+          "quantity": 100.0,
+          "reprintEvents": 2,
+          "sourceQuantity": 100.0,
+          "status": "ACTIVE"
+        }
+      },
+      {
+        "check": "drop-helper-actual-browser-real-sql",
+        "passed": true,
+        "jobId": "c83bf454-f2e1-4ef7-8280-26cd9f1dd1cc",
+        "labelId": 15,
+        "audit": {
+          "code": "888|0199002|SIM8888e0d7982bbb5|12.50|0000000002",
+          "codes": 1,
+          "firstEvents": 1,
+          "labelId": 15,
+          "legacyBalance": 12.5,
+          "legacyPositiveRows": 1,
+          "printQuantityDelta": 0.0,
+          "quantity": 12.5,
+          "reprintEvents": 0,
+          "sourceQuantity": 12.5,
+          "status": "ACTIVE"
+        },
+        "exactReceiptReplayUnchanged": true
+      },
+      {
+        "check": "drop-receipt-actual-browser-real-sql",
+        "passed": true,
+        "jobId": "391569cf-6835-4dbe-a4a9-aa59dfe437fd",
+        "labelId": 16,
+        "audit": {
+          "code": "888|0199002|SIM888680aa09aac21|7.00|0000000003",
+          "codes": 1,
+          "firstEvents": 1,
+          "labelId": 16,
+          "legacyBalance": 7.0,
+          "legacyPositiveRows": 1,
+          "printQuantityDelta": 0.0,
+          "quantity": 7.0,
+          "reprintEvents": 0,
+          "sourceQuantity": 7.0,
+          "status": "ACTIVE"
+        },
+        "exactReceiptReplayUnchanged": true
+      },
+      {
+        "check": "fail-sync-actual-browser-real-sql",
+        "passed": true,
+        "jobId": "d666d491-5412-42c3-9231-b6291dc4b693",
+        "labelId": 17,
+        "audit": {
+          "code": "888|0199002|SIM888b37b991c8319|9.00|0000000004",
+          "codes": 1,
+          "firstEvents": 1,
+          "labelId": 17,
+          "legacyBalance": 9.0,
+          "legacyPositiveRows": 1,
+          "printQuantityDelta": 0.0,
+          "quantity": 9.0,
+          "reprintEvents": 0,
+          "sourceQuantity": 9.0,
+          "status": "ACTIVE"
+        },
+        "exactReceiptReplayUnchanged": true
+      },
+      {
+        "check": "ready-for-user-with-pending-test-label",
+        "passed": true,
+        "labelId": 18,
+        "simulationDeviceId": "bebec29f-75e3-40ac-8ddd-26c40dc56ca0"
+      }
+    ]
+  },
+  "physicalDeviceGuard": {
+    "passed": true,
+    "registeredPhysicalDeviceRejected": true,
+    "status": 409,
+    "errorCode": "PRINT_SIMULATION_DEVICE_REQUIRED",
+    "pendingLabelUnchanged": true,
+    "noCodeConsumed": true,
+    "mockSendsUnchanged": true
+  },
+  "originalRows": {
+    "label_print_template": {
+      "sha256": "D3797E76414014BEB0CD9C0E71EF34ED7B29DFE3D8971196067501AB76D88D90",
+      "maxId": 4,
+      "unchanged": true
+    },
+    "label_print_template_version": {
+      "sha256": "BAB521E826CB12A62DA9D9DB25CFEAECF9D590C96BEDAE1E6890EA93F2E65473",
+      "maxId": 5,
+      "unchanged": true
+    },
+    "inventory_flow": {
+      "sha256": "88879BD672D0E31A3B2C25C25AEA1926ED0C8734742AD1012FAD8EF42B444FD6",
+      "maxId": 47,
+      "unchanged": true
+    },
+    "product_label": {
+      "sha256": "E2EB6E6489F4C06706D7CCA794B44FBDB8BAEDC5160D35CDFA0FAA7BE0F2388C",
+      "maxId": 13,
+      "unchanged": true
+    },
+    "traceback_sync_task": {
+      "sha256": "0980BC9A6BCB09D25F04EC7DEEC8DA6CF22833FFD34572E5164F656B8A8C3190",
+      "maxId": 11,
+      "unchanged": true
+    },
+    "label_code_registry": {
+      "sha256": "EC0CB7BA44784902659FE19603A2530EA82337AF3D8180291EA2176E962C3528",
+      "maxId": 9,
+      "unchanged": true
+    },
+    "business_operation_line": {
+      "sha256": "B0FB61D1E564C164A06C31EABCBF19486F54D480829AA35F45C04A3D6539FEBD",
+      "maxId": 97,
+      "unchanged": true
+    },
+    "business_operation_event": {
+      "sha256": "DBC7B4A64C57971876CE8B1DD738F1C039A690A7DD45479EA0D8661F941644AA",
+      "maxId": 270,
+      "unchanged": true
+    },
+    "label_print_asset": {
+      "sha256": "3B95F52409D8BD99532A31B6B44257E9E4E02412ACD475E09FEB4326B26B7942",
+      "maxId": 2,
+      "unchanged": true
+    },
+    "business_operation": {
+      "sha256": "CEB31C86CD04B0E65A6BF7651A7D4F7A4F0344FB059AAD7AB874495CFC3946BB",
+      "maxId": 76,
+      "unchanged": true
+    }
+  },
+  "productionProtected": [
+    {
+      "path": "D:\\LabelSystem\\Config\\label-api.json",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\U8Gateway\\site\\Web.config",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+      "unchanged": true
+    }
+  ],
+  "countsBefore": {
+    "operations": 20,
+    "flows": 22,
+    "codes": 5,
+    "labels": 8,
+    "printJobs": 6
+  },
+  "countsAfter": {
+    "flows": 33,
+    "labels": 13,
+    "codes": 9,
+    "printJobs": 11,
+    "operations": 30
+  },
+  "publicDevelopment": {
+    "simulationOnly": true,
+    "allowNewDispatch": true,
+    "u8Writes": true,
+    "gatewayTestWrites": true,
+    "gatewayProductionWrites": false,
+    "automaticRecovery": false,
+    "simulationDeviceId": "bebec29f-75e3-40ac-8ddd-26c40dc56ca0"
+  },
+  "sourceChecks": {
+    "frontendTests": 41,
+    "frontendSkipped": 1,
+    "apiPrintTests": 30,
+    "backendTargetedTests": true,
+    "goAllPackages": true,
+    "build": true,
+    "eslint": true,
+    "pythonBasicLint": true
+  },
+  "limitations": [
+    "No hardware print or physical scan",
+    "Fail-sync-once is injected before Gateway registration; previous SQL-only-code trigger failure evidence is retained separately",
+    "Existing account permissions and quantity/Code/idempotency validation remain enforced",
+    "AOCI unavailable; index may lag source"
+  ]
+}

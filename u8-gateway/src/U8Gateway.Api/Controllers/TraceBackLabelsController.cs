@@ -36,6 +36,15 @@ namespace U8Gateway.Api.Controllers
             return Ok(ApiResponse<object>.Ok(Read(request.Codes), GatewayRequestContext.Id));
         }
 
+        [HttpGet]
+        [Route("{code}/initial-print-evidence")]
+        public IHttpActionResult InitialPrintEvidence(string code)
+        {
+            try { return Ok(ApiResponse<LegacyPrintEvidence>.Ok(Reader().GetInitialPrintEvidence(code), GatewayRequestContext.Id)); }
+            catch (TraceBackContractException) { return Error(HttpStatusCode.Conflict,"TRACEBACK_LEGACY_EVIDENCE_REQUIRED","历史打印依据需核对。"); }
+            catch (Exception) { return Error(HttpStatusCode.ServiceUnavailable,"TRACEBACK_LEGACY_QUERY_FAILED","历史打印依据查询失败。"); }
+        }
+
         [HttpPost]
         [Route("sync-events")]
         public IHttpActionResult Sync(TraceBackSyncEventRequest request)
@@ -77,6 +86,46 @@ namespace U8Gateway.Api.Controllers
                     RequestId = GatewayRequestContext.Id,
                     ServerTime = BusinessClock.Now
                 });
+            }
+        }
+
+        [HttpPost]
+        [Route("initial-registrations")]
+        public IHttpActionResult RegisterInitial(InitialLabelRegistrationRequest request) =>
+            Initial(request, false);
+
+        [HttpPost]
+        [Route("initial-registrations/validate")]
+        public IHttpActionResult ValidateInitial(InitialLabelRegistrationRequest request) =>
+            Initial(request, true);
+
+        private IHttpActionResult Initial(InitialLabelRegistrationRequest request, bool validateOnly)
+        {
+            try
+            {
+                try { AppRuntime.EnsureU8WriteAllowed(); }
+                catch (InvalidOperationException)
+                { throw new TraceBackSyncException("TRACEBACK_WRITE_DISABLED", "追溯写入未启用。"); }
+                GatewaySettings settings = AppRuntime.CurrentSettings;
+                var writer = new TraceBackSyncWriter(settings.SqlServer, settings.SqlDatabase,
+                    settings.SqlUser, settings.SqlPassword, settings.EnvironmentName,
+                    settings.EnableProductionWrites, settings.U8AccountId,
+                    settings.WriteAllowedDatabase, settings.WriteAllowedAccountId);
+                if (validateOnly)
+                {
+                    writer.ValidateInitial(request);
+                    return Ok(ApiResponse<object>.Ok(new { valid = true }, GatewayRequestContext.Id));
+                }
+                return Ok(ApiResponse<InitialLabelRegistrationResult>.Ok(
+                    writer.ApplyInitial(request), GatewayRequestContext.Id));
+            }
+            catch (TraceBackSyncException exception)
+            {
+                return Error(HttpStatusCode.Conflict, exception.Code, exception.Message);
+            }
+            catch (Exception)
+            {
+                return Error(HttpStatusCode.ServiceUnavailable, "TRACEBACK_INITIAL_UNCONFIRMED", "首次登记未确认，请恢复原任务。");
             }
         }
 

@@ -1,5 +1,17 @@
 # U8 Gateway API 设计
 
+2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
+
+以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
+
+2026-10-19真实SQL后续：现有开发库/888已通过新版独立系统首打、补打、丢回执、三表失败及提交后丢响应恢复；14张表原有行摘要一致，保留验收记录后全库标签8/流水22/操作20、任务6/Code5。临时模拟宿主与公共站点配置分离，公共门禁仍关闭，没有生产008或迁移操作，详见[真实SQL验收](../../New_Label_Print_System/docs/LabelSystem真实SQL验收.md)。
+
+2026-10-19接入复核：独立系统经固定Flask白名单使用现有业务API及三表幂等合同；未新增第二套写账接口。现有开发HTTP、模拟恢复与真实SQL未完成范围见[联调记录](../../New_Label_Print_System/docs/LabelSystem联调复核.md)；本轮接口合同及迁移未改。
+
+最新开发部署：新接口程序仅在专用回环9881站点运行，连接888/UFDATA_888_2021，两层Gateway写入开关关闭；实际只读快照验证31409条物料。生产9880/008不变，本轮不在真实888写追溯或U8单据，见 [开发部署](../../docs/test-builds/2026-10-19-print-development.md)。
+
+2026-10-19隔离验证：新initial-registrations、validate、initial-print-evidence和snapshots已由实际Web API管线连接888逻辑账套临时影子库执行。首打正数只登记一次；OnlyCode拒写时Order/Goods回滚；旧库提交后丢响应再交原事件不重复加数。接口未部署到既有服务，临时库已删除，真实历史数据及其他故障点未穷举。详见 [验收报告](../../docs/test-builds/2026-10-19-print-phase1-isolated.md)。
+
 ## 物料档案完整快照（0.10.0）
 
 `GET /api/v1/reference-data/materials/snapshot` 使用现有 API Key 验证，一条固定 SQL 完整读取 `Inventory` 中 `dEDate IS NULL` 且 `cInvCode` 非空的记录；返回 `accountId`、`databaseName`、`itemCount` 和 `items`。每条包含 `code`、`name`、`specification`、`unitCode`、`requiresBatch`，按料号排序。上限 200,000 条，查询多读一行用于检测超限；超限返回 `503 MATERIAL_SOURCE_TOO_LARGE`，绝不返回被截断的成功快照。SQL 超时 60 秒。本接口不修改 U8 数据或索引；缓存及停用由 Business API 负责。
@@ -198,6 +210,34 @@ U8 登录许可饱和返回 `U8_LICENSE_UNAVAILABLE`；反射或参数绑定发�
 
 Gateway 使用 `sp_getapplock` 和 `Serializable` 事务，先复核最新流水 ID、余额、Goods 唯一性及 JSON，再原子写入 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode`。相同确定性 Goods UUID 且内容完全一致的重试返回 `alreadyApplied=true`；内容不同返回 `TRACEBACK_EVENT_CONFLICT`。来源变化返回 `TRACEBACK_SNAPSHOT_CHANGED`，写后负余额返回 `TRACEBACK_NEGATIVE_BALANCE`。`validateOnly=true` 只用于部署诊断，完整执行后回滚并且 `snapshot` 为空。
 
-写接口在代码中硬限制数据库为 `UFDATA_888_2021`，其他数据库返回 `TRACEBACK_WRITE_ACCOUNT_BLOCKED`；它仍受全局内部 API Key 保护，不接受客户端 SQL。托盘不进入接口。部分移动和无标签红字的目标正流水要等正式打印生成 Code 后才能调用，本阶段尚未接入打印入口。
+来源写接口受内部认证、环境/生产开关和精确账套/数据库白名单共同控制，拒绝不匹配目标（TRACEBACK_WRITE_ACCOUNT_BLOCKED），不接受客户端SQL。生产版本首次打印未上线；新初始登记见下节，仅专用开发9881部署且禁写，写入验收使用此前合成影子库。普通sync-events不能代替不存在Code的初始登记；托盘不进入接口。
 
 888 已完成数据量、重复值、真实字段类型和实际执行计划核查；由于关联键均为 `varchar(3500)`，本次未创建原字段索引，后续哈希索引方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
+# 开发中：初始打印兼容登记合同（2026-10-19）
+
+源码及重点隔离SQL验收完成；专用开发回环9881已部署，实际888写入关闭。017已在现有LabelSystem_Dev安装；三表数量写入验收仅发生在此前合成影子库，已清理。生产008、U8 COM和真实打印未操作。
+
+| 路由 | 用途 |
+| --- | --- |
+| POST /api/v1/traceback/labels/initial-registrations/validate | 相同初始载荷，校验 Code 未出现和物料/单位/批次/仓库/货位；只读事务，不写三表 |
+| POST /api/v1/traceback/labels/initial-registrations | 原子首次登记；expectedAbsent=true、expectedLatestFlowId=0、expectedBalance=0，仅新 Code |
+| GET /api/v1/traceback/labels/{完整Code}/initial-print-evidence | 最早正数及原 Goods/Order 的受限历史核验，不用当前余额作原数量 |
+
+初始载荷类型 InitialLabelRegistrationRequest：contractVersion=1、eventKey、payloadHash、
+完整 Code/SN、正 Quantity、Order/Goods UUID、操作人、物料/名称/单位/批次、目标仓库/货位、
+日期/属性、来源单据及明细。摘要按约定字段次序、UTF-8 字节长度前缀计算 SHA-256，
+Gateway 自行重算，不信任仅由客户端声明的 hash。与 Business API 共享固定跨层夹具测试。
+
+Serializable 事务依次取得事件、完整 Code、Order 应用锁；按稳定 Goods UUID 查已应用事件：
+三表数量、关联、原始载荷、来源、单位/位置/数量及摘要完全一致则返回 alreadyApplied=true，
+保留最初 flowId。只有原 Code 及事件均不存在才插入打印平台 Order、Goods、一条 +Q OnlyCode。
+不能用三表 COUNT 相等代替内容核验；已有其他来源、残缺关联、重复 UUID 或内容冲突均拒绝。
+
+返回 eventKey、payloadHash、alreadyApplied、初始 flowId 和当前权威 snapshot。
+后续消费/移动不允许重做初始 +Q；snapshot 已变化时 Business API 保留核对，不覆写回初始库存。
+旧客户端不遵守这些锁仍可能竞态；不宣称跨客户端或两个数据库具备原子可见性。
+
+预检与登记均受内部认证、AppRuntime 写开关和配置账套约束；登记再次校验精确白名单及档案。
+TRACEBACK_INITIAL_INVALID、TRACEBACK_INITIAL_CONFLICT、TRACEBACK_EVENT_CONFLICT、
+TRACEBACK_INITIAL_MASTER_INVALID、TRACEBACK_INITIAL_CODE_INCOMPATIBLE 等阻止继续发送/登记。
+未知响应按原事件重试；补打不调用此接口。完整协议见 ../../docs/PRINT_PHASE1_SPEC.md。

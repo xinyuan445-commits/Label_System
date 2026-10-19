@@ -1,6 +1,16 @@
 # 标签管理系统数据库设计说明
 
-状态：三套环境已执行迁移 001–016；物料档案缓存按来源账套隔离，生产 008 已完成首次同步。
+2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
+
+以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
+
+2026-10-19浏览器与助手更新：独立18003及本机9110已完成Edge页面、登录退出、0.7.0安装重装和三组浏览器请求拦截模拟验收；888开发打印规则单独复制并设为当前，原008规则未改，76.2×50.8mm模板版本2复用。仅新增开发规则/绑定和设备登记，业务8/22/20、任务6/Code5及正式流水分配不变，真实发送/U8写入关闭。详见[浏览器验收](../../New_Label_Print_System/docs/LabelSystem浏览器与助手验收.md)。
+
+2026-10-19真实SQL后续：现有开发库/888已通过新版独立系统首打、补打、丢回执、三表失败及提交后丢响应恢复；14张表原有行摘要一致，保留验收记录后全库标签8/流水22/操作20、任务6/Code5。临时模拟宿主与公共站点配置分离，公共门禁仍关闭，没有生产008或迁移操作，详见[真实SQL验收](../../New_Label_Print_System/docs/LabelSystem真实SQL验收.md)。
+
+2026-10-19打印复核：017保留且本轮未执行迁移；13张相关开发表前后内容摘要不变。正式记录仍由Business API统一管理，独立Flask不另建库存账；当前验证限制见[联调复核](../../New_Label_Print_System/docs/LabelSystem联调复核.md)。
+
+状态：既有LabelSystem_Dev的017未再次迁移；新独立应用正式发布已映射017模板/版本/图片，原SQLite只存设计稿及素材，任务和库存仍沿用既有账本。本轮新增验收模板2/版本2/图片2关联，业务数量3/9/8、正式任务和Code0，008未操作。见[实施验收](../../New_Label_Print_System/docs/LabelSystem接入实施.md)。
 数据库：Microsoft SQL Server 2019 Standard（15.0.2170.1）
 实例：`172.16.1.159` 默认实例
 更新时间：2026-10-19
@@ -61,6 +71,7 @@
 | 50 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
 | 51 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
 | 52 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
+| 53 | `052_label_print_phase1.sql` | 迁移017，打印模板/设备及幂等恢复；2026-10-19仅现有开发库安装，生产和测试未升级 |
 
 脚本使用 UTF-8 保存。通过旧版 `sqlcmd` 执行时必须增加 `-f 65001`，并使用 `-b` 在 SQL 错误时返回失败；连接密码通过安全部署配置或 `SQLCMDPASSWORD` 提供，不写入命令脚本。
 
@@ -180,7 +191,9 @@ label_code_rule
       └─ pallet（可选）
 ```
 
-打印不单独建表。成功的首次打印和补打由 `inventory_flow` 记录，操作人、设备和原因由 `business_operation` 记录；包装规格、计划张数和成功张数由业务操作明细记录，打印机、模板、任务号、失败返回和重试过程由 `business_operation_event` 按顺序记录。每成功物理输出一张标签，必须写入一条该标签的 `PRINT` 或 `REPRINT` 流水；失败或结果未知的尝试不得写成成功流水。
+打印不单独建业务记录表。成功的首次打印和补打由 `inventory_flow` 记录，操作人、设备和原因由 `business_operation` 记录；包装规格、计划张数和成功张数由业务操作明细记录，打印机、模板、任务号、失败返回和重试过程由 `business_operation_event` 按顺序记录。按 2026-10-19 已确认口径，每个数据发送成功并登记的副本写一条 `PRINT` 或 `REPRINT`，同一副本重复回执不重复写入；不确认实际出纸，明确发送失败或发送结果未知不得记成成功。
+
+电脑端打印D1–D7已确认；重点隔离验收通过，现有开发库已安装017，生产和测试未升级。见 [方案](../PRINT_INTEGRATION_PLAN.md)、[实现合同](../PRINT_PHASE1_SPEC.md)、[验收清单](../PRINT_PHASE1_ACCEPTANCE.md) 和 [开发部署](../test-builds/2026-10-19-print-development.md)。复用现有规则四表和库存账本，打印规则单选；首打/补打/恢复本地零数量，首次旧表正数事件唯一；未完成保持占用，旧入口不能绕过。
 
 ## 5. 表与字段
 
@@ -290,7 +303,9 @@ label_code_rule
 
 `inventory_qty_snapshot` 和 `requested_qty` 含义不同。例如产品标签扫码时余额为 100、本次申请使用 60，两个字段分别保存 100 和 60。前者只还原用户提交现场，后者保存业务请求；最终实际执行前后数量只写入 `inventory_flow.qty_before` 和 `inventory_flow.qty_after`。
 
-打印数量按两种口径查询：`printed_label_count` 是打印工具确认成功的张数，成功首次打印的产品总数量由本明细关联的 `inventory_flow` 中 `PRINT` 流水合计。补打、拆分和合并产生的新纸张不能重复增加 ERP 入库打印数量。
+打印来源明细必须直接保存目标仓库和货位；拆包明细保存拆包当时的位置；FIRST和REPRINT明细把准备发送时的当前位置同时保存到来源、目标字段，因为打印本身不移动库存。`print_snapshot_json`属于纸面冻结证据，补打仍沿用首打内容；若标签首打后发生移动，补打明细位置可以与冻结快照位置不同。上述字段属于新系统完整审计数据，不能依赖临时`TraceBackGoods`兼容查询事后补齐。
+
+打印数量按两种口径查询：`printed_label_count` 为发送成功并登记的副本数，不是实际出纸检测值；首次产品数量来自单据及目标的数量快照，按成功首次登记去重累计。已有待打印目标首打只写零数量 `PRINT`，不能靠合计 `PRINT.change_qty` 或重复写 +Q 统计数量。应打 100、已首次登记 60，则剩余 40；原标签补打不改变累计量和剩余量，未决任务继续占用原目标。拆分和合并产生的标签不得重复计入 ERP 入库打印量。
 
 已有 U8 单据来源位置与标签最新位置不一致时，该明细使用 `line_status = FAILED`、`error_code = LABEL_LOCATION_MISMATCH`，`error_message` 保存标签当前位置和 U8 来源位置；不得生成已生效库存流水，也不得静默修改 U8 单据。
 
@@ -655,7 +670,7 @@ label_code_rule
 | 流水并发分配 | `label_code_sequence(rule_version_id, partition_key)` 唯一约束及行版本 |
 | Code 全局登记 | `label_code_registry.code_hash` 唯一约束；按产品、托盘和规则版本建立过滤索引 |
 
-标签成功打印总次数为该标签 `PRINT` 与 `REPRINT` 流水条数之和，补打次数只统计 `REPRINT`。同一请求把同一个标签输出多张时，必须按成功张数写入多条 `REPRINT` 流水，且数量应与对应业务明细的 `printed_label_count` 一致。打印任务数使用不同的 `operation_id` 统计，不能代替标签实际打印张数。
+标签成功打印总次数为该标签 `PRINT` 与 `REPRINT` 流水条数之和，补打次数只统计 `REPRINT`。同一请求发送同一标签多个副本时，按成功发送并登记的副本数写入多条 `REPRINT`，与对应业务明细的 `printed_label_count` 汇总一致。同一副本恢复不新增流水；打印任务数不能代替成功发送副本数，也不能据此宣称实际出纸张数。
 
 位置类业务在创建 U8 单据前，从最新流水读取来源仓库和货位并保存到业务明细；用户选择的目的位置保存到目标字段。U8 写入及所需审核成功后，才允许在同一业务数据库事务中插入新流水并更新 `last_flow_id`。已有 U8 单据必须校验其来源位置与最新流水一致，不一致时拒绝提交，不得静默覆盖 U8 单据。
 
@@ -694,8 +709,8 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 
 ## 8. 尚待确认
 
-- 正式产品标签和托盘标签分别启用哪些规则，以及流水分区策略。
-- 正式发码、打印和 `label_code_registry` 登记的事务流程。
+- 正式产品规则及旧系统序号空间仍待实际核验；本地打印已有单选绑定和 namespace/环境/账套分区、跨版本单调序号，不按日期/年度重置。托盘规则不属首期。
+- 正式发码和registry的本地事务已实现，017已在临时库验证并安装到开发库；隔离首打/补打、10个并发回执和三表恢复通过。真实888禁写、开发发送关闭，全部SQL约束/故障点和现场仍未验证。
 - 各单据哪些库存自由项需要提升为普通检索列。
 - 单位换算功能及物料单位换算来源；当前所有数量必须使用同一标签单位。
 - 条码打印阶段“打印尾数”的页面交互、权限和默认开关。
@@ -725,3 +740,22 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 - 详细读取、写入、索引和退出方案见 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
 - 888 的只读数据量、字段类型、重复值、现有索引和代表性实际执行计划使用 `TRACEBACK_INDEX_ASSESSMENT_888.sql` 核查。脚本只输出候选索引，不执行建索引；生产账套必须重新独立评估。
 - 2026-10-16 已将 Business API 运行连接切换到 `LabelSystem_Prod`，迁移 001–015 齐全。首次正式扫码只在 `product_label` 建立 TraceBack 镜像，未写入 U8 单据或新的 TraceBack 流水。
+## 11. 打印第一阶段：017 已在开发库安装，生产未升级
+
+2026-10-19新增052_label_print_phase1.sql；先在临时库验证，再按授权备份LabelSystem_Dev并安装。**仅开发库增加017，生产和测试本轮未升级**。脚本SHA-256为8E6FEE2FE6CA541A4968710C4E1D6DAE9C357DF9A3818EE7026C8254CC53911F，已写入开发迁移记录。迁移前COPY_ONLY/CHECKSUM备份及VERIFYONLY通过，原业务记录数量不变，见 [开发部署](../test-builds/2026-10-19-print-development.md)。
+外层及4个动态批次通过ScriptDom解析；随后显式工具在空临时库按001–017安装，54项重点联调断言通过，临时库已删除。脚本头“仅准备”为编制时备注，已执行SQL字节保持不改，实际执行历史以 [验收报告](../test-builds/2026-10-19-print-phase1-isolated.md) 为准；不代表全部约束拒绝路径或历史数据升级通过。
+
+- label_print_template / version / asset / version_asset：毫米尺寸、不可变版本及图片；更新/删除触发器阻止覆盖版本与图片。
+- label_print_device：P-256 公钥、使用人、配对者、停启及 rowversion；无私钥或独立用户体系。
+- label_print_rule_binding：singleton_id=1，引用现有规则版本；不复制 label_code_rule/_version/_sequence/_registry。
+- business_operation：print_job_id、print_scope、阶段、设备/打印机、固定模板和文件清单。
+- business_operation_line：outputId、FIRST/REPRINT、原业务明细、阶段、冻结快照和发送时仓库货位；每份成功数0/1。来源标签明细同步保存目标仓库货位。
+- inventory_flow：print_output_line_id 组合归属外键及唯一索引；新打印 change_qty=0，同一标签新首打唯一。
+- business_operation_event：语义唯一 event_key、attemptId、输出明细归属；追加原授权、回执和核验依据。
+- traceback_sync_task：PRINT_TARGET 的完整身份 CHECK、每标签唯一任务；不新增库存余额副本。
+- system_function：7 项打印功能默认关闭；不自动授权、不选规则、不打开任何写门禁。
+
+脚本不修改 U8/旧三表、不回填或删除历史业务行、不自动执行。LOCAL 待登记镜像仍为原 NULL/NOT_APPLICABLE 组合；
+初始 +Q 只在旧库出现一次，确认后才填真实游标；本地 PRINT/REPRINT 和恢复不再加减已由业务单据落账的数量。
+2026-10-19已修复开发888打印相关明细的位置写入，并只对DBD26103204明细135、136做有原流水证明的空字段回填。回填没有改结构、Code、数量、库存流水、同步任务或旧三表；规则流水仍为13。旧三表当前继续承担兼容读写，最终停用后，本地打印明细与库存流水仍保留完整批次及位置证据。
+详见 [实现合同](../PRINT_PHASE1_SPEC.md)、[开发记录](../PRINT_PHASE1_IMPLEMENTATION.md)。

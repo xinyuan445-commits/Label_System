@@ -1,0 +1,133 @@
+{
+  "actual888FirstPrintMatrixExecuted": false,
+  "installerExecuted": false,
+  "tests": {
+    "build": "passed",
+    "ruff": "passed",
+    "go": "two packages passed",
+    "mypy": "five changed modules passed",
+    "eslint": "passed",
+    "backend": 424,
+    "frontend": 32,
+    "installerSyntax": "passed"
+  },
+  "deployment": {
+    "release": "D:\\NewLabelPrintDevelopment\\releases\\20261019_152833",
+    "backup": "D:\\NewLabelPrintDevelopment\\backups\\integration_20261019_162603",
+    "url": "http://172.16.1.159:18003",
+    "account": "888",
+    "printingEnabled": false
+  },
+  "protection": {
+    "counts": {
+      "flows": 9,
+      "operations": 8,
+      "labels": 3,
+      "printJobs": 0,
+      "registeredCodes": 0
+    },
+    "productionHashes": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true
+      }
+    ],
+    "apiOnly": true,
+    "newDispatch": false,
+    "u8Writes": false
+  },
+  "http": {
+    "/printing": {
+      "status": 200
+    },
+    "/print-rules": {
+      "status": 200
+    },
+    "/print-templates": {
+      "status": 200
+    },
+    "/api/labelsystem/print/capabilities": {
+      "status": 200
+    },
+    "/api/labelsystem/print/pending-labels": {
+      "status": 200,
+      "count": 1
+    },
+    "/api/labelsystem/print/jobs": {
+      "status": 200,
+      "count": 0
+    },
+    "/api/labelsystem/print/devices": {
+      "status": 200,
+      "count": 0
+    },
+    "/api/labelsystem/print/source-summary": {
+      "status": 200,
+      "count": 1
+    },
+    "/api/labelsystem/rules": {
+      "status": 200,
+      "count": 1
+    },
+    "/api/labelsystem/rules/catalog": {
+      "status": 200
+    },
+    "/api/labelsystem/print/code-rule": {
+      "status": 200
+    },
+    "rulePreview": {
+      "status": 200
+    },
+    "templatePublication": {
+      "draftId": 3,
+      "templateId": 2,
+      "versionId": 2,
+      "repeatReused": true,
+      "sourceAssetId": 1,
+      "formalAssetId": 2,
+      "aliasMapping": true,
+      "previewStatus": 200,
+      "pdfBytes": 21627,
+      "chineseAndQuantityAndImage": true
+    },
+    "/api/labelsystem/print/jobs/first": {
+      "status": 409,
+      "error": "PRINT_WRITES_BLOCKED"
+    },
+    "/api/labelsystem/print/jobs/reprint": {
+      "status": 409,
+      "error": "PRINT_DISPATCH_DISABLED"
+    },
+    "assistant": {
+      "downloadStatus": 200,
+      "zipBytes": 3627239,
+      "binarySha256": "cabae626a4709bf2f0cf5d7c7f313da137073eb1a44743863135358264701e9b",
+      "serverKeyPinned": true,
+      "printingDisabled": true,
+      "installerExecuted": false
+    },
+    "realPrintStarted": false,
+    "productionAccessed": false
+  },
+  "physicalPrinting": false
+}

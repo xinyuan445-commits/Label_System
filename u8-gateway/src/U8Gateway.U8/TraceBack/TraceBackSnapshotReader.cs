@@ -249,7 +249,7 @@ namespace U8Gateway.U8.TraceBack
         }
     }
 
-    public sealed class TraceBackSnapshotReader
+    public sealed partial class TraceBackSnapshotReader
     {
         private readonly string _connectionString;
 

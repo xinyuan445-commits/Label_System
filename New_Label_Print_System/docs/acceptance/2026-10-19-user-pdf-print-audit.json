@@ -1,0 +1,54 @@
+{
+  "auditedAt": "2026-10-19T21:20:00+08:00",
+  "scope": {
+    "environment": "development",
+    "erpAccountId": "888",
+    "erpDatabase": "UFDATA_888_2021",
+    "labelDatabase": "LabelSystem_Dev",
+    "printer": "Microsoft Print to PDF"
+  },
+  "jobs": [
+    {
+      "jobId": "f4131c9d-691b-4e0b-94a2-bea611114b17",
+      "operationId": 117,
+      "phase": "COMPLETED",
+      "status": "SUCCESS",
+      "outputs": 1
+    },
+    {
+      "jobId": "cde0d02c-6d90-421f-a89a-094282a9833c",
+      "operationId": 121,
+      "phase": "COMPLETED",
+      "status": "SUCCESS",
+      "outputs": 3
+    }
+  ],
+  "labels": [
+    { "labelId": 32, "serialNo": "0000000014", "quantity": 2, "printFlows": 1, "printQuantityDelta": 0, "codeRegistryRows": 1, "initialSyncTasks": 1 },
+    { "labelId": 33, "serialNo": "0000000015", "quantity": 3, "printFlows": 1, "printQuantityDelta": 0, "codeRegistryRows": 1, "initialSyncTasks": 1 },
+    { "labelId": 34, "serialNo": "0000000016", "quantity": 3, "printFlows": 1, "printQuantityDelta": 0, "codeRegistryRows": 1, "initialSyncTasks": 1 },
+    { "labelId": 35, "serialNo": "0000000017", "quantity": 1, "printFlows": 1, "printQuantityDelta": 0, "codeRegistryRows": 1, "initialSyncTasks": 1 }
+  ],
+  "traceBackCompatibility": {
+    "syncTasksCompleted": 4,
+    "orderRowsPerLabel": 1,
+    "goodsRowsPerLabel": 1,
+    "onlyCodeInitialRowsPerLabel": 1,
+    "registeredQuantitiesMatch": true
+  },
+  "checks": {
+    "uniqueCodes": true,
+    "duplicateFirstPrints": 0,
+    "duplicateOutputRegistrations": 0,
+    "nonZeroPrintOrReprintFlows": 0,
+    "unfinishedSyncTasks": 0,
+    "unresolvedPrintJobs": 0,
+    "anomalies": []
+  },
+  "safety": {
+    "readOnlyAudit": true,
+    "newPrintTriggeredByAudit": false,
+    "production008Accessed": false,
+    "databaseMigrationExecuted": false
+  }
+}

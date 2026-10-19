@@ -1,0 +1,205 @@
+{
+  "baseline": "main 1eb233d + uncommitted workspace",
+  "migration": {
+    "database": "LabelSystem_Dev",
+    "migration": "017",
+    "sha256": "8E6FEE2FE6CA541A4968710C4E1D6DAE9C357DF9A3818EE7026C8254CC53911F",
+    "backupPath": "C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\Backup\\LabelSystem_Dev_pre_print017_20261019_144919.bak",
+    "backupVerified": true,
+    "before": [
+      3,
+      9,
+      8
+    ],
+    "after": [
+      3,
+      9,
+      8
+    ],
+    "at": "2026-10-19T14:49:20.8577503+08:00"
+  },
+  "deployment": {
+    "release": "D:\\LabelSystem\\DevPrinting\\releases\\20261019_145739",
+    "apiUrl": "http://172.16.1.159:9891",
+    "workspaceUrl": "http://172.16.1.159:9891/printing/",
+    "database": "LabelSystem_Dev",
+    "account": "888",
+    "u8Database": "UFDATA_888_2021",
+    "gatewayUrl": "http://127.0.0.1:9881",
+    "printFunctions": 7,
+    "allowNewDispatch": false,
+    "apiWrites": false,
+    "gatewayWrites": false,
+    "rendererTask": "LabelSystemDevPrintRenderer"
+  },
+  "smoke": {
+    "at": "2026-10-19T15:04:50.6212853+08:00",
+    "baseUrl": "http://172.16.1.159:9891",
+    "health": {
+      "status": "ready",
+      "environment": "development",
+      "version": "0.11.0-print-dev",
+      "databaseReady": true,
+      "u8WritesEnabled": false
+    },
+    "sessionCookieNames": [
+      "LabelSystem.DevPrint.Session"
+    ],
+    "rootStatus": 200,
+    "workspaceStatus": 200,
+    "printEnabled": true,
+    "allowNewDispatch": false,
+    "pendingCount": 1,
+    "jobCount": 0,
+    "templateId": 1,
+    "templateVersion": 1,
+    "previewBytes": 21364,
+    "previewSha256": "D5481E7E4D813C1EEE66EBD9AD83FF5D268BEC320BA065407B54AB870E6A09F2",
+    "firstPrintBlocked": true,
+    "reprintBlocked": true,
+    "realPrinterStarted": false
+  },
+  "runtime": {
+    "at": "2026-10-19T14:59:57.4892472+08:00",
+    "gatewayConfigured": true,
+    "gatewayAccount": "888",
+    "gatewayDatabase": "UFDATA_888_2021",
+    "gatewayMaterialCount": 31409,
+    "rendererVersion": "label-renderer/1",
+    "cjk": true,
+    "materialSyncStatus": "SUCCESS",
+    "materialCacheCount": 31409,
+    "labels": 3,
+    "flows": 9,
+    "operations": 8,
+    "printJobs": 0,
+    "codeRegistry": 0,
+    "rendererTaskState": "Running"
+  },
+  "asset": {
+    "at": "2026-10-19T15:04:49.7575798+08:00",
+    "assetId": 1,
+    "sha256": "C6CBFCC7E23B62B766FD227508FDACE772EA710864C7BD70EB8AEA9E6FD27273",
+    "metadataVerified": true,
+    "frontend": "index-DsF0ijI9.js",
+    "secureContextOnlyApiRemoved": true,
+    "realPrinterStarted": false
+  },
+  "production": {
+    "at": "2026-10-19T15:01:20.7001054+08:00",
+    "productionFiles": [
+      {
+        "path": "D:\\LabelSystem\\Config\\label-api.json",
+        "unchanged": true,
+        "sha256": "A9B37B55210B18C7724C64A7FBFF29974CA9643F9A230BA83FD0C199BF082D0B"
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\LabelSystem.Api.dll",
+        "unchanged": true,
+        "sha256": "3EF74C0DD0F0AA9CB77E5BAB44F8771990E3438AA8B574C662EF2598F36FC56A"
+      },
+      {
+        "path": "D:\\LabelSystem\\Api\\releases\\20261019_095703\\web.config",
+        "unchanged": true,
+        "sha256": "2A389E9819D2C92F28FC5A73EF196267A69C3DB4B20BC28ABCD8CD5E7A2BF4A9"
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\bin\\U8Gateway.Api.dll",
+        "unchanged": true,
+        "sha256": "B3055085D88DAEA605ACD9FE9310C3D8ADBB3C366E979D58506BE85073B817F8"
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\Web.config",
+        "unchanged": true,
+        "sha256": "0FAF9DFC6A7CF1B5D5AD72B92A4023C8B777BF30C7A0D7BFE3DCAB7027CBFA32"
+      },
+      {
+        "path": "D:\\U8Gateway\\site\\App_Data\\settings.json",
+        "unchanged": true,
+        "sha256": "266B14ED9AB7A2126A4FB2F3251E690C68A618F9911DD3E96F1B0AE1A277B3FA"
+      }
+    ],
+    "productionSitesUnchanged": true,
+    "developmentSites": [
+      {
+        "name": "U8GatewayDevPrint",
+        "state": "Started",
+        "path": "D:\\LabelSystem\\DevPrinting\\releases\\20261019_145739\\gateway",
+        "pool": "U8GatewayDevPrintPool",
+        "bindings": [
+          "127.0.0.1:9881:"
+        ]
+      },
+      {
+        "name": "LabelSystemDevPrint",
+        "state": "Started",
+        "path": "D:\\LabelSystem\\DevPrinting\\releases\\20261019_145739\\api",
+        "pool": "LabelSystemDevPrintPool",
+        "bindings": [
+          "*:9891:"
+        ]
+      }
+    ]
+  },
+  "regression": {
+    "printFrontendTests": 7,
+    "apiTests": 38,
+    "printFrontendBuild": "passed",
+    "h5Build": "passed"
+  },
+  "cleanup": {
+    "temporaryDatabasesCreated": 0,
+    "unusedReleaseDeletion": "blocked_by_automatic_policy_review",
+    "unusedReleases": "retained"
+  },
+  "sourceHashes": [
+    {
+      "path": "docs/database/052_label_print_phase1.sql",
+      "sha256": "8E6FEE2FE6CA541A4968710C4E1D6DAE9C357DF9A3818EE7026C8254CC53911F"
+    },
+    {
+      "path": "label-api/src/LabelSystem.Api/Program.cs",
+      "sha256": "9882CD4624DB71E2BE6D56F1CB8149C7DC2E3ADD7199FB41D99770CBDFD3AD32"
+    },
+    {
+      "path": "label-api/src/LabelSystem.Api/Infrastructure.cs",
+      "sha256": "ABBCF371946636F7E12150651FCBC64743421F5EB25EC93B6F9C4AEC1418CEE2"
+    },
+    {
+      "path": "label-api/src/LabelSystem.Api/Printing/PrintEndpoints.cs",
+      "sha256": "2774336E5D6171B553ABA8C02952D548C63858971FEB495CF69108B605C1A23E"
+    },
+    {
+      "path": "label-print/frontend/src/App.tsx",
+      "sha256": "1F15914163378CA94E9C78E1C3A78CF79DCAFDF3194303BBCDAA5686BB8E2459"
+    },
+    {
+      "path": "label-print/frontend/src/lib/api.ts",
+      "sha256": "954826E6F175CE5C76E7CB0816927967ED345E731F0CE7D1D000E3A31CAC0DEC"
+    },
+    {
+      "path": "label-print/frontend/src/TemplateEditor.tsx",
+      "sha256": "CF86F26AD486652BD7F73F1D14B930E7B29B79A0AFA80563612F8B092D2A7EC2"
+    },
+    {
+      "path": "label-print/deployment/Deploy-Development.ps1",
+      "sha256": "495FF2787F3B910C085F41C490561430F7A4363635A57B546C8EBAC484D80B54"
+    }
+  ],
+  "finalVerification": {
+    "at": "2026-10-19T15:09:23.1660465+08:00",
+    "productionFilesUnchanged": 6,
+    "productionSitesUnchanged": true,
+    "developmentMigration": "017",
+    "checksum": "8E6FEE2FE6CA541A4968710C4E1D6DAE9C357DF9A3818EE7026C8254CC53911F",
+    "labels": 3,
+    "flows": 9,
+    "operations": 8,
+    "printJobs": 0,
+    "codeRegistry": 0,
+    "apiWrites": false,
+    "allowNewDispatch": false,
+    "recoveryEnabled": false
+  },
+  "assetBinaryMatches": true
+}

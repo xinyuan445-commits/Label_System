@@ -1,0 +1,289 @@
+{
+  "date": "2026-10-19",
+  "environment": "development",
+  "account": "888",
+  "labelDatabase": "LabelSystem_Dev",
+  "erpDatabase": "UFDATA_888_2021",
+  "browser": "Microsoft Edge, actual UI/HTTP without response interception or screenshots",
+  "driver": "server Go V2 mock only",
+  "url": "http://172.16.1.159:18003/bills",
+  "applicationRelease": "20261019_193502_simulation",
+  "apiRelease": "20261019_193502_simulation",
+  "migrationsExecuted": false,
+  "production008Operated": false,
+  "realPrinting": false,
+  "automaticRecovery": false,
+  "before": {
+    "flows": 33,
+    "printJobs": 11,
+    "codes": 9,
+    "labels": 13,
+    "operations": 30
+  },
+  "after": {
+    "operations": 45,
+    "labels": 24,
+    "codes": 15,
+    "flows": 55,
+    "printJobs": 18
+  },
+  "currentScopeCompletedPrintJobs": 12,
+  "currentScopeUnresolvedPrintJobs": 0,
+  "newFirstLabels": 6,
+  "originalPageReprintCopies": 2,
+  "historicalReprintCopies": 1,
+  "allNewPrintQuantityDelta": 0.0,
+  "billPacking": {
+    "parentLabelId": 7,
+    "childLabelIds": [
+      20,
+      21
+    ],
+    "parentQuantity": 0.0,
+    "netQuantityDelta": 0.0,
+    "auditEvent": "PRINT_SOURCE_PACK_RECONCILED",
+    "reason": "Historical unit name/code mismatch found and corrected explicitly during development acceptance."
+  },
+  "syntheticPartialPacking": {
+    "syntheticDevelopmentFixture": true,
+    "parentLabelId": 26,
+    "operationId": 101,
+    "targetCount": 3,
+    "parentQty": 0,
+    "childrenQty": 10,
+    "remainderQty": 3,
+    "packingDelta": 0,
+    "codeCountUnchanged": true,
+    "sourceReplaySameOperation": true,
+    "unitNameToCodeMapped": true,
+    "realDispatch": false
+  },
+  "sourceBoundary": {
+    "sourceReplaySameTargets": true,
+    "newRequestAfterStockQuotaExhausted": 409,
+    "oldWritersStillClosed": true,
+    "unsignedSourceRouteNotProxied": true
+  },
+  "actualBrowserChecks": [
+    {
+      "check": "bill-original-page-first",
+      "passed": true,
+      "operationId": 88,
+      "labelIds": [
+        20,
+        21
+      ]
+    },
+    {
+      "check": "bill-source-two-labels-zero-additional-accounting",
+      "passed": true,
+      "audits": [
+        {
+          "code": "888|21-HPL-B1-49007-ROCR9-7076|20260926JSJ|1.00|0000000005",
+          "codes": 1,
+          "firstEvents": 1,
+          "labelId": 20,
+          "legacyBalance": 1.0,
+          "legacyPositiveRows": 1,
+          "printQuantityDelta": 0.0,
+          "quantity": 1.0,
+          "reprintEvents": 0,
+          "sourceQuantity": 1.0,
+          "status": "ACTIVE"
+        },
+        {
+          "code": "888|21-HPL-B1-49007-ROCR9-7076|20260926JSJ|1.00|0000000006",
+          "codes": 1,
+          "firstEvents": 1,
+          "labelId": 21,
+          "legacyBalance": 1.0,
+          "legacyPositiveRows": 1,
+          "printQuantityDelta": 0.0,
+          "quantity": 1.0,
+          "reprintEvents": 0,
+          "sourceQuantity": 1.0,
+          "status": "ACTIVE"
+        }
+      ]
+    },
+    {
+      "check": "original-reprint-two-copies",
+      "passed": true,
+      "jobId": "0ff4fe64-7e40-4798-9270-34a2c8065194",
+      "audit": {
+        "code": "888|21-HPL-B1-49007-ROCR9-7076|20260926JSJ|1.00|0000000005",
+        "codes": 1,
+        "firstEvents": 1,
+        "labelId": 20,
+        "legacyBalance": 1.0,
+        "legacyPositiveRows": 1,
+        "printQuantityDelta": 0.0,
+        "quantity": 1.0,
+        "reprintEvents": 2,
+        "sourceQuantity": 1.0,
+        "status": "ACTIVE"
+      }
+    },
+    {
+      "check": "stock-normal-original-page",
+      "passed": true,
+      "jobId": "5212cffe-7373-4d3b-b965-3d3eb01a9fc6",
+      "audit": {
+        "code": "888|38-08-07|38-08-07|0.25|0000000007",
+        "codes": 1,
+        "firstEvents": 1,
+        "labelId": 22,
+        "legacyBalance": 0.25,
+        "legacyPositiveRows": 1,
+        "printQuantityDelta": 0.0,
+        "quantity": 0.25,
+        "reprintEvents": 0,
+        "sourceQuantity": 0.25,
+        "status": "ACTIVE"
+      },
+      "exactReceiptReplayUnchanged": true
+    },
+    {
+      "check": "stock-drop-helper-original-page",
+      "passed": true,
+      "jobId": "d9925221-03f1-43ce-b396-ac6b413d12b5",
+      "audit": {
+        "code": "888|38-08-07|38-08-07|0.25|0000000008",
+        "codes": 1,
+        "firstEvents": 1,
+        "labelId": 23,
+        "legacyBalance": 0.25,
+        "legacyPositiveRows": 1,
+        "printQuantityDelta": 0.0,
+        "quantity": 0.25,
+        "reprintEvents": 0,
+        "sourceQuantity": 0.25,
+        "status": "ACTIVE"
+      },
+      "exactReceiptReplayUnchanged": true
+    },
+    {
+      "check": "stock-drop-receipt-original-page",
+      "passed": true,
+      "jobId": "e638c084-d992-4f87-afeb-00c7d893ebc8",
+      "audit": {
+        "code": "888|38-08-07|38-08-07|0.25|0000000009",
+        "codes": 1,
+        "firstEvents": 1,
+        "labelId": 24,
+        "legacyBalance": 0.25,
+        "legacyPositiveRows": 1,
+        "printQuantityDelta": 0.0,
+        "quantity": 0.25,
+        "reprintEvents": 0,
+        "sourceQuantity": 0.25,
+        "status": "ACTIVE"
+      },
+      "exactReceiptReplayUnchanged": true
+    },
+    {
+      "check": "stock-fail-sync-original-page",
+      "passed": true,
+      "jobId": "3ffbf4ba-e76b-4238-b95d-3062949c6734",
+      "audit": {
+        "code": "888|38-08-07|38-08-07|0.25|0000000010",
+        "codes": 1,
+        "firstEvents": 1,
+        "labelId": 25,
+        "legacyBalance": 0.25,
+        "legacyPositiveRows": 1,
+        "printQuantityDelta": 0.0,
+        "quantity": 0.25,
+        "reprintEvents": 0,
+        "sourceQuantity": 0.25,
+        "status": "ACTIVE"
+      },
+      "exactReceiptReplayUnchanged": true
+    },
+    {
+      "check": "rule-accessible-from-original-system",
+      "passed": true
+    },
+    {
+      "check": "template-entry-consolidated",
+      "passed": true
+    },
+    {
+      "check": "no-browser-errors-or-physical-helper-requests",
+      "passed": true
+    }
+  ],
+  "finalBrowserChecks": [
+    {
+      "check": "720px-stock-selection-and-quota-guard-no-dispatch",
+      "passed": true
+    },
+    {
+      "check": "historical-baseline-persists-original-100-current-35-preview-only",
+      "passed": true,
+      "pdfBytes": 21623
+    },
+    {
+      "check": "record-reprint-link-uses-original-reprint-page",
+      "passed": true
+    },
+    {
+      "check": "original-bill-progress-counts-two-modern-original-labels",
+      "passed": true
+    },
+    {
+      "check": "final-ui-no-new-job-or-send-no-physical-helper",
+      "passed": true,
+      "mockDriverCalls": 11
+    }
+  ],
+  "historicalReprint": {
+    "check": "historical-original-page-reprint-current-scope",
+    "passed": true,
+    "jobId": "4e47be1d-9831-426d-951b-dc46827a9758",
+    "labelId": 10,
+    "originalQuantity": 100,
+    "currentBalance": 35,
+    "codeUnchanged": true,
+    "mockDriverCalls": 12
+  },
+  "historicalSqlAudit": {
+    "legacyBalance": 35.0,
+    "currentQty": 35.0,
+    "legacyPositiveRows": 1,
+    "codes": 1
+  },
+  "preexistingRowsUnchanged": {
+    "business_operation_line": true,
+    "business_operation_event": true,
+    "label_code_registry": true,
+    "business_operation": true,
+    "traceback_sync_task": true,
+    "label_print_asset": true,
+    "label_print_template": true,
+    "inventory_flow": true,
+    "label_print_template_version": true
+  },
+  "productLabelAuditScope": "Product labels excluded from whole-table unchanged proof: parent7 deliberately consumed by packing; historical mirror10 refreshed/reprinted. No claim that all old label rows were unchanged.",
+  "protectedProductionFiles": {
+    "count": 6,
+    "allHashesUnchanged": true
+  },
+  "validation": {
+    "dotnetPassed": 47,
+    "dotnetSkipped": 1,
+    "frontendPassed": 42,
+    "frontendSkipped": 1,
+    "backendFocusedPassed": 66,
+    "eslint": true,
+    "typescriptViteBuild": true,
+    "ruffFocused": true,
+    "finalDeploymentReadSmoke": true,
+    "aociExecuted": false
+  },
+  "limitations": [
+    "888 simulation only",
+    "All document types, free fields, external PDA concurrency and >100 page batch faults not fully covered",
+    "No physical hardware or production008 acceptance"
+  ]
+}

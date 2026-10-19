@@ -41,6 +41,7 @@ builder.Services.AddSingleton<OperationArchiveService>();
 builder.Services.AddHostedService<DocumentDraftCleanupService>();
 builder.Services.AddHttpClient(nameof(U8GatewayClient), client => client.Timeout = TimeSpan.FromSeconds(120));
 builder.Services.AddScoped<U8GatewayClient>();
+builder.Services.AddPrinting(builder.Configuration);
 
 var cors = builder.Configuration.GetSection("Cors").Get<CorsOptions>() ?? new CorsOptions();
 builder.Services.AddCors(config => config.AddPolicy("H5", policy =>
@@ -53,7 +54,17 @@ var app = builder.Build();
 app.UseMiddleware<RequestIdMiddleware>();
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseCors("H5");
+// An explicitly configured development bundle may serve H5 and /printing/ on the API origin.
+// Production deployments do not enable this setting.
+if (app.Configuration.GetValue<bool>("DevelopmentWorkspace:ServeStaticFiles") &&
+    app.Configuration["LabelSystem:Environment"] == "development")
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = context =>
+        context.Context.Response.Headers.CacheControl = "no-cache" });
+}
 app.UseMiddleware<SessionAuthenticationMiddleware>();
+app.MapPrinting();
 
 app.MapGet("/api/v1/health", async (
     HttpContext context,
@@ -98,7 +109,7 @@ app.MapPost("/api/v1/auth/login", async (
         return ApiResults.Error(context, StatusCodes.Status401Unauthorized,
             "LOGIN_FAILED", "账号或密码错误。");
     var result = sessions.Create(user);
-    context.Response.Cookies.Append("LabelSystem.Session", result.Token, new CookieOptions
+    context.Response.Cookies.Append(SessionAuthenticationMiddleware.CookieName(context), result.Token, new CookieOptions
     {
         HttpOnly = true,
         SameSite = SameSiteMode.Lax,
@@ -112,7 +123,7 @@ app.MapPost("/api/v1/auth/login", async (
 app.MapPost("/api/v1/auth/logout", (HttpContext context, DevelopmentSessionStore sessions) =>
 {
     sessions.Remove(SessionAuthenticationMiddleware.ReadToken(context));
-    context.Response.Cookies.Delete("LabelSystem.Session", new CookieOptions { Path = "/" });
+    context.Response.Cookies.Delete(SessionAuthenticationMiddleware.CookieName(context), new CookieOptions { Path = "/" });
     return ApiResults.Ok(context, new { loggedOut = true });
 });
 

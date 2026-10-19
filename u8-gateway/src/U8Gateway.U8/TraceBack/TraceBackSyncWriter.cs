@@ -17,7 +17,7 @@ namespace U8Gateway.U8.TraceBack
         public string Code { get; }
     }
 
-    public sealed class TraceBackSyncWriter
+    public sealed partial class TraceBackSyncWriter
     {
         private readonly string _database;
         private readonly string _connectionString;

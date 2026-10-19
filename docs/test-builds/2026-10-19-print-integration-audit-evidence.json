@@ -1,0 +1,26 @@
+{
+  "standalone": {
+    "meStatus": 200,
+    "authenticationSource": "labelsystem",
+    "printDispatchEnabled": false,
+    "rulesMenuInSource": false,
+    "rulesPageInSource": false,
+    "rulesProxyInSource": false
+  },
+  "businessApi": {
+    "capabilitiesEnabled": true,
+    "allowNewDispatch": false,
+    "protocol": "driver-labels-v2",
+    "ruleCatalogCount": 1,
+    "currentPrintRuleBound": false
+  },
+  "readOnlyAudit": true,
+  "productionAccessed": false,
+  "sourceEvidence": [
+    "New_Label_Print_System/frontend/src/App.tsx",
+    "New_Label_Print_System/frontend/src/layouts/AppLayout.tsx",
+    "New_Label_Print_System/backend/app/factory.py",
+    "label-api/src/LabelSystem.Api/Printing/PrintEndpoints.cs",
+    "label-print/frontend/src/App.tsx"
+  ]
+}

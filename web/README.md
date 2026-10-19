@@ -1,5 +1,11 @@
 # 标签管理系统 H5
 
+2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
+
+以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
+
+2026-10-19打印复核：H5打印入口已撤销，独立18003继续复用Business API及Gateway三表兼容服务，严格渲染器保留。旧代码清理边界见[清单](../docs/PRINT_REUSE_AND_CLEANUP.md)，当前联调及未验收项见[复核](../New_Label_Print_System/docs/LabelSystem联调复核.md)。
+
 `0.2.0-dev.81` 配合 APK `0.5.4 / 110` 增加启动过渡：原生图标淡入、扫描线、对勾，H5 首路由绘制后通知包装页短淡出，不强制等待动画结束。直接打开网页不播放原生动画；连接失败继续使用重试和地址设置。`npm run test:startup` 为衔接自动测试。
 
 `0.2.0-dev.80` 同步原生壳版本信息为 APK `0.5.3 / 109`。该 APK 更新标签图标和启动展示，去掉 Donut 启动品牌文字及底部图片；实际加载保留。必须覆盖安装 APK，仅更新 H5 不改变原生图标。PX101A 已安装，地址仍为 5175。
@@ -189,3 +195,11 @@ development 环境由 Business API 代理测试 U8 Gateway 的采购订单、采
 - 后端接口从模拟、待接入变为可用，或其限制发生变化。
 
 仅颜色、间距、图标等不改变使用方式的样式调整，无需逐次记录。业务规则和数据库决策维护在根目录 `BUSINESS_LOGIC.md`、`ARCHITECTURE.md` 及 `docs/database/`，不在本文件重复展开。
+# 电脑端打印边界（独立系统）
+
+最新状态：本H5不承载打印页面，新增菜单与iframe已撤销。New_Label_Print_System原React/Flask应用独立部署于18003，复用Label system账号和权限，只读888；9891只提供开发API，静态托管关闭。生产5175/9890/008不变，真实打印关闭。见[边界修正](../docs/PRINT_STANDALONE_CORRECTION.md)和[独立系统验收](../New_Label_Print_System/docs/LabelSystem开发验收.md)。
+
+此前试验的print.view菜单和同源/printing/嵌入已经撤销，../label-print/frontend只保留作早期参考；后续产品界面在../New_Label_Print_System/frontend维护，不在BusinessView.vue增加打印嵌入。
+不能只发布本H5就宣称打印模块可用。本轮开发库已安装017、启用7个打印功能码并部署配套API/Gateway/渲染；真实设备未配对，新发送及U8写入关闭，生产未更新。
+根H5与打印工作台构建已通过；重点SQL/API/渲染/模拟助手联调54项断言通过，临时服务与库已清理。浏览器页面、反代和真实打印未验收，未查看截图。见 [隔离报告](../docs/test-builds/2026-10-19-print-phase1-isolated.md)。
+当前产品资料见[独立系统接入边界](../New_Label_Print_System/docs/LabelSystem接入边界.md)及[开发记录](../docs/PRINT_PHASE1_IMPLEMENTATION.md)；label-print文档仅作早期试验参考。

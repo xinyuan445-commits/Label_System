@@ -1,0 +1,600 @@
+{
+  "baseline": "main 1eb233d + uncommitted workspace",
+  "apiVersion": "0.11.0",
+  "gatewayVersion": "0.10.0",
+  "assistantProtocol": "driver-labels-v2",
+  "rendererVersion": "label-renderer/1",
+  "templateVersion": 1,
+  "result": {
+    "runId": "f7c696b85c9c4046",
+    "passed": true,
+    "labelDatabase": "LabelSystem_PrintAcceptance_f7c696b85c9c4046",
+    "traceBackDatabase": "U8_PrintAcceptance_888_f7c696b85c9c4046",
+    "account": "888",
+    "environment": "test",
+    "production008Accessed": false,
+    "realPrinterStarted": false,
+    "startedAt": "2026-10-19T14:33:39.8967897+08:00",
+    "evidence": [
+      {
+        "check": "migration-001-through-017",
+        "passed": true,
+        "details": {
+          "migrationCount": 17
+        }
+      },
+      {
+        "check": "first-prepared-frozen-quantity",
+        "passed": true,
+        "details": {
+          "code": "888|MAT-ACCEPT|B1|100.000000|00000001",
+          "quantity": "100"
+        }
+      },
+      {
+        "check": "first-request-replay-same-code",
+        "passed": true,
+        "details": {
+          "jobId": "dc47012e-859a-438b-a12b-73d0d0f1795f"
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "dc47012e-859a-438b-a12b-73d0d0f1795f",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "assistant-repeat-no-resend",
+        "passed": true,
+        "details": {
+          "driverCalls": 1
+        }
+      },
+      {
+        "check": "first-completed",
+        "passed": true,
+        "details": {
+          "jobId": "dc47012e-859a-438b-a12b-73d0d0f1795f",
+          "phase": "COMPLETED"
+        }
+      },
+      {
+        "check": "first-and-ten-concurrent-receipts",
+        "passed": true,
+        "details": {
+          "label": 1,
+          "code": "888|MAT-ACCEPT|B1|100.000000|00000001",
+          "currentQuantity": 100.0,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 1,
+          "traceBackGoods": 1,
+          "traceBackOnlyCode": 1,
+          "traceBackBalance": 100.0,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "first-and-ten-concurrent-receipts-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "reprint-original-paper",
+        "passed": true,
+        "details": {
+          "balance": 35,
+          "paperQuantity": 100,
+          "copies": 2
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "fc6639ba-156a-42b0-80b7-0562ae5ffde1",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "assistant-repeat-no-resend",
+        "passed": true,
+        "details": {
+          "driverCalls": 2
+        }
+      },
+      {
+        "check": "reprint-no-quantity-change",
+        "passed": true,
+        "details": {
+          "label": 1,
+          "code": "888|MAT-ACCEPT|B1|100.000000|00000001",
+          "currentQuantity": 35.0,
+          "printFlows": 1,
+          "reprintFlows": 2,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 2,
+          "traceBackGoods": 2,
+          "traceBackOnlyCode": 2,
+          "traceBackBalance": 35.0,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "reprint-no-quantity-change-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "reprint-no-new-code",
+        "passed": true,
+        "details": {
+          "sequence": 1
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "38369195-a603-42a6-88aa-a4a3196e0a6e",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "lost-receipt-restart-recovery-no-resend",
+        "passed": true,
+        "details": {
+          "driverCalls": 3
+        }
+      },
+      {
+        "check": "lost-before-receipt",
+        "passed": true,
+        "details": {
+          "label": 2,
+          "code": "888|MAT-ACCEPT|B1|12.500000|00000002",
+          "currentQuantity": 12.5,
+          "printFlows": 0,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 0,
+          "traceBackGoods": 0,
+          "traceBackOnlyCode": 0,
+          "traceBackBalance": 0.0,
+          "isLocked": true
+        }
+      },
+      {
+        "check": "lost-before-receipt-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 0
+        }
+      },
+      {
+        "check": "lost-receipt-recovered-once",
+        "passed": true,
+        "details": {
+          "label": 2,
+          "code": "888|MAT-ACCEPT|B1|12.500000|00000002",
+          "currentQuantity": 12.5,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 1,
+          "traceBackGoods": 1,
+          "traceBackOnlyCode": 1,
+          "traceBackBalance": 12.5,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "lost-receipt-recovered-once-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "281a4b80-abf4-41e9-be0c-4864682a9ef2",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "three-table-failure-retains-outbox",
+        "passed": true,
+        "details": {
+          "phase": "TRACEBACK_PENDING"
+        }
+      },
+      {
+        "check": "three-table-transaction-rolled-back",
+        "passed": true,
+        "details": {
+          "label": 3,
+          "code": "888|MAT-ACCEPT|B1|7.000000|00000003",
+          "currentQuantity": 7.0,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 0,
+          "traceBackGoods": 0,
+          "traceBackOnlyCode": 0,
+          "traceBackBalance": 0.0,
+          "isLocked": true
+        }
+      },
+      {
+        "check": "three-table-transaction-rolled-back-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "three-table-recovery-once",
+        "passed": true,
+        "details": {
+          "label": 3,
+          "code": "888|MAT-ACCEPT|B1|7.000000|00000003",
+          "currentQuantity": 7.0,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 1,
+          "traceBackGoods": 1,
+          "traceBackOnlyCode": 1,
+          "traceBackBalance": 7.0,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "three-table-recovery-once-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "559cb81c-81bf-4967-922d-3ce811a1d21a",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "legacy-commit-response-lost",
+        "passed": true,
+        "details": {
+          "phase": "TRACEBACK_PENDING"
+        }
+      },
+      {
+        "check": "legacy-committed-response-lost",
+        "passed": true,
+        "details": {
+          "label": 4,
+          "code": "888|MAT-ACCEPT|B1|9.000000|00000004",
+          "currentQuantity": 9.0,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 1,
+          "traceBackGoods": 1,
+          "traceBackOnlyCode": 1,
+          "traceBackBalance": 9.0,
+          "isLocked": true
+        }
+      },
+      {
+        "check": "legacy-committed-response-lost-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "legacy-commit-retry-already-applied",
+        "passed": true,
+        "details": {
+          "label": 4,
+          "code": "888|MAT-ACCEPT|B1|9.000000|00000004",
+          "currentQuantity": 9.0,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 1,
+          "traceBackGoods": 1,
+          "traceBackOnlyCode": 1,
+          "traceBackBalance": 9.0,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "legacy-commit-retry-already-applied-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "03950bad-ebba-49c5-be41-a25e24a24874",
+          "mode": "unknown"
+        }
+      },
+      {
+        "check": "assistant-repeat-no-resend",
+        "passed": true,
+        "details": {
+          "driverCalls": 6
+        }
+      },
+      {
+        "check": "unknown-keeps-lock",
+        "passed": true,
+        "details": {
+          "phase": "RECONCILIATION_REQUIRED"
+        }
+      },
+      {
+        "check": "unknown-no-ledger-entry",
+        "passed": true,
+        "details": {
+          "label": 5,
+          "code": "888|MAT-ACCEPT|B1|4.000000|00000005",
+          "currentQuantity": 4.0,
+          "printFlows": 0,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 0,
+          "traceBackGoods": 0,
+          "traceBackOnlyCode": 0,
+          "traceBackBalance": 0.0,
+          "isLocked": true
+        }
+      },
+      {
+        "check": "unknown-no-ledger-entry-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 0
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "48ff6d24-0707-47b4-b8b8-fb90fbebf7ab",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "batch-a-completed-b-remains-ready",
+        "passed": true,
+        "details": {
+          "phase": "READY"
+        }
+      },
+      {
+        "check": "batch-a-unlocked",
+        "passed": true,
+        "details": {
+          "label": 6,
+          "code": "888|MAT-ACCEPT|B1|3.000000|00000006",
+          "currentQuantity": 3.0,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 1,
+          "traceBackGoods": 1,
+          "traceBackOnlyCode": 1,
+          "traceBackBalance": 3.0,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "batch-a-unlocked-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "batch-b-retains-own-lock",
+        "passed": true,
+        "details": {
+          "label": 7,
+          "code": "888|MAT-ACCEPT|B1|6.000000|00000007",
+          "currentQuantity": 6.0,
+          "printFlows": 0,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 0,
+          "traceBackGoods": 0,
+          "traceBackOnlyCode": 0,
+          "traceBackBalance": 0.0,
+          "isLocked": true
+        }
+      },
+      {
+        "check": "batch-b-retains-own-lock-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 0
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "48ff6d24-0707-47b4-b8b8-fb90fbebf7ab",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "batch-b-completed-once",
+        "passed": true,
+        "details": {
+          "label": 7,
+          "code": "888|MAT-ACCEPT|B1|6.000000|00000007",
+          "currentQuantity": 6.0,
+          "printFlows": 1,
+          "reprintFlows": 0,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 1,
+          "traceBackGoods": 1,
+          "traceBackOnlyCode": 1,
+          "traceBackBalance": 6.0,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "batch-b-completed-once-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 1
+        }
+      },
+      {
+        "check": "synthetic-history-legacy-seeded",
+        "passed": true,
+        "details": {
+          "initial": 50
+        }
+      },
+      {
+        "check": "history-original-quantity-not-current-balance",
+        "passed": true,
+        "details": {
+          "originalQuantity": 50,
+          "balance": 18
+        }
+      },
+      {
+        "check": "mock-driver-accepted",
+        "passed": true,
+        "details": {
+          "jobId": "4547fc56-792b-4c45-ae2e-9c89708ecb1f",
+          "mode": "sent"
+        }
+      },
+      {
+        "check": "assistant-repeat-no-resend",
+        "passed": true,
+        "details": {
+          "driverCalls": 9
+        }
+      },
+      {
+        "check": "history-reprint-no-fake-first",
+        "passed": true,
+        "details": {
+          "label": 8,
+          "code": "888|MAT-ACCEPT|B1|50|87654321",
+          "currentQuantity": 18.0,
+          "printFlows": 0,
+          "reprintFlows": 1,
+          "printQuantityChange": 0.0,
+          "traceBackOrder": 2,
+          "traceBackGoods": 2,
+          "traceBackOnlyCode": 2,
+          "traceBackBalance": 18.0,
+          "isLocked": false
+        }
+      },
+      {
+        "check": "history-reprint-no-fake-first-source-outbox-and-no-orphans",
+        "passed": true,
+        "details": {
+          "sourceUnchanged": true,
+          "printTargetTasks": 0
+        }
+      },
+      {
+        "check": "history-baseline-recorded-once",
+        "passed": true,
+        "details": {
+          "baselines": 1
+        }
+      },
+      {
+        "check": "source-summary-reprint-not-first",
+        "passed": true,
+        "details": {
+          "required": 100,
+          "firstRegistered": 100,
+          "remaining": 0
+        }
+      }
+    ]
+  },
+  "cleanup": {
+    "passed": true,
+    "removed": [
+      "LabelSystem_PrintAcceptance_f7c696b85c9c4046",
+      "U8_PrintAcceptance_888_f7c696b85c9c4046"
+    ],
+    "at": "2026-10-19T14:33:40.2903477+08:00"
+  },
+  "sourceHashes": [
+    {
+      "path": "docs/database/052_label_print_phase1.sql",
+      "sha256": "8E6FEE2FE6CA541A4968710C4E1D6DAE9C357DF9A3818EE7026C8254CC53911F"
+    },
+    {
+      "path": "label-api/src/LabelSystem.Api/Printing/PrintArtifacts.cs",
+      "sha256": "DA78B1B84400868A5141333F5173C1270D962B4ECF734038C7F472195110ACD5"
+    },
+    {
+      "path": "label-api/tools/PrintAcceptance/Program.cs",
+      "sha256": "12909BDF3BA2DC647D7C096C8B7649CB643A89529E58C8919A9FBDC8CFC5B188"
+    },
+    {
+      "path": "u8-gateway/tools/PrintAcceptanceBridge/Program.cs",
+      "sha256": "2ECB1E892A3E9F1EE95A7D107503AB79497190657AFCFF401EB5057D8A82BA97"
+    },
+    {
+      "path": "label-print/connector/acceptance_bridge_test.go",
+      "sha256": "9CF4F1C1E2B09D28293F08E806A87E81D83D4897E845CC494C824E4EEFF58EA0"
+    }
+  ],
+  "priorCleanupEvidence": ".tools/print-acceptance/cleanup-2026-10-19.json",
+  "finalVerification": {
+    "verifiedAt": "2026-10-19T14:36:56.843194+08:00",
+    "context": "master",
+    "sqlVersion": "15.0.2170.1",
+    "sqlEdition": "Standard Edition (64-bit)",
+    "remainingTempDatabases": [],
+    "existingConfigEnvironment": "production",
+    "existingConfigAccount": "008"
+  },
+  "temporarySecretFilesRemaining": 0,
+  "testProcessesRemaining": 0
+}

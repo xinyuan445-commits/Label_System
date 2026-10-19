@@ -22,6 +22,7 @@ namespace U8Gateway.TraceBackContractSmokeTest
                 RejectsInvalidSyncQuantity();
                 RejectsMissingSyncTarget();
                 BlocksNonTestWriteAccount();
+                ValidatesInitialRegistrationWithoutSql();
                 Console.WriteLine("traceback contract smoke passed");
                 return 0;
             }
@@ -30,6 +31,29 @@ namespace U8Gateway.TraceBackContractSmokeTest
                 Console.Error.WriteLine(exception);
                 return 1;
             }
+        }
+
+        private static void ValidatesInitialRegistrationWithoutSql()
+        {
+            var r=new InitialLabelRegistrationRequest {
+                ContractVersion=1,ExpectedAbsent=true,EventKey="print-initial:test",
+                Code="888|MAT-01|B01|12.5|000001",SerialNo="000001",Quantity=12.5m,
+                OrderUuid="11111111-1111-4111-8111-111111111111",GoodsUuid="22222222-2222-4222-8222-222222222222",
+                OperatorName="操作员",MaterialCode="MAT-01",MaterialName="测试物料",UnitCode="EA",BatchNo="B01",
+                TargetWarehouseCode="WH1",TargetLocationCode="P1",ManufactureDate="2026-10-19",ExpiryDate="2027-10-19",
+                AttributesJson="{}",SourceDocumentType="transfer",SourceDocumentId="T1",SourceDocumentNo="DB001",ErpDetailId="1"
+            };
+            r.PayloadHash=InitialRegistrationRules.Hash(r);
+            Equal("1EB7CFC2390323655BEAAA9A4A4C7984281FDB16A8A3C810ABDD8E686D13D321",r.PayloadHash);
+            InitialRegistrationRules.Validate(r);
+            // Gate must reject before opening any SQL connection.
+            try {
+                new TraceBackSyncWriter("unused","unused","unused","unused","development",false,"008","unused","008").ApplyInitial(r);
+                throw new InvalidOperationException("expected initial write gate");
+            } catch(TraceBackSyncException e) { Equal("TRACEBACK_WRITE_ACCOUNT_BLOCKED",e.Code); }
+            r.Quantity=12.6m;
+            try { InitialRegistrationRules.Validate(r);throw new InvalidOperationException("expected payload conflict"); }
+            catch(TraceBackSyncException e) { Equal("TRACEBACK_INITIAL_INVALID",e.Code); }
         }
 
         private static void MapsAvailableSnapshot()

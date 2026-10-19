@@ -1,5 +1,13 @@
 # Label System Business API
 
+2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
+
+以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
+
+2026-10-19打印复核：H5打印入口已撤销，独立18003继续复用Business API及Gateway三表兼容服务，严格渲染器保留。旧代码清理边界见[清单](../docs/PRINT_REUSE_AND_CLEANUP.md)，当前联调及未验收项见[复核](../New_Label_Print_System/docs/LabelSystem联调复核.md)。
+
+2026-10-19位置字段修复：打印来源标签明细直接保存目标仓库、货位；拆包明细保存拆包时位置；FIRST/REPRINT明细保存准备发送时的当前位置。DBD26103204既有两条明细已由原关联流水回填，Code、数量、流水、同步任务和旧三表未改。旧三表是迁移期兼容层，本地新表不依赖`TraceBackGoods`补齐打印审计字段。
+
 `0.11.0` 增加“物料档案”同步。通过 Gateway 完整读取在用物料，校验来源账套、数量和重复项后批量事务写入迁移 016 的 `u8_material_cache`。页面物料搜索读取当前账套本地缓存；无标签退料上传保留 U8 实时物料、单位和批次校验。首次未同步返回 `MATERIAL_CACHE_NOT_READY`，失败保留上次成功缓存。
 
 自动测试：`dotnet test tests/LabelSystem.Api.Tests/LabelSystem.Api.Tests.csproj -c Release`。设置进程环境变量 `LABELSYSTEM_TEST_SQL` 可启用 SQL 集成测试（连接串仅在进程内提供，不写入仓库）；测试只创建并删除带 GUID 的 `LabelSystem_MaterialTest_` 临时库，验证迁移 016、并发锁、原子替换、停用、恢复和失败回滚。
@@ -135,4 +143,13 @@ Gateway `0.5.8` 起，调拨审核和弃审会联动 U8 自动生成的其他出
 
 Business API 在扫码、建档前和 U8 写入前通过 Gateway 复核旧表最新流水。`0.10.0` 在 ERP 成功后创建同步任务：蓝字材料出库写负流水，原标签红字退料写正流水，调拨和货位调整全量写零流水、部分移动写原 Code 负流水。`POST /api/v1/operations/groups/{groupId}/traceback/retry` 恢复失败任务并沿用原 ERP 结果和确定性 UUID。
 
-无标签红字以及部分移动的目标 `PENDING_PRINT` 在正式打印前不向旧三表写空 Code；打印平台尚未接入，所以目标 Code 的首次正流水仍是下一阶段。审核和弃审不重复改变 TraceBack 数量。
+无标签红字及部分移动目标PENDING_PRINT在正式打印前不向旧三表写空Code；生产版本尚无首打平台。2026-10-19已完成重点隔离联调并部署专用开发9891/888站点，模块启用、新投递关闭，未现场打印。新首打以零数量PRINT和唯一PRINT_TARGET接入初始正流水，补打无旧表任务；审核/弃审不重复改变数量。
+# 开发中：电脑端打印（2026-10-19）
+
+最新：原New_Label_Print_System独立应用18003已补齐规则管理/当前规则、017正式发布、目标/任务/原码补打和V2回执恢复接口；实际验证规则读取/预览、带图片正式发布和重复发布复用，真实发送与业务写入保持关闭。原54项隔离证据与新版真实SQL全过程验收分开记录。9891仍仅提供API，原独立应用通过/api/labelsystem白名单按当前用户转接，没有共享服务账号。见[实施报告](../New_Label_Print_System/docs/LabelSystem接入实施.md)。
+
+本地新增 Printing/、逐份零数量 PRINT/REPRINT、旧表初始登记 outbox、规则单选和回执恢复。
+017脚本为../docs/database/052_label_print_phase1.sql；临时库54项验收后清理，随后现有开发库017及独立9891站点部署通过。普通测试不建库或迁移；显式隔离工具在tools/PrintAcceptance，开发部署工具在../label-print/deployment。
+Printing 的三个开关均默认关闭。原部署连接、服务和生产数据未改动。
+验证范围及限制见 [开发记录](../docs/PRINT_PHASE1_IMPLEMENTATION.md)，
+配置与构建见 [模块说明](../label-print/README.md)，接口见 docs/API_DESIGN.md。

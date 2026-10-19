@@ -1,5 +1,15 @@
 # U8 Gateway
 
+2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
+
+以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
+
+2026-10-19打印复核：H5打印入口已撤销，独立18003继续复用Business API及Gateway三表兼容服务，严格渲染器保留。旧代码清理边界见[清单](../docs/PRINT_REUSE_AND_CLEANUP.md)，当前联调及未验收项见[复核](../New_Label_Print_System/docs/LabelSystem联调复核.md)。
+
+最新开发部署：独立U8GatewayDevPrint/应用池在127.0.0.1:9881运行，精确连接888/UFDATA_888_2021，总写入和生产写入均关闭。实际物料快照返回31409条，Business API已同步至LabelSystem_Dev。既有9880/008站点、配置和程序未改变，见 [开发部署](../docs/test-builds/2026-10-19-print-development.md)。
+
+2026-10-19打印兼容接口已在独立测试宿主和888逻辑账套影子库完成真实SQL联调：初始三表登记、OnlyCode故障整体回滚、提交后丢响应的原事件恢复、历史标签核验补打均通过。未发布到既有IIS，未操作008或U8 COM，临时库已清理。见 [验收报告](../docs/test-builds/2026-10-19-print-phase1-isolated.md)；测试桥入口为tools/PrintAcceptanceBridge，仅注册追溯控制器。
+
 `0.10.0` 新增只读 `GET /api/v1/reference-data/materials/snapshot`，单次查询完整读取 `Inventory.dEDate IS NULL` 且料号非空的档案，附带来源账套、数据库和条数；上限 200,000 条，超限明确拒绝。原 `GET /reference-data/materials` 继续实时查询，供 Business API 上传前复核。缓存及同步状态由 Business API 保存。
 
 ## 账套写入
@@ -103,3 +113,13 @@ Gateway `0.7.1` 提供 `GET /api/v1/traceback/labels/{code}` 和 `POST /api/v1/t
 `POST /api/v1/traceback/labels/sync-events` 接收单个稳定同步事件。Gateway 先锁定事件和 Order UUID，复核原 Code 的最新流水 ID 与余额，再在一个 SQL 事务中写入缺失的 Order、Goods 和 OnlyCode；相同 Goods UUID 的完全一致重试直接返回已完成结果，不一致则返回冲突。写接口只允许 `UFDATA_888_2021`，其他账套在连接数据库前即返回 `TRACEBACK_WRITE_ACCOUNT_BLOCKED`。诊断用 `validateOnly=true` 会完整执行并回滚，不保留旧表数据。
 
 当前不包含托盘。部分移动的目标标签和无标签红字在首次打印前保持无 Code 的 `PENDING_PRINT`，因此本阶段只写来源事件，打印目标正流水待打印平台接入。详细口径见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
+# 开发中：初始打印登记（2026-10-19）
+
+已增加initial-registrations及只读预检、历史打印证据读取接口，专用开发9881已部署但禁写；生产9880未更新。
+原读快照仍按完整 Code 汇总、最新流水 Goods 定位。首打初始正数使用独立路径；
+旧 sync-events 继续处理来源事件，不负责创建不存在的新 Code。
+三表写入采用稳定 UUID、服务端重算载荷摘要和同事务校验，重放返回原 flowId。
+PRINT/REPRINT 的本地零数量登记由 Business API 负责，补打不调用此写入。
+环境、生产开关、精确账套/数据库白名单及内部认证继续有效，没有迁移或改写旧表结构。
+本轮只运行纯合同冒烟/构建，未调用真实业务接口，未操作 888/008 数据。
+合同及限制见 [打印规格](../docs/PRINT_PHASE1_SPEC.md)、[开发记录](../docs/PRINT_PHASE1_IMPLEMENTATION.md)。

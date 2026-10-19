@@ -13,7 +13,8 @@ public sealed class TraceBackMirrorRepository(
         TraceBackLabelSnapshot snapshot,
         SessionUser user,
         bool rejectChangedSnapshot,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool preserveTerminalState = false)
     {
         TraceBackSnapshotRules.RequireUsable(snapshot, allowUsed: true);
         await using var connection = connections.Create();
@@ -24,6 +25,8 @@ public sealed class TraceBackMirrorRepository(
         var existing = await ReadExistingAsync(connection, transaction, snapshot.Code, cancellationToken);
         var targetStatus = snapshot.Balance == 0 ? "USED" : "ACTIVE";
         if (existing is not null && existing.Status is "FROZEN" or "VOID")
+            targetStatus = existing.Status;
+        if (preserveTerminalState && existing?.Status is "SPLIT" or "MERGED")
             targetStatus = existing.Status;
 
         if (existing is not null &&
