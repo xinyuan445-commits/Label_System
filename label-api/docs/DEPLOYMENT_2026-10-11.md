@@ -1,5 +1,11 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-19 已发布 Business API `0.11.0` 至 `D:\LabelSystem\Api\releases\20261019_095703`，Gateway `0.10.0` 至原 9880 站点，H5 `0.2.0-dev.78` 在 5175 提供。数据同步页新增“物料档案”，只读 U8 `Inventory.dEDate IS NULL` 且料号非空的数据；搜索转为按当前账套读取本地缓存，无标签退料上传保持实时复核。三套标签库执行迁移 016 并记录相同 SHA-256 `393DF62F9FC1AB0259B5364F2B29A36E6EB8D4F50DD9F02C3A1080A3C595B1ED`。首次来源校验识别出 Gateway 的 `(default)@008` 格式，已按纯账套码修正返回；最终生产同步成功 31,512 条，两次同步和全部档案字段比对通过，审计来源为 `deployment-material-sync`。13 项自动测试全部通过（含独立临时 SQL 库事务和并发验证，测试库已删除）；H5 构建及两端 Release 构建通过。健康检查 `ready/running`，运行环境仍为 production / `LabelSystem_Prod` / 008，两层写入配置保留。本次未创建 U8 单据、标签、库存流水或 TraceBack 业务数据；应用池回收后需要重新登录。
+
+本次 Gateway 程序备份为 `D:\U8Gateway\backups\20261019_095610-pre-materials-0.10.0\site`，Business API 外置配置备份为 `D:\LabelSystem\Config\backups\label-api.pre-materials.20261019_095610.json`。数据库未另做备份。运维同步验证工具为 `label-api/tools/MaterialSyncSmokeTest`，在服务器读取外置配置并要求明确指定账套、U8 数据库和标签库，仅写物料缓存及同步状态。
+
+最终权限及跨域检查：未登录的物料搜索、同步请求以及缺少 API Key 的 Gateway 快照请求均返回 401；5175 来源的同步预检返回 204。全量比对使用与 Gateway 相同的首尾空白规范化，避免把 U8 规格末尾的 Unicode 空白误判为档案变更。
+
 2026-10-19 H5 更新为 `0.2.0-dev.77`：调拨单表头把原“部门”明确为“调出部门”，并并列默认显示“调入部门”；上传继续使用现有合同分别映射 U8 `codepcode`、`cidepcode`。本次仅更新 H5 和文档，无数据库迁移，不修改 Business API、Gateway、APK、U8 或 TraceBack 数据。
 
 2026-10-19 已在新设备 PX101A（ADB 序列号 `4622564`，无线地址 `172.16.10.201`）全新安装既有 APK `0.5.2`（versionCode `108`），用户完成首次隐私确认。设备的 development、production 地址均已保存为 `http://172.16.10.45:5175/`，PDA Bridge 启动、配置重读和设备到 5175 的网络连接验证通过。该 APK 仍是 CT58C/Urovo 基包，PX101A 未发现 Urovo `ScanManager`，通用扫码广播接收器已注册；物理扫码键及广播格式待实机验收。本次没有重新构建 APK，不修改 Business API、Gateway、数据库、U8 或 TraceBack 数据。

@@ -1,9 +1,9 @@
 # 标签管理系统数据库设计说明
 
-状态：结构、业务设置、U8 基础资料缓存、用户权限、漫游数据、本地密码凭据、用户管理审计、多端草稿同步、标签 Code 规则及打印时发码约束已创建；三套环境最新迁移编号均为 `014`
+状态：三套环境已执行迁移 001–016；物料档案缓存按来源账套隔离，生产 008 已完成首次同步。
 数据库：Microsoft SQL Server 2019 Standard（15.0.2170.1）
 实例：`172.16.1.159` 默认实例
-更新时间：2026-10-14
+更新时间：2026-10-19
 
 ## 1. 文件与执行顺序
 
@@ -52,9 +52,15 @@
 | 41 | `043_defer_product_label_code_until_print.sql` | 允许待打印标签在实际打印前不分配 Code |
 | 42 | `044_install_migration_014_all_environments.sql` | 用 sqlcmd 将 014 安装到三个环境 |
 | 43 | `045_record_migration_014_checksum.sql` | 保存 014 迁移脚本 SHA-256 |
-| 44 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
-| 45 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
-| 46 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
+| 44 | `046_add_traceback_mirror_and_sync_tasks.sql` | 迁移 015，建立 TraceBack 镜像游标和同步任务 |
+| 45 | `047_install_migration_015_all_environments.sql` | 将 015 安装到三个环境 |
+| 46 | `048_record_migration_015_checksum.sql` | 保存 015 迁移脚本 SHA-256 |
+| 47 | `049_cache_u8_materials.sql` | 迁移 016，建立物料档案缓存及同步来源 |
+| 48 | `050_install_migration_016_all_environments.sql` | 将 016 安装到三个环境 |
+| 49 | `051_record_migration_016_checksum.sql` | 保存 016 迁移脚本 SHA-256 |
+| 50 | `020_database_operations.sql` | 配置 Query Store、备份、校验、维护和容量检查 |
+| 51 | `021_add_long_transaction_monitor.sql` | 已部署环境补充长事务监测，新环境安全跳过 |
+| 52 | `030_restore_drill.sql` | 从最近生产完整备份恢复临时库、校验并自动清理 |
 
 脚本使用 UTF-8 保存。通过旧版 `sqlcmd` 执行时必须增加 `-f 65001`，并使用 `-b` 在 SQL 错误时返回失败；连接密码通过安全部署配置或 `SQLCMDPASSWORD` 提供，不写入命令脚本。
 
@@ -82,7 +88,7 @@
 - 操作过程事件和异常核对状态。
 - 非敏感的全局及单据级业务配置。
 - 系统功能目录、显示分组、顺序及全局启停状态。
-- U8 出入库类别、仓库、仓位和部门的本地只读缓存及同步状态。
+- U8 出入库类别、仓库、仓位、部门、物料和单据基础档案的本地只读缓存及同步状态。
 - 应用用户、ERP 制单人映射、直接功能权限和用户漫游偏好。
 
 本数据库不保存：
@@ -543,7 +549,7 @@ label_code_rule
 | --- | --- | --- | --- |
 | `migration_id` | varchar(100) | 否 | 全局唯一迁移编号 |
 | `description` | nvarchar(500) | 否 | 迁移用途 |
-| `script_checksum` | char(64) | 是 | 脚本 SHA-256；当前 `001` 至 `014` 均已记录 |
+| `script_checksum` | char(64) | 是 | 脚本 SHA-256；当前 `001` 至 `016` 均已记录 |
 | `applied_at` | datetime2(3) | 否 | 成功执行时间，北京时间 |
 | `applied_by` | sysname | 否 | 执行迁移的 SQL 登录名 |
 
@@ -605,6 +611,12 @@ label_code_rule
 
 保存 ERP 来源阶段和打印目标阶段的可恢复同步事件。`event_key` 全局唯一，稳定绑定账套业务事件；任务记录操作、明细、标签、事件角色、确定性 Order/Goods UUID、ERP 单据、结构化载荷及摘要，并保存状态、尝试次数、下次重试、最后错误和完成时间。第一阶段只建立结构，不产生旧三表写任务。
 
+### 5.30 `u8_material_cache` 物料档案缓存（迁移 016）
+
+迁移 016 新增 `u8_material_cache`：`source_account_id`、`source_database_name`、`material_code` 组成联合主键；其余字段为 `material_name`、`specification`、`unit_code`、`requires_batch`、`is_active`、`last_seen_at`、创建/更新时间和行版本。字段上限分别为料号 100、名称 200、规格 500、单位 50；名称和单位允许为空，上传时仍实时拒绝无效单位。选择索引按来源账套、数据库、启停状态和料号排序，包含显示字段。模糊搜索只扫描当前账套有效档案，精确料号优先，最多返回 100 条。
+
+`reference_data_sync_state` 增加可空的 `source_account_id`、`source_database_name`，物料同步键为 `materials`，与缓存事务一起提交。SQL Session 应用锁 `reference-data:materials` 串行覆盖读取、校验和入库；锁连接关闭池化并在结束后断开。用 `SqlBulkCopy` 写入临时表，整批更新、新增及标记缺失料号停用；任何失败回滚缓存改动，失败状态另行保存。来源读取限制最多 200,000 条，超限拒绝且不截断；空快照同样拒绝，保留原缓存。来源条件固定为 `dEDate IS NULL` 且料号非空，不更改 U8 的表或索引。
+
 ## 6. 关键索引与查询
 
 | 查询 | 主要索引或约束 |
@@ -631,6 +643,7 @@ label_code_rule
 | 可选出入库类别 | `u8_rd_style_cache(direction, is_active, is_terminal, rd_style_code)` |
 | 可选仓库与仓位 | `u8_warehouse_cache` 主键过滤、`u8_position_cache(warehouse_code, is_active, position_code)` |
 | 可选部门 | `u8_department_cache(is_active, department_code)` |
+| 可选物料 | `u8_material_cache(source_account_id, source_database_name, is_active, material_code)`，包含名称、规格、单位和批次标志 |
 | 登录用户 | `application_user(login_name)` 唯一约束及 `(is_enabled, login_name)` 索引 |
 | 用户有效功能 | `user_function_permission(user_id, function_code)` 主键和功能反查索引 |
 | 用户漫游偏好 | `user_preference(user_id, preference_key)` 主键 |
@@ -700,6 +713,8 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 迁移 001 至 015 已经在开发、测试和生产库执行。迁移 `012` 新增 `u8_purchase_type_cache`、`u8_sales_type_cache`、`u8_currency_cache`，并在 `reference_data_sync_state` 增加 `document-master-data`。迁移 `013` 在 `business_operation_line` 增加唯一的 `generated_label_id`，用于把无标签红字退料或部分移动明细与 U8 成功后新建的产品标签关联；该字段不代替原扫码 `label_id`。迁移 `014` 允许 `PENDING_PRINT` 产品标签在实际打印前保持 `label_code` 为空，并把唯一约束改为非空过滤唯一索引。迁移 `015` 增加镜像字段和同步任务结构。以后只允许使用新增迁移脚本修改结构，禁止直接修改已经执行过的历史迁移文件；每次执行都必须写入 `schema_migration` 并同步更新本说明。
 
 ## 10. TraceBack 迁移期数据边界（2026-10-15）
+
+2026-10-19 已在三套标签库执行迁移 016，SHA-256 为 `393DF62F9FC1AB0259B5364F2B29A36E6EB8D4F50DD9F02C3A1080A3C595B1ED`。本次仅增加物料档案缓存及同步来源字段；生产 008 已同步 31,512 条在用物料，按首尾空白规范化后全字段比对一致。开发、测试库只安装结构，未复制正式料号。U8 与 TraceBack 数据均未修改。
 
 - 现有产品标签的外部权威数据来自账套库 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode`；本地 `product_label` 和 `inventory_flow` 保存业务镜像、锁、待打印状态及新系统审计。托盘继续完全由本地表管理。
 - 迁移 015 保存每张外部标签最后同步的 `TraceBackOnlyCode.id`、余额、同步时间和身份摘要，并新增 `traceback_sync_task` 保存稳定事件键、尝试次数、最后错误和完成时间；已于 2026-10-15 在三套数据库执行。

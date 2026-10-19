@@ -2,8 +2,37 @@ namespace LabelSystem.Api;
 
 public sealed class ReferenceDataSyncService(
     U8GatewayClient gateway,
-    ReferenceDataRepository repository)
+    ReferenceDataRepository repository,
+    Microsoft.Extensions.Options.IOptionsMonitor<LabelSystemOptions> options)
 {
+    public async Task<DataSyncResult> SyncMaterialsAsync(
+        string userId, CancellationToken cancellationToken)
+    {
+        // Session 级应用锁覆盖读取、校验、入库和失败状态，进程退出时自动释放。
+        await using var syncLock = await repository.AcquireMaterialSyncLockAsync(cancellationToken);
+        var current = options.CurrentValue;
+        var accountId = current.ErpAccountId;
+        var databaseName = current.ErpDatabaseName;
+        await repository.BeginSyncAsync("materials", userId, cancellationToken);
+        try
+        {
+            var source = await gateway.GetMaterialsSnapshotAsync(cancellationToken);
+            var rows = MaterialSnapshotRules.Validate(source, accountId, databaseName);
+            if (options.CurrentValue.ErpAccountId != accountId ||
+                options.CurrentValue.ErpDatabaseName != databaseName)
+                throw new ApiException(StatusCodes.Status409Conflict,
+                    "MATERIAL_ACCOUNT_CHANGED", "账套已切换，请重新同步。");
+            return await repository.ReplaceMaterialsAsync(
+                rows, accountId, databaseName, userId, cancellationToken);
+        }
+        catch
+        {
+            try { await repository.FailSyncAsync("materials", userId, CancellationToken.None); }
+            catch { /* 保留原始同步异常。 */ }
+            throw;
+        }
+    }
+
     public async Task<DataSyncResult> SyncRdStylesAsync(
         string userId,
         CancellationToken cancellationToken)

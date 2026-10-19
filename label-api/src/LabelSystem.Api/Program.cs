@@ -631,7 +631,8 @@ app.MapGet("/api/v1/reference-data/materials", async (
     HttpContext context,
     string? keyword,
     int? limit,
-    U8GatewayClient gateway,
+    ReferenceDataRepository repository,
+    IOptionsMonitor<LabelSystemOptions> options,
     UserRepository users,
     CancellationToken cancellationToken) =>
 {
@@ -640,8 +641,10 @@ app.MapGet("/api/v1/reference-data/materials", async (
     if (normalized.Length > 100)
         throw new ApiException(StatusCodes.Status400BadRequest,
             "MATERIAL_QUERY_INVALID", "物料查询条件无效。");
-    return ApiResults.Ok(context,
-        await gateway.SearchMaterialsAsync(normalized, Math.Clamp(limit ?? 50, 1, 100), cancellationToken));
+    var current = options.CurrentValue;
+    return ApiResults.Ok(context, await repository.SearchMaterialsAsync(
+        normalized, Math.Clamp(limit ?? 50, 1, 100), current.ErpAccountId,
+        current.ErpDatabaseName, cancellationToken));
 });
 
 app.MapGet("/api/v1/reference-data/purchase-types", async (
@@ -665,10 +668,23 @@ app.MapGet("/api/v1/reference-data/currencies", async (
 app.MapGet("/api/v1/admin/data-sync/status", async (
     HttpContext context,
     ReferenceDataRepository repository,
+    IOptionsMonitor<LabelSystemOptions> options,
     CancellationToken cancellationToken) =>
 {
     RequireAdmin(context);
-    return ApiResults.Ok(context, await repository.ListSyncStatusAsync(cancellationToken));
+    var current = options.CurrentValue;
+    return ApiResults.Ok(context, await repository.ListSyncStatusAsync(
+        cancellationToken, current.ErpAccountId, current.ErpDatabaseName));
+});
+
+app.MapPost("/api/v1/admin/data-sync/materials", async (
+    HttpContext context,
+    ReferenceDataSyncService service,
+    CancellationToken cancellationToken) =>
+{
+    RequireAdmin(context);
+    return ApiResults.Ok(context,
+        await service.SyncMaterialsAsync(RequestContext.User(context).Id, cancellationToken));
 });
 
 app.MapPost("/api/v1/admin/data-sync/rd-styles", async (

@@ -9,6 +9,7 @@ import {
   saveDraftRetentionPolicy,
   syncDepartments,
   syncDocumentMasterData,
+  syncMaterials,
   syncRdStyles,
   syncWarehousePositions,
   type DataSyncStatusItem,
@@ -18,7 +19,7 @@ import {
 import { readSession } from '@/services/auth'
 
 interface SyncOption {
-  key: 'users' | 'categories' | 'locations' | 'departments' | 'documentMasterData'
+  key: 'users' | 'categories' | 'locations' | 'departments' | 'documentMasterData' | 'materials'
   label: string
   enabled: boolean
   statusKey?: string
@@ -30,6 +31,7 @@ const options: SyncOption[] = [
   { key: 'categories', label: '出入库类别', enabled: true, statusKey: 'rd-styles' },
   { key: 'locations', label: '仓位信息', enabled: true, statusKey: 'warehouse-positions' },
   { key: 'departments', label: '部门信息', enabled: true, statusKey: 'departments' },
+  { key: 'materials', label: '物料档案', enabled: true, statusKey: 'materials' },
   { key: 'documentMasterData', label: '单据基础档案', enabled: true, statusKey: 'document-master-data' },
 ]
 const selected = ref<Record<SyncOption['key'], boolean>>({
@@ -37,6 +39,7 @@ const selected = ref<Record<SyncOption['key'], boolean>>({
   categories: true,
   locations: true,
   departments: true,
+  materials: true,
   documentMasterData: true,
 })
 const statuses = ref<DataSyncStatusItem[]>([])
@@ -122,6 +125,7 @@ async function syncNow(): Promise<void> {
     if (selected.value.categories) tasks.push(syncRdStyles)
     if (selected.value.locations) tasks.push(syncWarehousePositions)
     if (selected.value.departments) tasks.push(syncDepartments)
+    if (selected.value.materials) tasks.push(syncMaterials)
     if (selected.value.documentMasterData) tasks.push(syncDocumentMasterData)
     let count = 0
     for (const task of tasks) count += (await task()).itemCount
@@ -129,6 +133,7 @@ async function syncNow(): Promise<void> {
     await loadStatus()
   } catch (error) {
     notify(error instanceof ApiError ? error.message : '同步失败', 'error')
+    await loadStatus()
   } finally {
     syncing.value = false
   }

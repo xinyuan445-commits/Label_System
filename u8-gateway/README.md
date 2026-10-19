@@ -1,5 +1,7 @@
 # U8 Gateway
 
+`0.10.0` 新增只读 `GET /api/v1/reference-data/materials/snapshot`，单次查询完整读取 `Inventory.dEDate IS NULL` 且料号非空的档案，附带来源账套、数据库和条数；上限 200,000 条，超限明确拒绝。原 `GET /reference-data/materials` 继续实时查询，供 Business API 上传前复核。缓存及同步状态由 Business API 保存。
+
 ## 账套写入
 
 `0.9.2` 增加受控生产写入门禁：Gateway 只有同时开启总写入和生产写入、环境为 `production`、当前数据库与账套严格命中白名单，并输入 `ENABLE PRODUCTION 账套 数据库` 时才能写 U8 和 TraceBack。Business API 保留第二层独立开关。配置模板仍默认只读，应用模板不会自动开启生产写入。本版同时修正 Business API 外置 JSON 已有节点在模板切换时未被更新的问题，并让 U8 连接测试返回可安全展示的登录失败原因。

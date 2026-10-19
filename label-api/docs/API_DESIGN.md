@@ -63,7 +63,8 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。CORS �
 | GET | `/reference-data/purchase-types` | 查询采购类型缓存 |
 | GET | `/reference-data/sales-types` | 查询销售类型缓存 |
 | GET | `/reference-data/currencies` | 查询币种及最新汇率缓存 |
-| GET | `/reference-data/materials?keyword=...&limit=...` | 从 U8 实时按编号或名称查询物料 |
+| GET | `/reference-data/materials?keyword=...&limit=...` | 按编号或名称查询当前账套本地物料缓存 |
+| POST | `/admin/data-sync/materials` | 从 U8 同步完整在用物料档案 |
 | GET | `/admin/data-sync/status` | 查询基础资料同步状态 |
 | POST | `/admin/data-sync/rd-styles` | 从 U8 同步出入库类别 |
 | POST | `/admin/data-sync/warehouse-positions` | 从 U8 同步仓库与仓位 |
@@ -144,7 +145,13 @@ H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API �
 
 重复同步开始时保留上一轮 `last_success_at`，本轮完成后再更新成功时间。数据库唯一键或检查约束冲突返回 `409 DATABASE_CONFLICT`，不再误报为数据库连接失败。
 
-`GET /admin/data-sync/status` 返回四个同步项的状态、条数和最近成功时间。所有 `/reference-data/*` 查询都只读取标签数据库缓存；类别的 `direction` 可为 `IN` 或 `OUT`，`terminalOnly=true` 只返回末级类别。接口不实时查询 U8，也不调用 U8 写能力。
+`POST /admin/data-sync/materials` 使用现有管理权限，读取 Gateway `/reference-data/materials/snapshot`。来源只包含 `Inventory.dEDate IS NULL` 且料号非空的记录，字段为 `code`、`name`、`specification`、`unitCode`、`requiresBatch`。校验来源 `accountId`、`databaseName` 与当前配置一致、`itemCount` 等于 `items` 长度、非空且不超过 200,000 条、料号不重复后批量事务替换。未返回的料号标记停用，不删除；Session 应用锁阻止并发覆盖，成功时同时提交来源、条数和数据库时钟时间。失败保持原缓存和上次成功时间。
+
+`GET /reference-data/materials` 保持原响应字段及材料出库功能权限；关键词最多 100 字符，按料号或名称包含匹配，精确料号优先，`limit` 默认 50、最大 100。只查当前账套的在用缓存。首次未同步或切换到未同步账套返回 `409 MATERIAL_CACHE_NOT_READY`；同步过程中可继续读取原成功缓存。无标签退料上传前的校验仍调用 Gateway 实时查询 U8，不使用此缓存代替制单校验。
+
+物料同步错误包括 `409 MATERIAL_SYNC_IN_PROGRESS`、`409 MATERIAL_ACCOUNT_MISMATCH`、`409 MATERIAL_ACCOUNT_CHANGED`、`503 MATERIAL_SOURCE_INVALID`、`503 MATERIAL_SOURCE_TOO_LARGE`；异常不提交缓存。`GET /admin/data-sync/status` 返回五个同步项的状态、条数和最近成功时间；物料来源不匹配当前账套时隐藏原条数和成功时间。
+
+所有对外 `/reference-data/*` 查询读取标签数据库缓存；类别的 `direction` 可为 `IN` 或 `OUT`，`terminalOnly=true` 只返回末级类别。同步接口只读 U8，不调用 U8 写能力。
 
 ## 用户、权限与漫游数据
 

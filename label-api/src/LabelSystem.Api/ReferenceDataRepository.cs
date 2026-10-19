@@ -3,7 +3,7 @@ using Microsoft.Data.SqlClient;
 
 namespace LabelSystem.Api;
 
-public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
+public sealed partial class ReferenceDataRepository(SqlConnectionFactory connections)
 {
     private const string RdStyleSyncKey = "rd-styles";
     private const string WarehousePositionSyncKey = "warehouse-positions";
@@ -11,11 +11,12 @@ public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
     private const string DocumentMasterDataSyncKey = "document-master-data";
 
     public async Task<IReadOnlyList<DataSyncStatusItem>> ListSyncStatusAsync(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? accountId = null, string? databaseName = null)
     {
         const string sql = """
             SELECT sync_key, sync_name, status, item_count, last_started_at,
-                   last_completed_at, last_success_at, synced_by, error_message
+                   last_completed_at, last_success_at, synced_by, error_message,
+                   source_account_id, source_database_name
             FROM dbo.reference_data_sync_state
             ORDER BY sync_key;
             """;
@@ -26,6 +27,16 @@ public sealed class ReferenceDataRepository(SqlConnectionFactory connections)
         var result = new List<DataSyncStatusItem>();
         while (await reader.ReadAsync(cancellationToken))
         {
+            if (reader.GetString(0) == "materials" && accountId is not null &&
+                (reader.IsDBNull(9) || reader.IsDBNull(10) ||
+                 !string.Equals(reader.GetString(9), accountId, StringComparison.OrdinalIgnoreCase) ||
+                 !string.Equals(reader.GetString(10), databaseName, StringComparison.OrdinalIgnoreCase)))
+            {
+                result.Add(new DataSyncStatusItem("materials", reader.GetString(1),
+                    reader.GetString(2) is "RUNNING" or "FAILED" ? reader.GetString(2) : "NEVER", 0,
+                    ReadDateTimeOffset(reader, 4), null, null, null, null));
+                continue;
+            }
             result.Add(new DataSyncStatusItem(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3),
                 ReadDateTimeOffset(reader, 4), ReadDateTimeOffset(reader, 5), ReadDateTimeOffset(reader, 6),

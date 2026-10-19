@@ -123,6 +123,13 @@ export async function syncDepartments(): Promise<DataSyncResult> {
   })
 }
 
+export async function syncMaterials(): Promise<DataSyncResult> {
+  return apiRequest<DataSyncResult>('/api/v1/admin/data-sync/materials', {
+    method: 'POST',
+    timeoutMs: 120_000,
+  })
+}
+
 export async function syncDocumentMasterData(): Promise<DataSyncResult> {
   return apiRequest<DataSyncResult>('/api/v1/admin/data-sync/document-master-data', {
     method: 'POST',

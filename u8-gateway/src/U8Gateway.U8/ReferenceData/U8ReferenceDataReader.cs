@@ -183,6 +183,37 @@ order by case when i.cInvCode = @keyword then 0 else 1 end, i.cInvCode;";
             return result;
         }
 
+        public IList<MaterialItem> GetMaterialsSnapshot()
+        {
+            // 一条查询读取完整在用档案；多读一行用于识别超限，不能静默截断后停用缓存。
+            const string sql = @"
+select top (200001) i.cInvCode, isnull(i.cInvName,N''), isnull(i.cInvStd,N''),
+       isnull(i.cComUnitCode,N''), convert(bit,isnull(i.bInvBatch,0))
+from dbo.Inventory i
+where i.dEDate is null and nullif(ltrim(rtrim(i.cInvCode)),N'') is not null
+order by i.cInvCode;";
+            var result = new List<MaterialItem>();
+            using (var connection = new SqlConnection(_connectionString))
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.CommandTimeout = 60;
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                        result.Add(new MaterialItem
+                        {
+                            Code = reader.GetString(0).Trim(),
+                            Name = reader.GetString(1).Trim(),
+                            Specification = reader.GetString(2).Trim(),
+                            UnitCode = reader.GetString(3).Trim(),
+                            RequiresBatch = reader.GetBoolean(4)
+                        });
+                }
+            }
+            return result;
+        }
+
         public DocumentMasterData GetDocumentMasterData()
         {
             return new DocumentMasterData

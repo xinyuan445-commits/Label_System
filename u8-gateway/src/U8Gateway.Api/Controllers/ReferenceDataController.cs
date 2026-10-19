@@ -4,6 +4,7 @@ using System.Net;
 using System.Web.Http;
 using U8Gateway.Api.Infrastructure;
 using U8Gateway.Contracts;
+using U8Gateway.Contracts.ReferenceData;
 using U8Gateway.Persistence.Configuration;
 using U8Gateway.U8.ReferenceData;
 
@@ -94,6 +95,37 @@ namespace U8Gateway.Api.Controllers
         }
 
         [HttpGet]
+        [Route("materials/snapshot")]
+        public IHttpActionResult GetMaterialSnapshot()
+        {
+            try
+            {
+                var settings = AppRuntime.CurrentSettings;
+                var rows = Reader(settings).GetMaterialsSnapshot();
+                if (rows.Count > 200000)
+                    return Error(HttpStatusCode.ServiceUnavailable,
+                        "MATERIAL_SOURCE_TOO_LARGE", "物料档案超出同步上限。");
+                return Ok(ApiResponse<object>.Ok(new MaterialSnapshot
+                {
+                    AccountId = AccountCode(settings.U8AccountId),
+                    DatabaseName = settings.SqlDatabase,
+                    ItemCount = rows.Count,
+                    Items = rows
+                }, GatewayRequestContext.Id));
+            }
+            catch (SqlException)
+            {
+                return Error(HttpStatusCode.ServiceUnavailable,
+                    "U8_REFERENCE_QUERY_FAILED", "U8 物料查询失败。");
+            }
+            catch (InvalidOperationException)
+            {
+                return Error(HttpStatusCode.ServiceUnavailable,
+                    "U8_GATEWAY_NOT_CONFIGURED", "U8 Gateway 尚未完成配置。");
+            }
+        }
+
+        [HttpGet]
         [Route("document-master-data")]
         public IHttpActionResult GetDocumentMasterData()
         {
@@ -114,9 +146,16 @@ namespace U8Gateway.Api.Controllers
             }
         }
 
-        private static U8ReferenceDataReader Reader()
+        private static string AccountCode(string value)
         {
-            GatewaySettings settings = AppRuntime.CurrentSettings;
+            var trimmed = (value ?? string.Empty).Trim();
+            var separator = trimmed.LastIndexOf('@');
+            return separator >= 0 ? trimmed.Substring(separator + 1) : trimmed;
+        }
+
+        private static U8ReferenceDataReader Reader(GatewaySettings settings = null)
+        {
+            settings = settings ?? AppRuntime.CurrentSettings;
             if (settings == null ||
                 string.IsNullOrWhiteSpace(settings.SqlServer) ||
                 string.IsNullOrWhiteSpace(settings.SqlDatabase) ||

@@ -1,5 +1,13 @@
 # U8 Gateway API 设计
 
+## 物料档案完整快照（0.10.0）
+
+`GET /api/v1/reference-data/materials/snapshot` 使用现有 API Key 验证，一条固定 SQL 完整读取 `Inventory` 中 `dEDate IS NULL` 且 `cInvCode` 非空的记录；返回 `accountId`、`databaseName`、`itemCount` 和 `items`。每条包含 `code`、`name`、`specification`、`unitCode`、`requiresBatch`，按料号排序。上限 200,000 条，查询多读一行用于检测超限；超限返回 `503 MATERIAL_SOURCE_TOO_LARGE`，绝不返回被截断的成功快照。SQL 超时 60 秒。本接口不修改 U8 数据或索引；缓存及停用由 Business API 负责。
+
+原 `GET /api/v1/reference-data/materials?keyword=&limit=` 保持实时查询及最多 100 条的行为，继续用于无标签退料上传前复核；不能用该搜索结果作完整同步快照。
+
+快照 `accountId` 使用纯账套码（例如 `008`）；Gateway 的 `(default)@008` 登录格式在返回前取 `@` 后的账套码。Business API 同时核对账套码及精确数据库名。
+
 ## 本机部署管理（0.9.0）
 
 `GET /admin/config` 提供仅服务器本机可访问的部署管理页，所有管理 API 都要求现有管理密码。`GET /admin/api/overview` 汇总 Gateway、Business API、标签数据库迁移和双层写入状态；`GET /admin/api/business-config` 返回不含密码和 API Key 的 Business API 外置配置视图；`POST /admin/api/test-business-sql` 测试候选标签数据库；`POST /admin/api/save-business` 原子保存并备份 Business API 外置配置；`POST /admin/api/traceback-check` 只读检查 TraceBack 三表及可选产品标签快照。Gateway 配置保存时可同时更换为任意非空管理密码，留空保持原值。测试写入要求 `ENABLE 账套 数据库`；生产写入还必须单独开启生产门禁，严格命中当前账套与数据库白名单，并输入 `ENABLE PRODUCTION 账套 数据库`。Business API 仍有独立写入开关和同样的生产确认。配置审计不记录密码、连接串或内部 API Key。

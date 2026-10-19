@@ -103,6 +103,19 @@ public sealed class U8GatewayClient(
         return envelope.Data;
     }
 
+    public async Task<MaterialSnapshotSource> GetMaterialsSnapshotAsync(
+        CancellationToken cancellationToken)
+    {
+        using var message = CreateRequest(HttpMethod.Get, "/api/v1/reference-data/materials/snapshot");
+        using var response = await Client().SendAsync(message, cancellationToken);
+        var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<MaterialSnapshotSource>>(
+            JsonOptions, cancellationToken);
+        if (!response.IsSuccessStatusCode || envelope?.Success != true || envelope.Data is null)
+            throw new ApiException(StatusCodes.Status503ServiceUnavailable,
+                envelope?.Code ?? "U8_REFERENCE_QUERY_FAILED", "U8 物料同步读取失败。");
+        return envelope.Data;
+    }
+
     public async Task<IReadOnlyList<MaterialSourceItem>> SearchMaterialsAsync(
         string keyword,
         int limit,

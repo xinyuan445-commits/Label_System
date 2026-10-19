@@ -37,6 +37,14 @@ namespace U8Gateway.Contracts.ReferenceData
         public bool RequiresBatch { get; set; }
     }
 
+    public sealed class MaterialSnapshot
+    {
+        public string AccountId { get; set; }
+        public string DatabaseName { get; set; }
+        public int ItemCount { get; set; }
+        public IList<MaterialItem> Items { get; set; }
+    }
+
     public sealed class DocumentTypeItem
     {
         public string Code { get; set; }

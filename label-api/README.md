@@ -1,11 +1,17 @@
 # Label System Business API
 
+`0.11.0` 增加“物料档案”同步。通过 Gateway 完整读取在用物料，校验来源账套、数量和重复项后批量事务写入迁移 016 的 `u8_material_cache`。页面物料搜索读取当前账套本地缓存；无标签退料上传保留 U8 实时物料、单位和批次校验。首次未同步返回 `MATERIAL_CACHE_NOT_READY`，失败保留上次成功缓存。
+
+自动测试：`dotnet test tests/LabelSystem.Api.Tests/LabelSystem.Api.Tests.csproj -c Release`。设置进程环境变量 `LABELSYSTEM_TEST_SQL` 可启用 SQL 集成测试（连接串仅在进程内提供，不写入仓库）；测试只创建并删除带 GUID 的 `LabelSystem_MaterialTest_` 临时库，验证迁移 016、并发锁、原子替换、停用、恢复和失败回滚。
+
+服务器运维验证：设置 `LABELSYSTEM_CONFIG_PATH` 指向现有外置配置，运行 `MaterialSyncSmokeTest --sync 008 UFDATA_008_2021 LabelSystem_Prod`（项目在 `tools/MaterialSyncSmokeTest`）。工具核对三个明确目标后调用同一物料同步服务，只更新物料缓存及同步状态，并全量比较来源、缓存和实时搜索样本；不创建标签或 U8 单据。同步人记录为 `deployment-material-sync`。
+
 ## 草稿同步、审核、标签规则和用户管理
 
 `0.8.1` 补齐 U8 明确失败与结果未知的状态边界：明确未执行写入的失败结束为 `FAILED` 并释放锁，只有保存调用后无法回查确认的请求保留 `NEEDS_RECONCILIATION`。development 已对测试账套 888 开放九类新增、审核和弃审。
 标签系统业务后端。H5 只调用本服务；本服务访问标签数据库，并通过 U8 Gateway 读取或写入 U8。
 
-当前开发与 IIS 版本为 `0.10.1`。`0.10.1` 修复 TraceBack 本地镜像标签在材料出库提交前读取时字段投影不完整导致的上传异常；失败发生在 U8 新增和 TraceBack 同步任务建立之前，可直接重新提交草稿。
+当前开发与 IIS 版本为 `0.11.0`。历史 `0.10.1` 修复 TraceBack 本地镜像标签在材料出库提交前读取时字段投影不完整导致的上传异常；失败发生在 U8 新增和 TraceBack 同步任务建立之前，可直接重新提交草稿。
 
 2026-10-16 运行环境已切换为 `production`，标签库为 `LabelSystem_Prod`，ERP 账套为 `008 / UFDATA_008_2021`。正式 `admin` 使用本地密码派生值登录并绑定 ERP 操作员；开发登录已关闭。Business API 写入开关已与 Gateway 的受控生产门禁同时开启。
 

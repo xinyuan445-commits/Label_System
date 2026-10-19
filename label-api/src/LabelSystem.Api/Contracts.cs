@@ -544,6 +544,12 @@ public sealed record MaterialSourceItem(
     string UnitCode,
     bool RequiresBatch);
 
+public sealed record MaterialSnapshotSource(
+    string AccountId,
+    string DatabaseName,
+    int ItemCount,
+    IReadOnlyList<MaterialSourceItem> Items);
+
 public sealed record DocumentTypeSourceItem(
     string Code,
     string Name,
