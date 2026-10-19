@@ -26,7 +26,7 @@ const browserStorageKey = 'label_system_shell_config'
 
 const defaultConfig: ShellConfig = {
   environment: 'development',
-  developmentUrl: 'http://172.16.10.45:5173/',
+  developmentUrl: 'http://172.16.10.45:5175/',
   testUrl: 'http://172.16.10.45:5174/',
   productionUrl: 'http://172.16.10.45:5175/',
   scanSound: 'short',

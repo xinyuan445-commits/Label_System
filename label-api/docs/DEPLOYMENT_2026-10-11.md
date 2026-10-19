@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-19 H5 默认端口由 5173 切换为 5175，当前地址为 `http://172.16.10.45:5175/`，H5 版本更新为 `0.2.0-dev.76`。Business API 外置配置备份为 `D:\LabelSystem\Config\backups\label-api.pre-port-5175.20261019_092541.json`，并增加 5175 的 localhost、127.0.0.1 和局域网精确 CORS 来源；切换期间保留原 5173、5174 来源。回收应用池后健康检查为 `ready`、production、数据库就绪、008 写入开关保持开启，5175 CORS 预检和 H5 局域网访问均通过，5173 已停止监听。本次不修改数据库、U8 账套或 TraceBack 数据；原登录会话因应用池回收失效。
+
 2026-10-16 已将 `LabelSystem_Dev` 中除开发快捷 `admin` 外的用户同步到 `LabelSystem_Prod`：新增 `123`、`itsupport`、`yuanxin` 三个 `LOCAL` 用户，保留生产库现有 `admin` 及其密码和 ERP 映射。同步内容包括用户状态、ERP 操作员映射、本地密码派生值、12 条功能/数据范围权限和 2 条个人设置；不同步会话、草稿、单据、标签、库存流水和管理审计。事务提交后用户、权限和个人设置逐项差异均为 0，Business API 用户管理接口返回 4 个正式用户。本次未写入 U8 或 TraceBack 表。
 
 2026-10-16 14:29 Business API 已切换到 `production / LabelSystem_Prod / 008 / UFDATA_008_2021`，版本保持 `0.10.1`。正式 `admin` 账号改为 `LOCAL`，密码仅保存 PBKDF2-SHA256 加盐派生值，并绑定 ERP 操作员 `yx`；开发登录关闭。Gateway `0.9.2` 修正外置 JSON 切换问题后，健康检查为 `ready`、数据库就绪、Business API 和 Gateway 两层写入均开启。用正式 TraceBack 标签完成一次实时扫码和本地镜像验证；本次未创建 U8 单据，未写入新的 TraceBack 业务流水。

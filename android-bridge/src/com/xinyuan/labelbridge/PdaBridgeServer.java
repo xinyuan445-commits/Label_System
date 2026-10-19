@@ -35,7 +35,7 @@ final class PdaBridgeServer {
     private static final String TAG = "LabelPdaBridge";
     private static final String PREFS = "label_pda_bridge";
     private static final String CONFIG_READY = "config_ready";
-    private static final String DEFAULT_DEVELOPMENT_URL = "http://172.16.10.45:5173/";
+    private static final String DEFAULT_DEVELOPMENT_URL = "http://172.16.10.45:5175/";
     private static final String DEFAULT_TEST_URL = "http://172.16.10.45:5174/";
     private static final String DEFAULT_PRODUCTION_URL = "http://172.16.10.45:5175/";
     private static final long ACTIVE_WINDOW_MS = 3500L;

@@ -12,7 +12,7 @@ interface SavedH5Config {
 
 const STORAGE_KEY = 'label_system_h5_config'
 const DEFAULT_URLS: Record<EnvironmentKey, string> = {
-  development: 'http://172.16.10.45:5173/',
+  development: 'http://172.16.10.45:5175/',
   test: 'http://172.16.10.45:5174/',
   production: 'http://172.16.10.45:5175/',
 }

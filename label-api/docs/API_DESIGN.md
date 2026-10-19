@@ -22,7 +22,7 @@ Authorization: Bearer <session-token>
 
 登录成功的 `data` 包含 `token`、`expiresAt`、`expiresInSeconds` 和 `user`；`user` 包含稳定用户 ID、显示名称和角色。development 会话有效期为 12 小时并保存在 API 进程内，应用池重启后失效。客户端使用 `expiresInSeconds` 建立本机会话，避免设备时钟偏差；启动时使用 `/auth/me` 验证缓存会话，主动退出调用 `/auth/logout`，受保护接口返回 `401 AUTH_REQUIRED` 时必须清除本地会话。
 
-H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。development CORS 只允许已登记的 H5 来源，不使用通配来源；当前已登记 CT58C 开发来源 `http://172.16.10.45:5173` 和实际容器来源 `http://172.16.10.45:5174`。
+H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。CORS 只允许已登记的 H5 来源，不使用通配来源；当前网页来源为 `http://172.16.10.45:5175`，切换期间保留原 5173、5174 精确来源兼容已打开的旧页面。
 
 ## 接口
 
