@@ -1,17 +1,44 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
 import { readLastLoginUsername } from '@/services/auth-session'
+import { getRuntimeConfig } from '@/services/runtime-config'
+import { RememberedLoginStore } from '@/services/remembered-login'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const username = ref(readLastLoginUsername())
-const password = ref('')
+const config = getRuntimeConfig()
+let storage: Storage | null = null
+try { storage = window.localStorage } catch { /* WebView 可能禁用本机存储。 */ }
+const rememberedStore = new RememberedLoginStore(config.environment, config.apiBaseUrl, storage)
+const remembered = rememberedStore.read()
+const username = ref(remembered?.username ?? readLastLoginUsername())
+const password = ref(remembered?.password ?? '')
+const rememberPassword = ref(remembered !== null)
+let passwordPrefilled = remembered !== null
 const errorMessage = ref('')
 const submitting = ref(false)
+
+watch(username, (value) => {
+  if (passwordPrefilled && value.trim() !== remembered?.username) {
+    password.value = ''
+    passwordPrefilled = false
+  }
+})
+
+function handleRememberChange(): void {
+  if (rememberPassword.value && !storage) {
+    rememberPassword.value = false
+    errorMessage.value = '本机无法记住密码'
+    return
+  }
+  if (!rememberPassword.value && !rememberedStore.clear()) {
+    errorMessage.value = '清除失败，请重试'
+  }
+}
 
 async function handleSubmit(): Promise<void> {
   if (submitting.value) return
@@ -24,12 +51,19 @@ async function handleSubmit(): Promise<void> {
 
   submitting.value = true
   errorMessage.value = ''
-  const result = await authStore.login(account, password.value)
+  const loginPassword = password.value
+  const result = await authStore.login(account, loginPassword)
 
   if (!result.success) {
     errorMessage.value = result.message || '登录失败'
     submitting.value = false
     return
+  }
+
+  if (rememberPassword.value) {
+    if (!rememberedStore.save(account, loginPassword)) rememberedStore.clear()
+  } else {
+    rememberedStore.clear()
   }
 
   await router.replace({ name: 'home' })
@@ -61,6 +95,7 @@ async function handleSubmit(): Promise<void> {
             name="username"
             autocomplete="username"
             inputmode="text"
+            :disabled="submitting"
             @input="errorMessage = ''"
           />
         </label>
@@ -72,8 +107,14 @@ async function handleSubmit(): Promise<void> {
             name="password"
             type="password"
             autocomplete="current-password"
-            @input="errorMessage = ''"
+            :disabled="submitting"
+            @input="errorMessage = ''; passwordPrefilled = false"
           />
+        </label>
+
+        <label class="remember-password">
+          <input v-model="rememberPassword" type="checkbox" :disabled="submitting" @change="handleRememberChange" />
+          <span>记住密码</span>
         </label>
 
         <p class="form-error" aria-live="polite">{{ errorMessage }}</p>
@@ -182,6 +223,23 @@ h1 {
   margin: -4px 0 -2px;
   color: #bf3434;
   font-size: 14px;
+}
+
+.remember-password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: #56708f;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.remember-password input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2368c4;
 }
 
 .primary-button {

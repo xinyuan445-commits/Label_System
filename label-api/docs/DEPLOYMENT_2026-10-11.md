@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-19 H5 更新为 `0.2.0-dev.79`：登录页新增默认不勾选的“记住密码”。完整登录成功后按环境、API 地址将单个账号凭据保存至设备 WebView/浏览器 `localStorage`；取消立即清除，修改账号时清空自动带出的密码。退出及会话失效后保留用户主动记住的凭据，登录仍经现有服务端验证。4 项存储自动测试及 H5 构建通过。本次只更新 H5，不回收 Business API 或 Gateway 应用池，无数据库迁移，APK 不变。
+
 2026-10-19 已发布 Business API `0.11.0` 至 `D:\LabelSystem\Api\releases\20261019_095703`，Gateway `0.10.0` 至原 9880 站点，H5 `0.2.0-dev.78` 在 5175 提供。数据同步页新增“物料档案”，只读 U8 `Inventory.dEDate IS NULL` 且料号非空的数据；搜索转为按当前账套读取本地缓存，无标签退料上传保持实时复核。三套标签库执行迁移 016 并记录相同 SHA-256 `393DF62F9FC1AB0259B5364F2B29A36E6EB8D4F50DD9F02C3A1080A3C595B1ED`。首次来源校验识别出 Gateway 的 `(default)@008` 格式，已按纯账套码修正返回；最终生产同步成功 31,512 条，两次同步和全部档案字段比对通过，审计来源为 `deployment-material-sync`。13 项自动测试全部通过（含独立临时 SQL 库事务和并发验证，测试库已删除）；H5 构建及两端 Release 构建通过。健康检查 `ready/running`，运行环境仍为 production / `LabelSystem_Prod` / 008，两层写入配置保留。本次未创建 U8 单据、标签、库存流水或 TraceBack 业务数据；应用池回收后需要重新登录。
 
 本次 Gateway 程序备份为 `D:\U8Gateway\backups\20261019_095610-pre-materials-0.10.0\site`，Business API 外置配置备份为 `D:\LabelSystem\Config\backups\label-api.pre-materials.20261019_095610.json`。数据库未另做备份。运维同步验证工具为 `label-api/tools/MaterialSyncSmokeTest`，在服务器读取外置配置并要求明确指定账套、U8 数据库和标签库，仅写物料缓存及同步状态。

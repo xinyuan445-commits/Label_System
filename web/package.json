@@ -1,7 +1,7 @@
 {
   "name": "label-system-web",
   "private": true,
-  "version": "0.2.0-dev.78",
+  "version": "0.2.0-dev.79",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -10,6 +10,7 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit",
+    "test:remembered-login": "node --test scripts/test-remembered-login.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
