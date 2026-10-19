@@ -1,0 +1,38 @@
+<style>
+#startup{position:fixed;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f3f6fa;opacity:1;transition:opacity 120ms ease-out;pointer-events:none}
+#startup.leaving{opacity:0}#startup[hidden]{display:none}
+#startup svg{width:104px;height:104px}#startup strong{margin-top:20px;font-size:23px;color:#17365d}
+@media(prefers-reduced-motion:reduce){#startup{transition:none}}
+</style>
+<div id="startup" aria-hidden="true">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+<rect width="108" height="108" rx="23" fill="#2368C4"/>
+<path d="M35 23H61L79 41V75Q79 83 71 83H35Q27 83 27 75V31Q27 23 35 23Z" fill="#FFF"/>
+<path d="M61 23V35Q61 41 67 41H79Z" fill="#B8D7FF"/>
+<path d="M37 49H41V68H37ZM45 49H47V68H45ZM51 49H57V68H51ZM61 49H63V68H61ZM67 49H70V68H67Z" fill="#2368C4"/>
+<rect x="37" y="73" width="20" height="3" rx="1.5" fill="#B8D7FF"/>
+<circle cx="77" cy="78" r="14" fill="#16AA91"/>
+<path d="M70 78L75 83L84 73" fill="none" stroke="#FFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg><strong>标签管理系统</strong></div>
+<script>
+(()=>{
+  const frame=document.getElementById('app'),cover=document.getElementById('startup');
+  let finished=false;
+  function finish(){
+    if(finished)return;finished=true;clearTimeout(timeout);
+    cover.classList.add('leaving');
+    // A hard upper bound also works when transitionend is suppressed or animations are disabled.
+    setTimeout(()=>{cover.hidden=true},150);
+  }
+  const timeout=setTimeout(()=>{
+    finish();window.dispatchEvent(new Event('label-startup-timeout'));
+  },10000);
+  window.addEventListener('message',event=>{
+    if(event.source!==frame.contentWindow||!event.data||event.data.source!=='label-system-h5'||event.data.type!=='app-ready')return;
+    let expected;try{expected=new URL(frame.src).origin}catch(_){return}
+    if(event.origin===expected)finish();
+  });
+  // Offline errors take precedence and must never be hidden behind decoration.
+  window.addEventListener('label-startup-offline',finish);
+})();
+</script>

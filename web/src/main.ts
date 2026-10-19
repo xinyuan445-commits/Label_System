@@ -3,6 +3,7 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import { setUnauthorizedHandler } from './api/client'
+import { notifyStartupReady } from './bridge/startup-ready'
 import { router } from './router'
 import { loadRuntimeConfig } from './services/runtime-config'
 import { startDocumentDraftSync } from './services/document-draft-sync'
@@ -27,4 +28,5 @@ setUnauthorizedHandler(async () => {
 
 app.use(router)
 app.mount('#app')
+void router.isReady().then(notifyStartupReady)
 void authStore.initialize().finally(() => startDocumentDraftSync())

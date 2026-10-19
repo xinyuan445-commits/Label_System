@@ -306,7 +306,7 @@ final class PdaBridgeServer {
         return "<!doctype html><html><head><meta charset=\"utf-8\">"
             + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no\">"
             + "<style>html,body{width:100%;height:100%;margin:0;overflow:hidden;background:#f4f6f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1f2937}"
-            + "iframe{width:100%;height:100%;margin:0;border:0;background:#fff}"
+            + "iframe{width:100%;height:100%;margin:0;border:0;background:#f3f6fa}"
             + "#offline{position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:#f4f6f8;z-index:9}"
             + "#offline.visible{display:flex}.card{width:100%;max-width:440px;background:#fff;border-radius:16px;padding:24px;box-sizing:border-box;box-shadow:0 8px 28px rgba(15,23,42,.12)}"
             + "h1{font-size:22px;margin:0 0 12px}.hint{font-size:14px;color:#64748b;margin-bottom:18px;word-break:break-all}"
@@ -321,10 +321,10 @@ final class PdaBridgeServer {
             + "<button id=\"retry\">重新加载</button><button id=\"change\" class=\"secondary\">更换地址</button></div>"
             + "<div id=\"editor\" class=\"editor\"><input id=\"address\" inputmode=\"url\" autocomplete=\"off\">"
             + "<div class=\"actions\"><button id=\"save\">保存并重试</button><button id=\"cancel\" class=\"secondary\">取消</button></div></div>"
-            + "<div id=\"message\"></div></div></div><script>"
+            + "<div id=\"message\"></div></div></div>" + startupOverlay() + "<script>"
             + "const app=document.getElementById('app'),offline=document.getElementById('offline'),current=document.getElementById('current'),editor=document.getElementById('editor'),address=document.getElementById('address'),message=document.getElementById('message');let config=" + configJson + ",checking=false,backGuardEnabled=false,backGuardArmed=false,suppressBack=false;"
             + "function target(){return String(config[config.environment+'Url']||'')}"
-            + "function showOffline(text=''){current.textContent=target();message.textContent=text;offline.classList.add('visible')}"
+            + "function showOffline(text=''){window.dispatchEvent(new Event('label-startup-offline'));current.textContent=target();message.textContent=text;offline.classList.add('visible')}"
             + "function hideOffline(){offline.classList.remove('visible');editor.classList.remove('visible');message.textContent=''}"
             + "async function reachable(url){try{await Promise.race([fetch(url,{mode:'no-cors',cache:'no-store'}),new Promise((_,reject)=>setTimeout(()=>reject(new Error()),4000))]);return true}catch(x){return false}}"
             + "async function checkTarget(forceReload=false){if(checking)return;checking=true;const url=target(),wasOffline=offline.classList.contains('visible');message.textContent=wasOffline?'正在连接…':'';"
@@ -336,6 +336,7 @@ final class PdaBridgeServer {
             + "function disarmBackGuard(){if(!backGuardArmed)return;suppressBack=true;backGuardArmed=false;history.back()}"
             + "window.addEventListener('popstate',()=>{if(suppressBack){suppressBack=false;return}if(!backGuardEnabled)return;backGuardArmed=false;app.contentWindow.postMessage({source:'label-system-pda',type:'system-back'},'*');setTimeout(armBackGuard,80)});"
             + "app.addEventListener('load',()=>sendConfig());"
+            + "window.addEventListener('label-startup-timeout',()=>showOffline('加载较慢，请重试'));"
             + "document.getElementById('retry').addEventListener('click',()=>checkTarget(true));"
             + "document.getElementById('change').addEventListener('click',()=>{address.value=target();editor.classList.add('visible');address.focus()});"
             + "document.getElementById('cancel').addEventListener('click',()=>{editor.classList.remove('visible');message.textContent=''}) ;"
@@ -363,6 +364,19 @@ final class PdaBridgeServer {
             + "catch(e){}finally{setTimeout(poll,140);}}poll();"
             + "setTimeout(()=>checkTarget(false),250);setInterval(()=>checkTarget(false),5000);"
             + "</script></body></html>";
+    }
+
+    private static String startupOverlay() {
+        try (InputStream stream = appContext.getAssets().open("startup-overlay.html")) {
+            BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
+            StringBuilder html = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) html.append(line).append('\n');
+            return html.toString();
+        } catch (Exception error) {
+            Log.w(TAG, "Startup decoration unavailable");
+            return ""; // Decoration failures must not prevent loading the business application.
+        }
     }
 
     private static String appVersionName() {

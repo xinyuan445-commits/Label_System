@@ -48,7 +48,8 @@ $requiredPaths = @(
     (Join-Path $bridgeSourceDir 'Ct58cScanReceiver.java'),
     (Join-Path $bridgeSourceDir 'Ct58cBridgeInitializer.java'),
     (Join-Path $bridgeAssetDir 'scan_success_zh_female.wav'),
-    (Join-Path $bridgeAssetDir 'scan_error_zh_female.wav')
+    (Join-Path $bridgeAssetDir 'scan_error_zh_female.wav'),
+    (Join-Path $bridgeAssetDir 'startup-overlay.html')
 )
 foreach ($path in $requiredPaths) {
     if (-not (Test-Path -LiteralPath $path)) {
@@ -211,6 +212,7 @@ $injectAssetDir = Join-Path $injectDir 'assets'
 New-Item -ItemType Directory -Force -Path $injectAssetDir | Out-Null
 Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_success_zh_female.wav') -Destination $injectAssetDir
 Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'scan_error_zh_female.wav') -Destination $injectAssetDir
+Copy-Item -Force -LiteralPath (Join-Path $bridgeAssetDir 'startup-overlay.html') -Destination $injectAssetDir
 Copy-Item -Force -LiteralPath $rebuiltApk -Destination $unsignedApk
 Push-Location $injectDir
 try {

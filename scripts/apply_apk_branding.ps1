@@ -48,6 +48,28 @@ if (Test-Path -LiteralPath $loadingLayout) {
             $node.SetAttribute('layout_height', $androidNs, '0dp')
         }
     }
+    # Keep SDK progress/avatar/name objects and IDs for its code; place our decoration above them.
+    foreach ($node in @($xml.SelectNodes('//*'))) {
+        if ($node.GetAttribute('tag', $androidNs) -eq 'label_startup_brand_overlay') {
+            [void]$node.ParentNode.RemoveChild($node)
+        }
+    }
+    [xml]$startup = [IO.File]::ReadAllText((Join-Path $brand 'startup.xml'))
+    $overlay = $xml.CreateElement('FrameLayout')
+    $overlay.SetAttribute('tag', $androidNs, 'label_startup_brand_overlay')
+    $overlay.SetAttribute('layout_width', $androidNs, 'match_parent')
+    $overlay.SetAttribute('layout_height', $androidNs, 'match_parent')
+    $overlay.SetAttribute('background', $androidNs, '#F3F6FA')
+    $content = $xml.ImportNode($startup.DocumentElement.FirstChild, $true)
+    $content.SetAttribute('layout_gravity', $androidNs, 'center')
+    foreach ($icon in $content.SelectNodes('.//com.xinyuan.labelbridge.StartupBrandView')) {
+        $icon.SetAttribute('tag', $androidNs, 'label_startup_static')
+    }
+    [void]$overlay.AppendChild($content)
+    # Keep the SDK's optional compliance hint above the decorative layer.
+    $hint = $xml.SelectNodes('//*') | Where-Object { $_.GetAttribute('id', $androidNs) -eq '@id/wmpf_splash_game_hint' } | Select-Object -First 1
+    if ($hint) { [void]$xml.DocumentElement.InsertBefore($overlay, $hint) }
+    else { [void]$xml.DocumentElement.AppendChild($overlay) }
     [IO.File]::WriteAllText($loadingLayout, $xml.OuterXml, $utf8)
 }
 Write-Output "Branding applied; cleared $count startup text resources."

@@ -1,4 +1,6 @@
-# 扫码结果语音资源
+# 原生桥资源
+
+## 扫码结果语音
 
 - `scan_success_zh_female.wav`：中文女声播报“成功”，时长约 0.91 秒。
 - `scan_error_zh_female.wav`：中文女声播报“错误”，时长约 0.85 秒。
@@ -10,3 +12,7 @@
 - `scan_error_zh_female.wav` SHA-256：`A5249FE266202E4C6E4F1993BD23DF5D2759BD02DCC9D4A84F5ACC5844F19498`。
 
 APK 只包含以上两个 WAV 文件，运行时不需要网络或设备 TTS 引擎。
+
+## 启动衔接
+
+`startup-overlay.html` 自带 SVG、样式和就绪监听脚本，不引用外部图像或动画库。构建时打入 APK，桥包装页读取并内嵌；只负责静态交接和短淡出，不阻塞业务加载，不发送业务请求。动画与验证说明见 `android-bridge/branding/README.md`。

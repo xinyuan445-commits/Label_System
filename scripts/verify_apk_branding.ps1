@@ -27,6 +27,12 @@ if($donut.Count -eq 0){throw 'Startup branding resource was not verified.'}
 foreach($entry in $donut){if(($entry.Context.PostContext -join '') -notmatch '\(string8\) ""'){
     throw 'Startup branding text was not cleared.'
 }}
+foreach($layout in @('layout','layout_splashscreen','wmpf_splash_ui')){
+    $tree=(& $aapt dump xmltree $apk "res/layout/$layout.xml") -join "`n"
+    if($LASTEXITCODE -ne 0 -or $tree -notmatch 'E: com\.xinyuan\.labelbridge\.StartupBrandView '){
+        throw "Animated startup view missing from layout: $layout"
+    }
+}
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 Add-Type -AssemblyName System.Drawing
@@ -56,8 +62,15 @@ try{
             if($actual){$actual.Dispose()};if($expected){$expected.Dispose()};$stream.Dispose()
         }
     }
-    foreach($file in @('classes3.dex','assets/scan_success_zh_female.wav','assets/scan_error_zh_female.wav')){
+    foreach($file in @('classes3.dex','assets/scan_success_zh_female.wav','assets/scan_error_zh_female.wav','assets/startup-overlay.html')){
         if(-not $zip.GetEntry($file)){throw "Missing native bridge resource: $file"}
     }
+    $dexStream=$zip.GetEntry('classes3.dex').Open()
+    $reader=[IO.StreamReader]::new($dexStream)
+    try{
+        if($reader.ReadToEnd() -notmatch 'Lcom/xinyuan/labelbridge/StartupBrandView;'){
+            throw 'Animated startup view class missing from bridge DEX.'
+        }
+    }finally{$reader.Dispose()}
 }finally{$zip.Dispose()}
 Write-Output 'APK branding, version, bridge registration and launcher pixels verified.'
