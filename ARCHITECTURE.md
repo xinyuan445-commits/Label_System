@@ -1527,3 +1527,10 @@ APK 上线前还必须满足：
 - APK 边界：既有 APK `0.5.2` 未随本次端口调整重新构建，二进制仍保留旧开发地址默认值；新设备必须通过 Bridge 地址配置覆盖。PX101A 已将 development、production 地址保存为 5175。
 - 设备兼容：PX101A 可启动 APK、PDA Bridge 和小程序容器，并可连接 5175；通用扫码广播接收器已注册，但设备不存在 CT58C/Urovo `ScanManager`，物理扫码兼容性必须单独实测，不能仅凭安装成功判定通过。
 - 影响：H5 `0.2.0-dev.76`；复用 APK `0.5.2`，不修改 Business API 程序、Gateway、数据库、U8 账套、TraceBack 数据或写入门禁。
+
+### 2026-10-19 调拨单区分调出、调入部门
+
+- 决定：调拨单表头并列显示“调出部门”和“调入部门”，两项都从部门基础档案选择；调入部门不再作为默认隐藏的扩展字段。
+- 映射：沿用现有合同，调出部门通过 `header.departmentCode` 写 U8 `codepcode`，调入部门通过 `header.additionalFields.targetDepartmentCode` 写 U8 `cidepcode`。
+- 兼容：已有草稿和 Business API 合同不变，调入部门继续保持可选；无数据库迁移，不修改 Gateway。
+- 影响：H5 `0.2.0-dev.77`；Business API、Gateway、APK、数据库和 U8 数据不变。

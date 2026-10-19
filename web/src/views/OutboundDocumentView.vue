@@ -217,6 +217,7 @@ const handledHeaderFieldKeys = new Set([
   'header.sourceLocationCode',
   'header.targetLocationCode',
   'header.departmentCode',
+  'header.targetDepartmentCode',
   'header.categoryCode',
   'header.productionBatch',
   'header.remark',
@@ -463,6 +464,10 @@ function formatQty(value: number | null): string {
 }
 
 function fieldVisible(key: string): boolean {
+  if (props.documentType === 'transfer-order' &&
+      ['header.departmentCode', 'header.targetDepartmentCode'].includes(key)) {
+    return true
+  }
   if (['transfer-order', 'location-adjustment'].includes(props.documentType)) {
     const hiddenHeaders = props.documentType === 'transfer-order'
       ? ['header.warehouseCode', 'header.targetWarehouseCode', 'header.targetLocationCode']
@@ -2049,12 +2054,23 @@ onBeforeRouteLeave((to) => {
           </label>
 
           <label v-if="fieldVisible('header.departmentCode')" class="field">
-            <span><i v-if="fieldRequired('header.departmentCode')">*</i>部门</span>
+            <span><i v-if="fieldRequired('header.departmentCode')">*</i>{{ documentType === 'transfer-order' ? '调出部门' : '部门' }}</span>
             <SearchSelect
               v-model="departmentCode"
               :options="departmentSelectOptions"
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
+            />
+          </label>
+
+          <label v-if="documentType === 'transfer-order' && fieldVisible('header.targetDepartmentCode')" class="field">
+            <span><i v-if="fieldRequired('header.targetDepartmentCode')">*</i>调入部门</span>
+            <SearchSelect
+              :model-value="String(headerFieldValues['header.targetDepartmentCode'] ?? '')"
+              :options="departmentSelectOptions"
+              :disabled="referenceDataLoading"
+              placeholder="编号或名称"
+              @update:model-value="setHeaderField('header.targetDepartmentCode', $event)"
             />
           </label>
 
@@ -2116,14 +2132,6 @@ onBeforeRouteLeave((to) => {
               v-else-if="field.key === 'header.inCategoryCode'"
               :model-value="String(headerFieldValues[field.key] ?? '')"
               :options="inRdStyleSelectOptions"
-              :disabled="referenceDataLoading"
-              placeholder="编号或名称"
-              @update:model-value="setHeaderField(field.key, $event)"
-            />
-            <SearchSelect
-              v-else-if="field.key === 'header.targetDepartmentCode'"
-              :model-value="String(headerFieldValues[field.key] ?? '')"
-              :options="departmentSelectOptions"
               :disabled="referenceDataLoading"
               placeholder="编号或名称"
               @update:model-value="setHeaderField(field.key, $event)"

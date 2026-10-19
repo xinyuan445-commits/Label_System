@@ -1,5 +1,7 @@
 # 2026-10-11 Business API IIS 部署记录
 
+2026-10-19 H5 更新为 `0.2.0-dev.77`：调拨单表头把原“部门”明确为“调出部门”，并并列默认显示“调入部门”；上传继续使用现有合同分别映射 U8 `codepcode`、`cidepcode`。本次仅更新 H5 和文档，无数据库迁移，不修改 Business API、Gateway、APK、U8 或 TraceBack 数据。
+
 2026-10-19 已在新设备 PX101A（ADB 序列号 `4622564`，无线地址 `172.16.10.201`）全新安装既有 APK `0.5.2`（versionCode `108`），用户完成首次隐私确认。设备的 development、production 地址均已保存为 `http://172.16.10.45:5175/`，PDA Bridge 启动、配置重读和设备到 5175 的网络连接验证通过。该 APK 仍是 CT58C/Urovo 基包，PX101A 未发现 Urovo `ScanManager`，通用扫码广播接收器已注册；物理扫码键及广播格式待实机验收。本次没有重新构建 APK，不修改 Business API、Gateway、数据库、U8 或 TraceBack 数据。
 
 2026-10-19 H5 默认端口由 5173 切换为 5175，当前地址为 `http://172.16.10.45:5175/`，H5 版本更新为 `0.2.0-dev.76`。Business API 外置配置备份为 `D:\LabelSystem\Config\backups\label-api.pre-port-5175.20261019_092541.json`，并增加 5175 的 localhost、127.0.0.1 和局域网精确 CORS 来源；切换期间保留原 5173、5174 来源。回收应用池后健康检查为 `ready`、production、数据库就绪、008 写入开关保持开启，5175 CORS 预检和 H5 局域网访问均通过，5173 已停止监听。本次不修改数据库、U8 账套或 TraceBack 数据；原登录会话因应用池回收失效。

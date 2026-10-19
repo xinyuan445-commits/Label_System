@@ -88,7 +88,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
     ))
   }
   fields.push(field(
-    'header.departmentCode', '部门', 'header', 'text',
+    'header.departmentCode', documentType === 'transfer-order' ? '调出部门' : '部门', 'header', 'text',
     config.departmentRequired, config.departmentRequired,
   ))
   if (config.categoryLabel) {
@@ -139,7 +139,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
   }
   if (documentType === 'transfer-order') {
     fields.push(
-      field('header.targetDepartmentCode', '调入部门', 'header', 'text'),
+      field('header.targetDepartmentCode', '调入部门', 'header', 'text', true),
       field('header.outCategoryCode', '调出类别', 'header', 'text', true, true),
       field('header.inCategoryCode', '调入类别', 'header', 'text', true, true),
     )
