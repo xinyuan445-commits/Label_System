@@ -20,6 +20,7 @@ def main() -> None:
         "frontend/dist",
         "connector/dist/blg-connector-windows.exe",
         "deployment/Run-LabelSystemLocal.ps1",
+        "deployment/Start-LabelPrintSystem.ps1",
     ]
     for name in paths:
         if not (root / name).exists():

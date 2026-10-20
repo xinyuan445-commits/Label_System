@@ -115,14 +115,26 @@ foreach ($listener in $listeners) {
 }
 
 $runner = Join-Path $release 'deployment\Run-LabelSystemLocal.ps1'
-$startup = Join-Path ([Environment]::GetFolderPath('Startup')) 'NewLabelPrintSystem.vbs'
-$command = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""' + `
-    $runner + '"" -ConfigPath ""' + $configPath + '""'
-$vbs = 'CreateObject("WScript.Shell").Run "' + $command + '", 0, False'
-[IO.File]::WriteAllText($startup, $vbs, [Text.Encoding]::Unicode)
-$desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) '标签打印系统.url'
-[IO.File]::WriteAllText($desktop, "[InternetShortcut]`r`nURL=http://127.0.0.1:18003/bills`r`n")
-Start-Process -FilePath 'wscript.exe' -ArgumentList ('"' + $startup + '"') -WindowStyle Hidden
+$manualStart = Join-Path $root 'Start-LabelPrintSystem.ps1'
+Copy-Item -LiteralPath (Join-Path $release 'deployment\Start-LabelPrintSystem.ps1') `
+    -Destination $manualStart -Force
+$startupFolder = [Environment]::GetFolderPath('Startup')
+foreach ($name in 'NewLabelPrintSystem.vbs','LabelPrintingAssistant.vbs') {
+    $automatic = Join-Path $startupFolder $name
+    if (Test-Path -LiteralPath $automatic) {
+        Move-Item -LiteralPath $automatic -Destination ($automatic + '.disabled') -Force
+    }
+}
+$desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) '启动标签打印系统.cmd'
+$oldDesktop = Join-Path ([Environment]::GetFolderPath('Desktop')) '标签打印系统.url'
+if (Test-Path -LiteralPath $oldDesktop) { Remove-Item -LiteralPath $oldDesktop -Force }
+$desktopCommand = '@echo off' + "`r`n" +
+    'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\NewLabelPrintSystem\Start-LabelPrintSystem.ps1"' + "`r`n" +
+    'if errorlevel 1 pause' + "`r`n"
+[IO.File]::WriteAllText($desktop, $desktopCommand, [Text.Encoding]::Default)
+$runArguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
+    $runner + '" -ConfigPath "' + $configPath + '"'
+Start-Process -FilePath 'powershell.exe' -ArgumentList $runArguments -WindowStyle Hidden
 
 $healthy = $false
 for ($i = 0; $i -lt 40; $i++) {
@@ -146,10 +158,18 @@ $matches = @(
 if ($matches.Count -ne 1) {
     throw 'Health check reached a different local printing release.'
 }
+Stop-Process -Id $matches[0].ProcessId -Force
+for ($i = 0; $i -lt 20; $i++) {
+    if (-not (Get-NetTCPConnection -LocalPort 18003 -State Listen -ErrorAction SilentlyContinue)) {
+        break
+    }
+    Start-Sleep -Milliseconds 100
+}
 [pscustomobject]@{
     url = 'http://127.0.0.1:18003/bills'
     source = $apiOrigin
     account = '888'
     release = $release
     data = $data
+    manualStart = $desktop
 }
