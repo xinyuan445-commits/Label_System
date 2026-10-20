@@ -612,7 +612,9 @@ label_code_rule
 
 ### 5.26 `label_code_sequence` 标签 Code 流水
 
-按规则版本和分区键保存最后分配流水号，并使用行版本保护并发。业务制单和待打印任务创建不消耗流水；打印平台开始首次打印时，必须在分配流水、回填标签 Code 和统一登记的同一数据库事务内完成。
+按规则版本和分区键保存最后分配流水号，并使用事务应用锁保护并发。当前产品标签分区按账套和打印日划分，正式值为 `yyMMdd` + 4位当日号；取号时同时读取旧 `TraceBackOnlyCode.sn`（空时取Code末段）、新 `label_code_registry`、`inventory_flow.serial_no` 和本表的当日最大值，避免从1重新开始与旧标签重码。业务制单和待打印任务创建不消耗流水；打印平台开始首次打印时，必须在分配流水、回填标签 Code 和统一登记的同一数据库事务内完成。补打不更新本表。
+
+首打和补打的零数量 `inventory_flow` 使用冻结打印快照中的正式SN写入 `serial_no`；早期已经完成且该列为空的记录仍以不可变快照和 `label_code_registry` 为准，不改写原Code。
 
 ### 5.27 `label_code_registry` Code 统一登记
 

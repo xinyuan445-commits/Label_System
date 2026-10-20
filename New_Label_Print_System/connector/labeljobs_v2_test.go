@@ -52,6 +52,9 @@ func v2DestinationFixture(t *testing.T, printer string, pdf bool) (*LocalAPI, ti
 	digest := sha256.Sum256(png)
 	m := manifestV2{Version: 2, Scope: ticket.Scope, JobID: job, DeviceID: deviceID, Printer: ticket.Printer,
 		WidthMM: 80, HeightMM: 50, Pages: []pageV2{{OutputID: output, File: file, SHA256: hex.EncodeToString(digest[:])}}}
+	if pdf {
+		m.Pages[0].Filename = "DBD26103204_9_2610200042.pdf"
+	}
 	var buf bytes.Buffer
 	writer := zip.NewWriter(&buf)
 	entry, _ := writer.Create("manifest.json")
@@ -91,6 +94,9 @@ func TestV2PDFReplaySavesOnlyOneFile(t *testing.T) {
 	files, _ := filepath.Glob(filepath.Join(folder, "*.pdf"))
 	if len(files) != 1 {
 		t.Fatal("expected exactly one PDF")
+	}
+	if filepath.Base(files[0]) != "DBD26103204_9_2610200042.pdf" {
+		t.Fatalf("unexpected PDF filename: %s", filepath.Base(files[0]))
 	}
 	data, _ := os.ReadFile(files[0])
 	if !bytes.HasPrefix(data, []byte("%PDF-")) {

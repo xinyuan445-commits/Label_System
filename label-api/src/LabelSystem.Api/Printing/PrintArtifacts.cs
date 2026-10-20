@@ -113,10 +113,12 @@ public sealed class PrintArtifacts(IOptionsMonitor<PrintingOptions> options,IHtt
         {
             ["version"]=2,["scope"]=scope,["jobId"]=job.JobId.ToString(),["deviceId"]=job.DeviceId.ToString(),
             ["printer"]=job.Printer,["widthMm"]=template.D("width_mm"),["heightMm"]=template.D("height_mm"),
+            ["reprint"]=job.Outputs.All(o=>o.Kind=="REPRINT"),
             ["templateVersionId"]=job.TemplateVersionId,["templateHash"]=template.S("content_sha256"),
             ["fontManifest"]=rendered["fontManifest"]!.DeepClone(),["pages"]=new JsonArray()
         };
         using var buffer=new MemoryStream();
+        var filenames=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using(var zip=new ZipArchive(buffer,ZipArchiveMode.Create,true))
         {
             foreach(var page in pages.OfType<JsonObject>())
@@ -127,10 +129,13 @@ public sealed class PrintArtifacts(IOptionsMonitor<PrintingOptions> options,IHtt
                 var pdf=Convert.FromBase64String(page.S("pdf"));
                 var pdfPath=await Store(job.JobId.ToString("N"),pdf,"pdf",ct);
                 var payload=job.Printer=="Microsoft Print to PDF"?pdf:png;
-                var file=id.ToString("N")+(job.Printer=="Microsoft Print to PDF"?".pdf":".png");
+                var extension=job.Printer=="Microsoft Print to PDF"?".pdf":".png";
+                var file=id.ToString("N")+extension;
+                var output=job.Outputs.Single(o=>o.OutputId==id);
+                var filename=extension==".pdf"?BusinessFilename(output,filenames):file;
                 var hash=Convert.ToHexString(SHA256.HashData(payload));
                 content["pages"]!.AsArray().Add(new JsonObject
-                    {["outputId"]=id.ToString(),["file"]=file,["sha256"]=hash,
+                    {["outputId"]=id.ToString(),["file"]=file,["filename"]=filename,["sha256"]=hash,
                      ["pdfPath"]=pdfPath,["pdfSha256"]=Convert.ToHexString(SHA256.HashData(pdf))});
                 var entry=zip.CreateEntry(file,CompressionLevel.Fastest);
                 entry.LastWriteTime=new DateTimeOffset(2000,1,1,0,0,0,TimeSpan.Zero);
@@ -151,5 +156,34 @@ public sealed class PrintArtifacts(IOptionsMonitor<PrintingOptions> options,IHtt
         var canonical=Encoding.UTF8.GetBytes(PrintRules.Canonical(content));
         content["manifestPath"]=await Store(job.JobId.ToString("N"),canonical,"json",ct);
         return content;
+    }
+
+    public static string BusinessFilename(PrintOutput output,ISet<string>? used=null)
+    {
+        static string Safe(string value)
+        {
+            var invalid=Path.GetInvalidFileNameChars().ToHashSet();
+            var cleaned=new string(value.Trim().Select(c=>invalid.Contains(c)||char.IsControl(c)?'_':c).ToArray()).Trim(' ','.');
+            return string.IsNullOrWhiteSpace(cleaned)?"0":cleaned;
+        }
+        var snapshot=output.Snapshot;
+        var document=Safe(snapshot.SourceDocumentNo);
+        var rawLine=snapshot.Variables.S("行号");
+        var line=Safe(string.IsNullOrWhiteSpace(rawLine)?snapshot.ErpDetailId??"0":rawLine);
+        var rawSerial=snapshot.Code.Split('|').LastOrDefault();
+        var serial=Safe(string.IsNullOrWhiteSpace(rawSerial)?snapshot.SerialNo:rawSerial);
+        var stem=$"{document}_{line}_{serial}";
+        if(stem.Length>230)stem=stem[..230];
+        var filename=stem+".pdf";
+        if(used is null)return filename;
+        var suffix=1;
+        while(!used.Add(filename))
+        {
+            suffix++;
+            var marker=$"_{suffix}";
+            var baseStem=stem.Length+marker.Length>230?stem[..(230-marker.Length)]:stem;
+            filename=baseStem+marker+".pdf";
+        }
+        return filename;
     }
 }

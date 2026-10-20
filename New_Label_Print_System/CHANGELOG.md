@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2 - 2026-10-20
+
+- Label system的Microsoft Print to PDF恢复使用 `单号_行号_条码末段流水号.pdf`，包内UUID身份与用户文件名分离；补打进入独立任务目录，重复名称追加序号。
+- 正式首打唯一值沿用旧TraceBack十位格式 `yyMMdd` + 当日4位号，取号同时检查旧 `sn`/Code末段和新表已用值；已有Code及补打编码不改。
+- 新产生的首打、补打零数量库存流水写入冻结SN，便于新表独立审计和后续停用旧三表。
+
 All notable changes to **BarcodeLabelGen** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

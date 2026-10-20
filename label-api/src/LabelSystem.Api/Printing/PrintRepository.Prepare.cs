@@ -77,18 +77,19 @@ public sealed partial class PrintRepository
                     throw PrintRules.Conflict("PRINT_MATERIAL_REQUIRED","请先同步物料档案。");
                 if(string.IsNullOrEmpty(snapshot.Code))
                 {
-                    var serial=await NextSerial(db,rule.L("id"));
+                    var uniqueSegment=validated.Spec.Segments.FirstOrDefault(x=>x.Kind=="FIELD" && x.Field=="LABEL_UNIQUE_VALUE");
+                    if(uniqueSegment?.Length!=10)
+                        throw PrintRules.Conflict("PRINT_RULE_SERIAL_FORMAT_INVALID","当前打印规则的唯一值必须为10位。");
+                    var serial=await NextSerial(db,rule.L("id"),snapshot.FrozenAt);
                     var values=new Dictionary<string,string>(StringComparer.Ordinal)
                     {
                         ["ERP_ACCOUNT_ID"]=labelOptions.CurrentValue.ErpAccountId,
                         ["LABEL_TYPE"]="PRODUCT_LABEL",["MATERIAL_CODE"]=snapshot.MaterialCode,
                         ["BATCH_NO"]=snapshot.BatchNo,["ISSUED_QUANTITY"]=snapshot.Quantity,
                         ["UNIT_CODE"]=snapshot.UnitCode,["SOURCE_DOCUMENT_NO"]=snapshot.SourceDocumentNo,
-                        ["CURRENT_DATE"]=snapshot.FrozenAt,["SEQUENCE"]=serial.ToString(CultureInfo.InvariantCulture)
+                        ["CURRENT_DATE"]=snapshot.FrozenAt,["SEQUENCE"]=serial
                     };
-                    var uniqueSegment=validated.Spec.Segments.FirstOrDefault(x=>x.Kind=="FIELD" && x.Field=="LABEL_UNIQUE_VALUE");
-                    values["LABEL_UNIQUE_VALUE"]=serial.ToString(CultureInfo.InvariantCulture)
-                        .PadLeft(uniqueSegment?.Length ?? 1,'0');
+                    values["LABEL_UNIQUE_VALUE"]=serial;
                     if(snapshot.ManufactureDate is not null) values["MANUFACTURE_DATE"]=snapshot.ManufactureDate;
                     var code=codeEngine.Render(validated.Spec,values,labelOptions.CurrentValue.ErpAccountId);
                     var parsed=codeEngine.ParseCode(validated.Spec,code,null,labelOptions.CurrentValue.ErpAccountId);
@@ -212,26 +213,54 @@ public sealed partial class PrintRepository
             ("@year",l.ErpYear),("@database",l.ErpDatabaseName),("@reason",reason),
             ("@job",job),("@scope",Scope),("@printer",printer),("@device",device),("@template",template)),CultureInfo.InvariantCulture);
     }
-    private async Task<long> NextSerial(PrintDb db,long version)
+    private async Task<string> NextSerial(PrintDb db,long version,string frozenAt)
     {
-        // Shared monotonic floor across rule versions; no daily/yearly reset at the printer.
-        var partition="PRINT:"+Hashing.Sha256(printOptions.CurrentValue.Namespace+"|"+
-            labelOptions.CurrentValue.Environment+"|"+labelOptions.CurrentValue.ErpAccountId);
+        var day=DateTimeOffset.Parse(frozenAt,CultureInfo.InvariantCulture).ToString("yyMMdd",CultureInfo.InvariantCulture);
+        var partition="PRINT-LEGACY:"+Hashing.Sha256(printOptions.CurrentValue.Namespace+"|"+
+            labelOptions.CurrentValue.Environment+"|"+labelOptions.CurrentValue.ErpAccountId)+":"+day;
+        var database=labelOptions.CurrentValue.ErpDatabaseName;
+        if(database.Length is <1 or >128 || database.Any(c=>!(char.IsAsciiLetterOrDigit(c)||c=='_')))
+            throw new InvalidOperationException("Invalid ERP database name.");
         await db.Scalar("""
             DECLARE @lock int;
             EXEC @lock=sys.sp_getapplock @Resource=@key,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000;
             IF @lock<0 THROW 50001,N'打印流水正忙。',1; SELECT @lock;
             """,("@key",partition));
-        var serial=Convert.ToInt64(await db.Scalar("""
-            SELECT ISNULL(MAX(current_value),0)+1 FROM dbo.label_code_sequence WITH(UPDLOCK,HOLDLOCK)
-            WHERE partition_key=@key;
-            """,("@key",partition)),CultureInfo.InvariantCulture);
+        var legacyTable=$"[{database}].dbo.TraceBackOnlyCode";
+        var serial=Convert.ToInt64(await db.Scalar($$"""
+            ;WITH used(value) AS
+            (
+                SELECT TRY_CONVERT(int,RIGHT(v.serial,4))
+                FROM {{legacyTable}} t WITH(UPDLOCK,HOLDLOCK)
+                CROSS APPLY (VALUES(CASE WHEN NULLIF(LTRIM(RTRIM(t.sn)),'') IS NOT NULL
+                  THEN LTRIM(RTRIM(t.sn)) WHEN CHARINDEX('|',REVERSE(t.traceBackCode))>0
+                  THEN RIGHT(t.traceBackCode,CHARINDEX('|',REVERSE(t.traceBackCode))-1) END)) v(serial)
+                WHERE LEN(v.serial)=10 AND LEFT(v.serial,6)=@day AND v.serial NOT LIKE '%[^0-9]%'
+                UNION ALL
+                SELECT TRY_CONVERT(int,RIGHT(v.serial,4))
+                FROM dbo.label_code_registry r WITH(UPDLOCK,HOLDLOCK)
+                CROSS APPLY (VALUES(CASE WHEN CHARINDEX('|',REVERSE(r.raw_code))>0
+                  THEN RIGHT(r.raw_code,CHARINDEX('|',REVERSE(r.raw_code))-1) END)) v(serial)
+                WHERE LEN(v.serial)=10 AND LEFT(v.serial,6)=@day AND v.serial NOT LIKE '%[^0-9]%'
+                UNION ALL
+                SELECT TRY_CONVERT(int,RIGHT(LTRIM(RTRIM(f.serial_no)),4))
+                FROM dbo.inventory_flow f WITH(UPDLOCK,HOLDLOCK)
+                WHERE LEN(LTRIM(RTRIM(f.serial_no)))=10 AND LEFT(LTRIM(RTRIM(f.serial_no)),6)=@day
+                  AND LTRIM(RTRIM(f.serial_no)) NOT LIKE '%[^0-9]%'
+                UNION ALL
+                SELECT TRY_CONVERT(int,current_value) FROM dbo.label_code_sequence WITH(UPDLOCK,HOLDLOCK)
+                WHERE partition_key=@key
+            )
+            SELECT ISNULL(MAX(value),0)+1 FROM used;
+            """,("@day",day),("@key",partition)),CultureInfo.InvariantCulture);
+        if(serial>9999)
+            throw PrintRules.Conflict("PRINT_SERIAL_EXHAUSTED","当天打印流水号已用完。");
         await db.Execute("""
             UPDATE dbo.label_code_sequence SET current_value=@n,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
             WHERE rule_version_id=@version AND partition_key=@key;
             IF @@ROWCOUNT=0 INSERT dbo.label_code_sequence(rule_version_id,partition_key,current_value) VALUES(@version,@key,@n);
             """,("@n",serial),("@version",version),("@key",partition));
-        return serial;
+        return day+serial.ToString("D4",CultureInfo.InvariantCulture);
     }
     private Task<JsonObject?> TargetQuery(PrintDb db,long id) => db.One("""
         SELECT p.*,f.material_code,f.batch_no,f.unit_code,f.serial_no,f.manufacture_date,f.expiry_date,

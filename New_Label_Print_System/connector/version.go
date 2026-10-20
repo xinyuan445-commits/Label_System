@@ -2,4 +2,4 @@ package main
 
 // Version is reported to the server via /api/agent/state and shown in
 // `blg-connector -version`. Bump together with the repo CHANGELOG.
-const Version = "0.7.1"
+const Version = "0.7.2"

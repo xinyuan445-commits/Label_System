@@ -46,6 +46,7 @@ type receiptV2 struct {
 type pageV2 struct {
 	OutputID string `json:"outputId"`
 	File     string `json:"file"`
+	Filename string `json:"filename"`
 	SHA256   string `json:"sha256"`
 }
 type manifestV2 struct {
@@ -56,6 +57,7 @@ type manifestV2 struct {
 	Printer  string   `json:"printer"`
 	WidthMM  float64  `json:"widthMm"`
 	HeightMM float64  `json:"heightMm"`
+	Reprint  bool     `json:"reprint"`
 	Pages    []pageV2 `json:"pages"`
 }
 
@@ -429,7 +431,8 @@ func decodeV2(raw []byte, ticket ticketV2) (LabelManifest, map[string][]byte, er
 		selected[id] = true
 	}
 	seen := map[string]bool{}
-	output = LabelManifest{RunID: strings.ReplaceAll(ticket.JobID, "-", ""), Printer: manifest.Printer, WidthMM: manifest.WidthMM, HeightMM: manifest.HeightMM}
+	names := map[string]bool{}
+	output = LabelManifest{RunID: strings.ReplaceAll(ticket.JobID, "-", ""), Printer: manifest.Printer, WidthMM: manifest.WidthMM, HeightMM: manifest.HeightMM, Reprint: manifest.Reprint}
 	extension := ".png"
 	signature := []byte{137, 80, 78, 71, 13, 10, 26, 10}
 	if manifest.Printer == "Microsoft Print to PDF" {
@@ -440,6 +443,16 @@ func decodeV2(raw []byte, ticket ticketV2) (LabelManifest, map[string][]byte, er
 		if !uuidV2.MatchString(p.OutputID) || seen[p.OutputID] || p.File != strings.ReplaceAll(p.OutputID, "-", "")+extension {
 			return output, files, errors.New("invalid_page")
 		}
+		filename := p.File
+		if extension == ".pdf" && p.Filename != "" {
+			if !safeLabelFilename(p.Filename) || names[strings.ToUpper(p.Filename)] {
+				return output, files, errors.New("invalid_page")
+			}
+			filename = p.Filename
+		} else if p.Filename != "" && p.Filename != p.File {
+			return output, files, errors.New("invalid_page")
+		}
+		names[strings.ToUpper(filename)] = true
 		seen[p.OutputID] = true
 		b := files[p.File]
 		hash := sha256.Sum256(b)
@@ -447,7 +460,7 @@ func decodeV2(raw []byte, ticket ticketV2) (LabelManifest, map[string][]byte, er
 			return output, files, errors.New("invalid_page")
 		}
 		if selected[p.OutputID] {
-			output.Pages = append(output.Pages, LabelPage{File: p.File, Filename: p.File})
+			output.Pages = append(output.Pages, LabelPage{File: p.File, Filename: filename})
 		}
 	}
 	if len(output.Pages) != len(selected) {

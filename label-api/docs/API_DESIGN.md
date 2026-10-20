@@ -315,6 +315,8 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 
 打印平台使用内部 `id` 显式发起首次打印，由`POST /api/v1/print/jobs/first`在同一事务中分配流水、生成 Code、回填标签并登记唯一哈希。Code 一经分配即不可回收；发送失败只能恢复原任务及原 Code。现有按 `{labelCode}/confirm` 的接口仅兼容迁移前已经提前分配 Code 的待打印记录，不能绕过新任务签名回执或释放未决锁。
 
+当前产品标签唯一值沿用旧 TraceBack 的10位口径：打印日 `yyMMdd` + 当日4位递增号。取号事务先比较 `TraceBackOnlyCode.sn`（空值时取完整Code末段）、`label_code_registry`、`inventory_flow.serial_no` 和当日 `label_code_sequence` 的最大值，再分配下一号；TraceBackOrder和TraceBackGoods通过UUID关联标签身份，本身不承担流水号分配。补打不进入取号逻辑。
+
 ## TraceBack 产品标签读取与同步（0.10.0）
 
 迁移期产品标签查询由 Business API 编排 Gateway 的 TraceBack 快照接口。稳定对外响应继续使用现有 `InventoryLookupResult`，不向 H5 暴露旧表 JSON、数据库字段或 UUID。扫码成功会以 `TRACEBACK_MIRROR` 操作和库存流水建立或刷新本地镜像；托盘查询仍只读本地表。
@@ -341,6 +343,7 @@ Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`�
 
 - `GET /api/v1/print/capabilities`增加`sourceEnabled`，来源预约与模拟门禁解耦，仍限定当前精确开发888库并验证来源签名。
 - 首打允许精确目标`Microsoft Print to PDF`；V2包该目标采用真实PDF及PDF摘要，其余标签打印目标仍使用PNG。预览保持无正式编码、无落账。
+- V2包内页文件继续使用副本UUID并纳入摘要；PDF页另带安全业务文件名 `单号_行号_Code末段流水号.pdf`，0.7.2助手保存时采用该名称。补打保存到任务独立子目录，重复名称追加序号，不改变Code或回执身份。
 - `POST jobs/reprint`增加可选`deviceId/printer`，绑定当前有效设备；原Code、原纸面数量和不可变快照/模板保持。
 - `GET templates`只列启用模板。历史已发布模板保留不可变，验收专用模板停用。
 - 旧`/api/labelsystem/simulation/helper/*`、mode及restart-helper已从独立Flask移除，返回404。API合成种子方法属于历史自动化工具，当前SimulationOnly=false时关闭，不作为正常用户功能。

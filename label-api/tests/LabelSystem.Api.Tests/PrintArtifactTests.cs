@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 using LabelSystem.Api;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -30,6 +31,19 @@ public sealed class PrintArtifactTests
             Assert.StartsWith(Path.GetFullPath(Path.GetTempPath()),Path.GetFullPath(folder),StringComparison.OrdinalIgnoreCase);
             Directory.Delete(folder,true);
         }
+    }
+
+    [Fact]
+    public void PdfFilenameUsesDocumentLineAndBarcodeFinalSegment()
+    {
+        var snapshot=new PrintSnapshot(1,"888|MAT|B01|2.00|2610200042","different", "2","EA",
+            "MAT","物料","B01","WH","P1",null,null,null,1,null,7,"U8_BILL:CLCK","1","DBD/26103204","9",
+            3,"2026-10-20T08:00:00+08:00",new JsonObject{{"行号","9"}});
+        var output=new PrintOutput(Guid.NewGuid(),11,"FIRST","READY",null,snapshot);
+        Assert.Equal("DBD_26103204_9_2610200042.pdf",PrintArtifacts.BusinessFilename(output));
+        var used=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("DBD_26103204_9_2610200042.pdf",PrintArtifacts.BusinessFilename(output,used));
+        Assert.Equal("DBD_26103204_9_2610200042_2.pdf",PrintArtifacts.BusinessFilename(output,used));
     }
     private sealed class FixedOptions(PrintingOptions value):IOptionsMonitor<PrintingOptions>
     {

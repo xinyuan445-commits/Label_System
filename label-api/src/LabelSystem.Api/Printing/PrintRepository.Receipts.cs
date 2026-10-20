@@ -152,12 +152,12 @@ public sealed partial class PrintRepository
             SELECT @op,@line,@line,'PRODUCT_LABEL',p.id,
               (SELECT ISNULL(MAX(object_sequence_no),0)+1 FROM dbo.inventory_flow WITH(UPDLOCK,HOLDLOCK) WHERE label_id=p.id),
               'NORMAL',@kind,f.unit_code,p.current_qty,0,p.current_qty,f.material_code,f.batch_no,
-              f.manufacture_date,f.expiry_date,f.serial_no,f.inventory_attributes_json,f.attribute_schema_version,
+              f.manufacture_date,f.expiry_date,@serial,f.inventory_attributes_json,f.attribute_schema_version,
               f.inventory_identity_hash,f.to_warehouse_code,f.to_location_code,f.to_warehouse_code,f.to_location_code,
               f.to_pallet_id,f.to_pallet_id,N'数据发送成功登记'
             FROM dbo.product_label p JOIN dbo.inventory_flow f ON f.id=p.last_flow_id AND f.label_id=p.id WHERE p.id=@label;
             """,("@op",operation.L("id")),("@line",output.LineId),("@kind",output.Kind=="FIRST"?"PRINT":"REPRINT"),
-            ("@label",s.LabelId)),CultureInfo.InvariantCulture);
+            ("@serial",s.SerialNo),("@label",s.LabelId)),CultureInfo.InvariantCulture);
         await db.Execute("""
             UPDATE dbo.product_label SET last_flow_id=@flow,status=CASE WHEN @first=1 THEN 'ACTIVE' ELSE status END,
               updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@label AND locked_operation_id=@op;
