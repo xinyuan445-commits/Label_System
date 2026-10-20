@@ -26,6 +26,8 @@
 
 ## 本地开发
 
+在工作区根目录双击 `启动标签管理系统.cmd`，会复用已运行的 5175 H5，或在端口空闲时后台启动；随后验证运行时配置并打开本机页面。日志保存在当前用户的 `%LOCALAPPDATA%\LabelSystem\logs`。脚本只探测 159 上的 Business API 和 Gateway，不重启 IIS、不修改环境、账套或写入开关。
+
 ```powershell
 npm install
 npm run dev
