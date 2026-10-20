@@ -49,6 +49,7 @@ public sealed record PrintRuleRequest(long RuleVersionId, string? ExpectedRowVer
 public sealed record PrintTemplateRequest(string Name, JsonElement CanvasData, decimal WidthMm,
     decimal HeightMm, string? ExpectedRowVersion);
 public sealed record PublishPrintTemplateRequest(string ExpectedRowVersion);
+public sealed record PrintTemplateStateRequest(string ExpectedRowVersion, bool Enabled);
 public sealed record PrintAssetRequest(string MediaType, string DataBase64, int WidthPx, int HeightPx);
 public sealed record ResolvePrintLabelRequest(string Code);
 public sealed record LegacyPrintEvidence(string Code,long InitialFlowId,decimal InitialQuantity,

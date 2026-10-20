@@ -147,7 +147,9 @@ public static class PrintEndpoints
         group.MapPost("/previews",async(PrintPreviewRequest request,PrintService s,CancellationToken ct)=>
             Results.File(await s.Preview(request,ct),"application/pdf"));
         group.MapGet("/templates",async(HttpContext h,PrintRepository r,CancellationToken ct)=>
-            ApiResults.Ok(h,await r.Templates(ct)));
+            ApiResults.Ok(h,await r.Templates(true,ct)));
+        group.MapGet("/templates/archived",async(HttpContext h,PrintRepository r,CancellationToken ct)=>
+            ApiResults.Ok(h,await r.Templates(false,ct)));
         group.MapGet("/templates/{id:long}",async(HttpContext h,long id,PrintRepository r,CancellationToken ct)=>
             ApiResults.Ok(h,await r.Template(id,ct)));
         group.MapPost("/templates",async(HttpContext h,PrintTemplateRequest request,PrintRepository r,CancellationToken ct)=>
@@ -155,6 +157,9 @@ public static class PrintEndpoints
             .WithMetadata(new PrintPermission("print.template.manage"));
         group.MapPut("/templates/{id:long}",async(HttpContext h,long id,PrintTemplateRequest request,PrintRepository r,CancellationToken ct)=>
             ApiResults.Ok(h,await r.SaveTemplate(id,request,RequestContext.User(h),ct)))
+            .WithMetadata(new PrintPermission("print.template.manage"));
+        group.MapPut("/templates/{id:long}/state",async(HttpContext h,long id,PrintTemplateStateRequest request,PrintRepository r,CancellationToken ct)=>
+            ApiResults.Ok(h,await r.SetTemplateState(id,request,RequestContext.User(h),ct)))
             .WithMetadata(new PrintPermission("print.template.manage"));
         group.MapPost("/templates/{id:long}/publish",async(HttpContext h,long id,PublishPrintTemplateRequest request,PrintService s,CancellationToken ct)=>
             ApiResults.Ok(h,await s.Publish(id,request,RequestContext.User(h),ct)))

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMe } from "../hooks/useMe";
 import { PublishedTemplatesPage } from "./PublishedTemplatesPage";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ImportTemplateModal } from "../components/ImportTemplateModal";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -26,6 +26,12 @@ import {
 } from "../hooks/useFolders";
 import { featuredImageUrl } from "../hooks/useTemplates";
 import { useUploadAsset } from "../hooks/useAssets";
+import {
+  usePublishedTemplates,
+  useRefreshPublishedTemplates,
+  useSetPublishedTemplateState,
+} from "../hooks/usePublishedTemplates";
+import { errorText, ls } from "../lib/labelSystem";
 import { emptyCanvas } from "../editor/types";
 
 /** Fixed palette for folder colours — dot in the rail + on cards. */
@@ -55,8 +61,20 @@ type FolderFilter = "all" | "none" | number;
 export function TemplatesPage() {
   const { data: me } = useMe();
   const { t } = useTranslation();
+  const integrated = me?.authentication_source === "labelsystem";
+  const manageFormal = Boolean(
+    integrated && me?.print_permissions?.includes("print.template.manage"),
+  );
+  const requested = new URLSearchParams(window.location.search).get("section");
+  const [section, setSection] = useState<"drafts" | "published" | "archived">(
+    requested === "published" || requested === "archived" ? requested : "drafts",
+  );
   const [folderFilter, setFolderFilter] = useState<FolderFilter>("all");
   const templates = useTemplates(folderFilter === "all" ? undefined : folderFilter);
+  const allTemplates = useTemplates();
+  const formal = usePublishedTemplates(integrated);
+  const refreshFormal = useRefreshPublishedTemplates();
+  const setFormalState = useSetPublishedTemplateState();
   const folders = useFolders();
   const folderColor = (id: number | null) =>
     id === null ? null : (folders.data?.find((f) => f.id === id)?.color ?? null);
@@ -65,168 +83,312 @@ export function TemplatesPage() {
   const [showImport, setShowImport] = useState(false);
   const [settingsFor, setSettingsFor] = useState<TemplateSummary | null>(null);
   const [renameFor, setRenameFor] = useState<TemplateSummary | null>(null);
+  const [deleteFor, setDeleteFor] = useState<TemplateSummary | null>(null);
   const [query, setQuery] = useState("");
+  const [publishingId, setPublishingId] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const filtered = templates.data
     ? query.trim()
       ? templates.data.filter((tpl) => tpl.name.toLowerCase().includes(query.trim().toLowerCase()))
       : templates.data
     : [];
+  const activeCount = (formal.data ?? []).filter((item) => item.enabled).length;
+  const archivedCount = (formal.data ?? []).filter((item) => !item.enabled).length;
+  const linkedFormal = (templateId: number) =>
+    (formal.data ?? []).find((item) => item.sourceTemplateId === templateId);
+
+  async function publish(template: TemplateSummary) {
+    setPublishingId(template.id);
+    setNotice("");
+    setActionError("");
+    try {
+      const value = await ls<{ versionId: number; reused: boolean }>(
+        `/designer-templates/${template.id}/publish`,
+        {},
+      );
+      await refreshFormal();
+      setNotice(value.reused ? "正式模板已启用" : `已发布正式版本 ${value.versionId}`);
+    } catch (error) {
+      setActionError(errorText(error));
+    } finally {
+      setPublishingId(null);
+    }
+  }
+
+  async function removeDraft(stopFormal: boolean) {
+    if (!deleteFor) return;
+    const formalTemplate = linkedFormal(deleteFor.id);
+    setActionError("");
+    try {
+      if (stopFormal && formalTemplate?.enabled) {
+        await setFormalState.mutateAsync({ template: formalTemplate, enabled: false });
+      }
+      await del.mutateAsync(deleteFor.id);
+      setDeleteFor(null);
+    } catch (error) {
+      setActionError(errorText(error));
+    }
+  }
+
+  const tabs = [
+    { id: "drafts" as const, label: "设计稿", count: allTemplates.data?.length ?? 0 },
+    ...(integrated
+      ? [
+          { id: "published" as const, label: "已发布", count: activeCount },
+          { id: "archived" as const, label: "已停用", count: archivedCount },
+        ]
+      : []),
+  ];
+  const visibleSection = integrated ? section : "drafts";
 
   return (
-    <div className="flex gap-6">
-      <FolderRail active={folderFilter} onSelect={setFolderFilter} />
-
-      <div className="min-w-0 flex-1 space-y-6">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">{t("nav.templates")}</h1>
-            <p className="mt-1 text-xs text-slate-400">有模板权限的账号共用</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {templates.data && templates.data.length > 0 && (
+    <div className="space-y-6">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">{t("nav.templates")}</h1>
+          <p className="mt-1 text-sm text-slate-400">设计、发布和停用标签模板</p>
+        </div>
+        {visibleSection === "drafts" && (
+          <div className="flex flex-wrap items-center gap-2">
+            {allTemplates.data && allTemplates.data.length > 0 && (
               <Input
                 type="search"
                 placeholder={t("templates.searchPlaceholder")}
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-64"
+                onChange={(event) => setQuery(event.target.value)}
+                className="w-56"
               />
             )}
             <Button variant="secondary" onClick={() => setShowImport(true)}>
-              ⬆ {t("templates.import")}
+              {t("templates.import")}
             </Button>
             <Button onClick={() => setShowCreate(true)}>+ {t("templates.new")}</Button>
           </div>
-        </header>
-        {me?.authentication_source === "labelsystem" && (
-          <details
-            open={new URLSearchParams(window.location.search).get("section") === "published"}
+        )}
+      </header>
+
+      <nav className="flex gap-1 rounded-xl border border-slate-800 bg-slate-900/60 p-1">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => {
+              setSection(tab.id);
+              setNotice("");
+              setActionError("");
+            }}
+            className={[
+              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+              visibleSection === tab.id
+                ? "bg-indigo-600 text-white shadow"
+                : "text-slate-400 hover:bg-slate-800 hover:text-slate-100",
+            ].join(" ")}
           >
-            <summary className="cursor-pointer">发布与正式版本</summary>
-            <div className="mt-4">
-              <PublishedTemplatesPage embedded />
-            </div>
-          </details>
-        )}
+            {tab.label}
+            <span className="rounded-full bg-black/20 px-2 py-0.5 text-xs">{tab.count}</span>
+          </button>
+        ))}
+      </nav>
 
-        {templates.isLoading && <p className="text-slate-400">{t("common.loading")}</p>}
+      {notice && (
+        <p
+          role="status"
+          className="rounded-lg bg-emerald-950/50 px-4 py-3 text-sm text-emerald-300"
+        >
+          {notice}
+        </p>
+      )}
+      {actionError && (
+        <p role="alert" className="rounded-lg bg-rose-950/50 px-4 py-3 text-sm text-rose-300">
+          {actionError}
+        </p>
+      )}
 
-        {templates.data && templates.data.length === 0 && (
-          <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/40 p-10 text-center text-slate-400">
-            {t("templates.empty")}
+      {visibleSection === "drafts" ? (
+        <div className="flex gap-6">
+          <FolderRail active={folderFilter} onSelect={setFolderFilter} />
+          <div className="min-w-0 flex-1">
+            {templates.isLoading && <p className="text-slate-400">{t("common.loading")}</p>}
+            {templates.data && templates.data.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/30 p-12 text-center text-slate-400">
+                {t("templates.empty")}
+              </div>
+            )}
+            {templates.data && templates.data.length > 0 && filtered.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/30 p-12 text-center text-slate-400">
+                {t("templates.noMatches", { query })}
+              </div>
+            )}
+            {filtered.length > 0 && (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {filtered.map((tpl) => {
+                  const publication = linkedFormal(tpl.id);
+                  return (
+                    <article
+                      key={tpl.id}
+                      className="overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60 shadow-sm transition hover:border-slate-700 hover:shadow-lg"
+                    >
+                      <Link to={`/templates/${tpl.id}/edit`} className="block">
+                        {tpl.featured_asset_id !== null ? (
+                          <img
+                            src={featuredImageUrl(tpl)}
+                            alt=""
+                            loading="lazy"
+                            className="h-32 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-32 items-center justify-center bg-gradient-to-br from-slate-800 to-slate-900 text-sm text-slate-500">
+                            {tpl.width_mm} × {tpl.height_mm} mm
+                          </div>
+                        )}
+                      </Link>
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate font-semibold text-slate-100">{tpl.name}</h3>
+                            <p className="mt-1 text-xs text-slate-500">
+                              <ColorDot color={folderColor(tpl.folder_id)} className="mr-1" />v
+                              {tpl.version} · {new Date(tpl.updated_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span
+                            className={[
+                              "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
+                              publication?.enabled
+                                ? "bg-emerald-950 text-emerald-300"
+                                : publication
+                                  ? "bg-slate-800 text-slate-400"
+                                  : "bg-amber-950/60 text-amber-300",
+                            ].join(" ")}
+                          >
+                            {publication?.enabled ? "已发布" : publication ? "已停用" : "未发布"}
+                          </span>
+                        </div>
+                        {tpl.description && (
+                          <p className="mt-3 line-clamp-2 text-sm text-slate-400">
+                            {tpl.description}
+                          </p>
+                        )}
+                        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-4">
+                          <Link
+                            to={`/templates/${tpl.id}/edit`}
+                            className="rounded-md bg-slate-800 px-3 py-2 text-sm text-slate-100 hover:bg-slate-700"
+                          >
+                            编辑
+                          </Link>
+                          {manageFormal && (
+                            <Button
+                              className="!px-3"
+                              disabled={publishingId !== null}
+                              onClick={() => void publish(tpl)}
+                            >
+                              {publishingId === tpl.id
+                                ? "发布中…"
+                                : publication?.enabled
+                                  ? "重新发布"
+                                  : "发布"}
+                            </Button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setRenameFor(tpl)}
+                            className="rounded px-2 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                          >
+                            重命名
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSettingsFor(tpl)}
+                            className="rounded px-2 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                          >
+                            设置
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const safe =
+                                tpl.name.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_|_$/g, "") ||
+                                "template";
+                              void exportTemplateToFile(tpl.id, `${safe}.blg-template.json`);
+                            }}
+                            className="rounded px-2 py-2 text-sm text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                          >
+                            导出
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteFor(tpl)}
+                            className="ml-auto rounded px-2 py-2 text-sm text-rose-400 hover:bg-rose-950/50"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      ) : (
+        <PublishedTemplatesPage embedded mode={visibleSection} />
+      )}
 
-        {templates.data && templates.data.length > 0 && filtered.length === 0 && (
-          <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900/40 p-10 text-center text-slate-400">
-            {t("templates.noMatches", { query })}
-          </div>
-        )}
-
-        {filtered.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((tpl) => (
-              <a
-                key={tpl.id}
-                href={`/templates/${tpl.id}/edit`}
-                className="group rounded-lg border border-slate-800 bg-slate-900/50 p-4 transition-colors hover:border-indigo-600"
+      {showCreate && <NewTemplateModal onClose={() => setShowCreate(false)} />}
+      {showImport && <ImportTemplateModal onClose={() => setShowImport(false)} />}
+      {settingsFor && (
+        <TemplateSettingsModal template={settingsFor} onClose={() => setSettingsFor(null)} />
+      )}
+      {renameFor && <RenameTemplateModal template={renameFor} onClose={() => setRenameFor(null)} />}
+      {deleteFor && (
+        <Modal
+          open
+          onClose={() => {
+            if (!del.isPending && !setFormalState.isPending) setDeleteFor(null);
+          }}
+          title={`删除“${deleteFor.name}”`}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                disabled={del.isPending || setFormalState.isPending}
+                onClick={() => setDeleteFor(null)}
               >
-                {tpl.featured_asset_id !== null && (
-                  <img
-                    src={featuredImageUrl(tpl)}
-                    alt=""
-                    loading="lazy"
-                    className="mb-3 h-24 w-full rounded object-cover"
-                  />
-                )}
-                <h3 className="mb-1 truncate font-semibold text-slate-100">
-                  {tpl.is_shared && (
-                    <span className="mr-1" title={t("templates.sharedBadge")}>
-                      📚
-                    </span>
-                  )}
-                  {tpl.name}
-                </h3>
-                <p className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <ColorDot color={folderColor(tpl.folder_id)} />
-                  {tpl.width_mm} × {tpl.height_mm} mm
-                </p>
-                {tpl.description && (
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-400">{tpl.description}</p>
-                )}
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                  <span>v{tpl.version}</span>
-                  <span>{new Date(tpl.updated_at).toLocaleDateString()}</span>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setRenameFor(tpl);
-                    }}
-                    className="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-indigo-300 hover:bg-slate-800 hover:text-indigo-200"
-                  >
-                    {t("templates.rename")}
-                  </button>
-                  <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setSettingsFor(tpl);
-                      }}
-                      className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-                      aria-label={t("templates.settings")}
-                      title={t("templates.settingsTooltip")}
-                    >
-                      ⚙
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const safe =
-                          tpl.name.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_|_$/g, "") ||
-                          "template";
-                        void exportTemplateToFile(tpl.id, `${safe}.blg-template.json`);
-                      }}
-                      className="rounded px-1.5 py-0.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-                      aria-label={t("templates.export")}
-                      title={t("templates.exportTooltip")}
-                    >
-                      ⬇
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (confirm(t("templates.confirmDelete", { name: tpl.name }))) {
-                          del.mutate(tpl.id);
-                        }
-                      }}
-                      className="rounded px-1.5 py-0.5 text-rose-400 hover:bg-rose-950/50"
-                      aria-label={t("common.delete")}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
-        )}
-
-        {showCreate && <NewTemplateModal onClose={() => setShowCreate(false)} />}
-        {showImport && <ImportTemplateModal onClose={() => setShowImport(false)} />}
-        {settingsFor && (
-          <TemplateSettingsModal template={settingsFor} onClose={() => setSettingsFor(null)} />
-        )}
-        {renameFor && (
-          <RenameTemplateModal template={renameFor} onClose={() => setRenameFor(null)} />
-        )}
-      </div>
+                取消
+              </Button>
+              {linkedFormal(deleteFor.id)?.enabled && manageFormal && (
+                <Button
+                  variant="secondary"
+                  disabled={del.isPending || setFormalState.isPending}
+                  onClick={() => void removeDraft(false)}
+                >
+                  只删除设计稿
+                </Button>
+              )}
+              <Button
+                variant="danger"
+                disabled={del.isPending || setFormalState.isPending}
+                onClick={() =>
+                  void removeDraft(Boolean(manageFormal && linkedFormal(deleteFor.id)?.enabled))
+                }
+              >
+                {linkedFormal(deleteFor.id)?.enabled && manageFormal ? "停用并删除" : "删除"}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-slate-300">
+            {linkedFormal(deleteFor.id)?.enabled
+              ? manageFormal
+                ? "此模板正在使用。建议同时停用正式模板。"
+                : "正式模板会继续保留。"
+              : "删除后无法恢复。"}
+          </p>
+        </Modal>
+      )}
     </div>
   );
 }

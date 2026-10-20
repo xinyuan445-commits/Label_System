@@ -1,116 +1,124 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../lib/api";
-import { errorText, ls, printFile, showPdf, type PrintTemplate } from "../lib/labelSystem";
+import { Button } from "../components/ui/Button";
+import { useMe } from "../hooks/useMe";
+import {
+  usePublishedTemplates,
+  useSetPublishedTemplateState,
+} from "../hooks/usePublishedTemplates";
+import { useTemplates } from "../hooks/useTemplates";
+import { errorText, printFile, showPdf } from "../lib/labelSystem";
 
-const button = "rounded bg-indigo-600 px-3 py-2 text-sm disabled:opacity-40";
-export function PublishedTemplatesPage({ embedded = false }: { embedded?: boolean }) {
-  const [drafts, setDrafts] = useState<{ id: number; name: string }[]>([]),
-    [published, setPublished] = useState<PrintTemplate[]>([]);
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState("");
-  const refresh = useCallback(async () => {
-    const [a, b] = await Promise.all([
-      api<{ templates: { id: number; name: string }[] }>("/api/templates"),
-      ls<PrintTemplate[]>("/print/templates"),
-    ]);
-    setDrafts(a.templates);
-    setPublished(b);
-  }, []);
-  useEffect(() => {
-    void refresh().catch((e) => setError(errorText(e)));
-  }, [refresh]);
-  async function run(action: () => Promise<void>) {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await action();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+export function PublishedTemplatesPage({
+  mode = "published",
+}: {
+  embedded?: boolean;
+  mode?: "published" | "archived";
+}) {
+  const { data: me } = useMe();
+  const drafts = useTemplates();
+  const formal = usePublishedTemplates();
+  const setState = useSetPublishedTemplateState();
+  const manage = Boolean(me?.print_permissions?.includes("print.template.manage"));
+  const enabled = mode === "published";
+  const rows = (formal.data ?? []).filter((template) => template.enabled === enabled);
+  const draftIds = new Set((drafts.data ?? []).map((draft) => draft.id));
+  const [localError, setLocalError] = useState("");
+  const orphans = rows.filter(
+    (template) => template.sourceTemplateId !== null && !draftIds.has(template.sourceTemplateId),
+  );
+  const error = formal.error ?? setState.error;
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        {embedded ? (
-          <h2 className="font-semibold">正式版本</h2>
-        ) : (
-          <h1 className="text-2xl font-semibold">正式模板</h1>
-        )}
-        {!embedded && (
-          <Link to="/templates" className="underline">
-            模板设计
-          </Link>
-        )}
-      </div>
-      {error && (
-        <p role="alert" className="text-rose-400">
-          {error}
+    <section className="space-y-4">
+      {(error || localError) && (
+        <p role="alert" className="rounded-lg bg-rose-950/50 px-4 py-3 text-sm text-rose-300">
+          {localError || errorText(error)}
         </p>
       )}
-      {notice && (
-        <p role="status" className="text-emerald-400">
-          {notice}
-        </p>
-      )}
-      <section className="space-y-3">
-        <h2 className="font-semibold">发布设计稿</h2>
-        {drafts.map((draft) => (
-          <div
-            className="flex flex-wrap items-center gap-4 rounded border border-slate-800 p-3"
-            key={draft.id}
+
+      {manage && enabled && orphans.length > 0 && (
+        <div className="flex justify-end">
+          <Button
+            variant="secondary"
+            disabled={setState.isPending}
+            onClick={() => {
+              setLocalError("");
+              void (async () => {
+                try {
+                  for (const template of orphans) {
+                    await setState.mutateAsync({ template, enabled: false });
+                  }
+                } catch (caught) {
+                  setLocalError(errorText(caught));
+                }
+              })();
+            }}
           >
-            <span className="flex-1">{draft.name}</span>
-            <Link className="underline" to={`/templates/${draft.id}/edit`}>
-              编辑
-            </Link>
-            <button
-              className={button}
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  const value = await ls<{ versionId: number; reused: boolean }>(
-                    `/designer-templates/${draft.id}/publish`,
-                    {},
-                  );
-                  await refresh();
-                  setNotice(
-                    value.reused
-                      ? "内容未变化，继续使用原发布版本"
-                      : `已发布，版本编号 ${value.versionId}`,
-                  );
-                })
-              }
+            停用已删除设计稿（{orphans.length}）
+          </Button>
+        </div>
+      )}
+
+      {formal.isLoading && <p className="text-sm text-slate-400">正在加载模板…</p>}
+
+      {!formal.isLoading && rows.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/30 px-6 py-12 text-center text-sm text-slate-400">
+          {enabled ? "还没有已发布模板" : "没有已停用模板"}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {rows.map((template) => {
+          const hasDraft =
+            template.sourceTemplateId !== null && draftIds.has(template.sourceTemplateId);
+          return (
+            <article
+              key={template.id}
+              className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm"
             >
-              发布为正式模板
-            </button>
-          </div>
-        ))}
-      </section>
-      <section className="space-y-3">
-        <h2 className="font-semibold">已发布模板</h2>
-        {published.map((template) => (
-          <div
-            className="flex flex-wrap items-center gap-4 rounded border border-slate-800 p-3"
-            key={template.id}
-          >
-            <span className="flex-1">
-              {template.name} · {template.widthMm}×{template.heightMm} mm
-            </span>
-            <span>
-              {template.publishedVersionId ? `版本 ${template.publishedVersionId}` : "未发布"}
-            </span>
-            <button
-              className={button}
-              disabled={busy || !template.publishedVersionId}
-              onClick={() =>
-                void run(async () => {
-                  showPdf(
-                    await printFile("/previews", {
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="truncate font-semibold text-slate-100">{template.name}</h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {template.widthMm} × {template.heightMm} mm
+                  </p>
+                </div>
+                <span
+                  className={[
+                    "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
+                    enabled ? "bg-emerald-950 text-emerald-300" : "bg-slate-800 text-slate-400",
+                  ].join(" ")}
+                >
+                  {enabled ? "使用中" : "已停用"}
+                </span>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                <span>正式版本 {template.publishedVersionId ?? "—"}</span>
+                {template.sourceTemplateId !== null && !hasDraft && (
+                  <span className="rounded bg-amber-950/60 px-2 py-0.5 text-amber-300">
+                    设计稿已删除
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-800 pt-4">
+                {hasDraft && (
+                  <Link
+                    className="rounded-md px-3 py-2 text-sm text-indigo-300 hover:bg-slate-800"
+                    to={`/templates/${template.sourceTemplateId}/edit`}
+                  >
+                    编辑设计稿
+                  </Link>
+                )}
+                <Button
+                  variant="secondary"
+                  disabled={!template.publishedVersionId}
+                  onClick={() => {
+                    if (!template.publishedVersionId) return;
+                    setLocalError("");
+                    void printFile("/previews", {
                       templateVersionId: template.publishedVersionId,
                       variables: {
                         条码: "PREVIEW",
@@ -127,16 +135,28 @@ export function PublishedTemplatesPage({ embedded = false }: { embedded?: boolea
                         仓库编码: "DEMO",
                         货位编码: "",
                       },
-                    }),
-                  );
-                })
-              }
-            >
-              预览
-            </button>
-          </div>
-        ))}
-      </section>
-    </div>
+                    })
+                      .then(showPdf)
+                      .catch((caught) => setLocalError(errorText(caught)));
+                  }}
+                >
+                  预览
+                </Button>
+                {manage && (
+                  <Button
+                    className="ml-auto"
+                    variant={enabled ? "danger" : "secondary"}
+                    disabled={setState.isPending}
+                    onClick={() => setState.mutate({ template, enabled: !enabled })}
+                  >
+                    {enabled ? "停用" : "重新启用"}
+                  </Button>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }

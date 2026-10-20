@@ -168,5 +168,5 @@ for ($i = 0; $i -lt 20; $i++) {
     account = '888'
     release = $release
     data = $data
-    manualStart = $desktop
+    manualStart = $manualStart
 }

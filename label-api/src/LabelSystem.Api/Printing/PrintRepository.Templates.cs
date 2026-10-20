@@ -8,11 +8,12 @@ namespace LabelSystem.Api;
 
 public sealed partial class PrintRepository
 {
-    public Task<IReadOnlyList<JsonObject>> Templates(CancellationToken ct) =>
+    public Task<IReadOnlyList<JsonObject>> Templates(bool enabled,CancellationToken ct) =>
         Transaction<IReadOnlyList<JsonObject>>(async db=>await db.Query("""
             SELECT id,name,width_mm AS widthMm,height_mm AS heightMm,published_version_id AS publishedVersionId,
-              row_version AS rowVersion FROM dbo.label_print_template WHERE is_enabled=1 ORDER BY id DESC;
-            """),ct);
+              CAST(is_enabled AS bit) AS enabled,row_version AS rowVersion
+            FROM dbo.label_print_template WHERE is_enabled=@enabled ORDER BY id DESC;
+            """,("@enabled",enabled)),ct);
     public Task<JsonObject> Template(long id,CancellationToken ct) => Transaction(async db=>
         await db.One("SELECT * FROM dbo.label_print_template WHERE id=@id;",("@id",id))
         ??throw new ApiException(404,"PRINT_TEMPLATE_NOT_FOUND","模板不存在。"),ct);
@@ -44,6 +45,22 @@ public sealed partial class PrintRepository
                 """,("@name",request.Name.Trim()),("@canvas",request.CanvasData.GetRawText()),
                 ("@w",request.WidthMm),("@h",request.HeightMm),("@user",user.Id)),CultureInfo.InvariantCulture);
             return (await db.One("SELECT * FROM dbo.label_print_template WHERE id=@id;",("@id",target)))!;
+        },ct);
+    public Task<JsonObject> SetTemplateState(long id,PrintTemplateStateRequest request,SessionUser user,CancellationToken ct) =>
+        Transaction(async db=>
+        {
+            var row=await db.One("SELECT * FROM dbo.label_print_template WITH(UPDLOCK,HOLDLOCK) WHERE id=@id;",("@id",id))
+                ??throw new ApiException(404,"PRINT_TEMPLATE_NOT_FOUND","模板不存在。");
+            Version(row,request.ExpectedRowVersion);
+            await db.Execute("""
+                UPDATE dbo.label_print_template SET is_enabled=@enabled,updated_by=@user,
+                  updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id;
+                """,("@enabled",request.Enabled),("@user",user.Id),("@id",id));
+            return (await db.One("""
+                SELECT id,name,width_mm AS widthMm,height_mm AS heightMm,
+                  published_version_id AS publishedVersionId,CAST(is_enabled AS bit) AS enabled,
+                  row_version AS rowVersion FROM dbo.label_print_template WHERE id=@id;
+                """,("@id",id)))!;
         },ct);
     public static void ValidateCanvas(PrintTemplateRequest request)
     {

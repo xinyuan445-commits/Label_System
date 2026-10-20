@@ -25,7 +25,7 @@ _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 _PRINT = [
     (
         "GET",
-        r"capabilities|pending-labels|source-summary|jobs|templates|code-rule|devices",
+        r"capabilities|pending-labels|source-summary|jobs|templates(?:/archived)?|code-rule|devices",
         "print.view",
         False,
     ),
@@ -45,7 +45,7 @@ _PRINT = [
     ("POST", rf"jobs/{_UUID}/reconciliations", "print.reconcile", True),
     ("PUT", r"code-rule", "print.template.manage", True),
     ("POST", r"templates|templates/[1-9]\d*/publish|assets", "print.template.manage", False),
-    ("PUT", r"templates/[1-9]\d*", "print.template.manage", False),
+    ("PUT", r"templates/[1-9]\d*(?:/state)?", "print.template.manage", False),
     ("POST", r"previews|barcode-preview", "print.view", False),
     ("POST", r"devices", "print.device.manage", True),
     ("PUT", rf"devices/{_UUID}", "print.device.manage", True),

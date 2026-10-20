@@ -45,6 +45,23 @@ _VARIABLES = {
 }
 
 
+def _formal_templates() -> list[dict[str, Any]]:
+    active = invoke("GET", _ROOT + "/templates")
+    archived = invoke("GET", _ROOT + "/templates/archived")
+    return [*active, *archived]
+
+
+def _enable(template_id: int) -> None:
+    current = invoke("GET", _ROOT + "/templates/" + str(template_id))
+    if current.get("is_enabled"):
+        return
+    invoke(
+        "PUT",
+        _ROOT + "/templates/" + str(template_id) + "/state",
+        {"expectedRowVersion": current["row_version"], "enabled": True},
+    )
+
+
 def normalize(value: Any) -> Any:  # noqa: ANN401 -- recursive designer JSON
     if isinstance(value, dict):
         return {key: normalize(item) for key, item in value.items()}
@@ -101,7 +118,7 @@ def publish(template_id: int, user_id: int) -> dict[str, Any]:
             ).encode()
         ).hexdigest()
         target = None
-        for row in invoke("GET", _ROOT + "/templates"):
+        for row in _formal_templates():
             candidate = invoke("GET", _ROOT + "/templates/" + str(row["id"]))
             draft = json.loads(candidate["draft_canvas_json"])
             marker = draft.get("sourceDesigner", {})
@@ -115,6 +132,7 @@ def publish(template_id: int, user_id: int) -> dict[str, Any]:
                     if published is not None and published != marker.get(
                         "previousPublishedVersionId"
                     ):
+                        _enable(int(candidate["id"]))
                         return {
                             "templateId": candidate["id"],
                             "versionId": published,
@@ -183,4 +201,5 @@ def publish(template_id: int, user_id: int) -> dict[str, Any]:
             _ROOT + "/templates/" + str(saved["id"]) + "/publish",
             {"expectedRowVersion": saved["row_version"]},
         )
+        _enable(int(saved["id"]))
         return {"templateId": saved["id"], "versionId": version["id"], "reused": False}

@@ -85,6 +85,39 @@ def test_proxy_has_no_arbitrary_forwarding(bridge, path):
     assert client.get("/api/labelsystem/print/" + path).status_code == 404
 
 
+def test_template_state_routes_keep_permissions_and_row_version(bridge, monkeypatch):
+    client, csrf, state, _ = bridge
+    from app.routes import labelsystem_print as route
+
+    calls = []
+
+    def upstream(method, path, body):
+        calls.append((method, path, body))
+        return json.dumps({"success": True, "data": [] if method == "GET" else body}).encode(), (
+            "application/json"
+        )
+
+    monkeypatch.setattr(route, "exchange", upstream)
+    assert client.get("/api/labelsystem/print/templates/archived").status_code == 200
+    body = {"expectedRowVersion": "A1", "enabled": False}
+    state["codes"] = {"print.view"}
+    assert (
+        client.put(
+            "/api/labelsystem/print/templates/9/state", json=body, headers=csrf.headers()
+        ).status_code
+        == 403
+    )
+    state["codes"].add("print.template.manage")
+    response = client.put(
+        "/api/labelsystem/print/templates/9/state", json=body, headers=csrf.headers()
+    )
+    assert response.status_code == 200
+    assert calls == [
+        ("GET", "/api/v1/print/templates/archived", None),
+        ("PUT", "/api/v1/print/templates/9/state", body),
+    ]
+
+
 def test_recovery_only_calls_original_sync_endpoint(bridge, monkeypatch):
     client, csrf, state, _ = bridge
     state["codes"].add("print.confirm")
@@ -135,10 +168,17 @@ def test_template_publication_normalizes_aliases_and_reuses_immutable_version(
         state = {"template": None, "versions": 0, "fail_publish": False}
 
         def upstream(method, path, body=None):
+            if method == "GET" and path.endswith("/templates/archived"):
+                return (
+                    [{"id": 9}] if state["template"] and not state["template"]["is_enabled"] else []
+                )
             if method == "GET" and path.endswith("/templates"):
-                return [{"id": 9}] if state["template"] else []
+                return [{"id": 9}] if state["template"] and state["template"]["is_enabled"] else []
             if method == "GET":
                 return state["template"]
+            if path.endswith("/state"):
+                state["template"]["is_enabled"] = body["enabled"]
+                return {"id": 9, "enabled": body["enabled"], "rowVersion": "DEF"}
             if path.endswith("/publish"):
                 if state["fail_publish"]:
                     state["fail_publish"] = False
@@ -156,6 +196,7 @@ def test_template_publication_normalizes_aliases_and_reuses_immutable_version(
                 "row_version": "ABC",
                 "draft_canvas_json": json.dumps(body["canvasData"]),
                 "published_version_id": old_version,
+                "is_enabled": True,
             }
             return state["template"]
 
@@ -177,6 +218,10 @@ def test_template_publication_normalizes_aliases_and_reuses_immutable_version(
         recovered = labelsystem_templates.publish(draft.id, user_id)
         assert recovered["versionId"] == 18 and not recovered["reused"]
         assert labelsystem_templates.publish(draft.id, user_id)["reused"]
+        assert state["versions"] == 2
+        state["template"]["is_enabled"] = False
+        assert labelsystem_templates.publish(draft.id, user_id)["reused"]
+        assert state["template"]["is_enabled"]
         assert state["versions"] == 2
 
 

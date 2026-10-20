@@ -40,8 +40,10 @@
   只处理明确未发送，保留原 Code、输出身份和历史，不按超时解锁未知任务。
 - POST jobs/{id}/reconciliations：管理员及 print.reconcile；核对说明和可选原签名回执；
   无签名备注不会记成功、认定未发送或解锁。
-- GET/POST templates、GET/PUT templates/{id}、POST templates/{id}/publish；
-  POST assets、GET assets/{id}：草稿 CAS，版本和资源不可变。模板包导入/导出在工作台完成。
+- GET/POST templates、GET templates/archived、GET/PUT templates/{id}、
+  PUT templates/{id}/state、POST templates/{id}/publish；模板停用和重新启用使用行版本并保留历史版本，
+  停用模板不进入新打印任务。POST assets、GET assets/{id}：草稿 CAS，版本和资源不可变。
+  模板包导入/导出在工作台完成。
 - GET/PUT code-rule：复用规则四表并原子切换唯一绑定，管理员操作；
   GET/POST devices、PUT devices/{id}：管理员配对/停启，公钥不覆盖，停用不拒绝历史回执验证。
 
@@ -347,6 +349,6 @@ Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`�
 - 首打允许精确目标`Microsoft Print to PDF`；V2包该目标采用真实PDF及PDF摘要，其余标签打印目标仍使用PNG。预览保持无正式编码、无落账。
 - V2包内页文件继续使用副本UUID并纳入摘要；PDF页另带安全业务文件名 `单号_行号_Code末段流水号.pdf`，0.7.2助手保存时采用该名称。补打保存到任务独立子目录，重复名称追加序号，不改变Code或回执身份。
 - `POST jobs/reprint`增加可选`deviceId/printer`，绑定当前有效设备；原Code、原纸面数量和不可变快照/模板保持。
-- `GET templates`只列启用模板。历史已发布模板保留不可变，验收专用模板停用。
+- `GET templates`只列启用模板，`GET templates/archived`列停用模板；`PUT templates/{id}/state`按行版本停用或重新启用。历史已发布版本保持不可变，停用模板不能用于新打印任务。
 - 旧`/api/labelsystem/simulation/helper/*`、mode及restart-helper已从独立Flask移除，返回404。API合成种子方法属于历史自动化工具，当前SimulationOnly=false时关闭，不作为正常用户功能。
 - `source-print/{kind}`转接请求带本机`deviceId`与`printer`，先校验再预约；首打、补打和恢复继续使用原017唯一事件。
