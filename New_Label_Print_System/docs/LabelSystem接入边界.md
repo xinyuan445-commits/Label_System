@@ -1,5 +1,7 @@
 # Label system接入边界（2026-10-19）
 
+2026-10-20补充：独立应用仍是产品主体，但运行位置改为每台打印电脑本地18003；159仅提供9891、888及017正式账。旧服务器部署已清理，见[本地部署与159来源](本地部署与159来源.md)。
+
 2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
 
 以下报告保留其验收时点，模拟门禁、旧版本与清理前数量属于历史证据。
@@ -10,7 +12,7 @@
 
 用户已确认：复用Label system账号和权限。独立应用保留原登录页；Flask将凭证提交给开发Business API，并逐请求校验账号和有效功能码。浏览器只保存本系统不透明会话句柄，上游令牌保留在服务进程内；服务重启后重新登录。没有创建另一套可登录密码，也不使用共享业务服务身份。模板所有者使用远端用户ID散列映射的本地引用。
 
-新入口为`backend/standalone_labelsystem.py`，启用`LABELSYSTEM_API_URL`模式；原始`local_server.py`、Docker独立账号模式仍保留兼容，不能当作本次接入启动命令。部署脚本见`deployment/Install-LabelSystemDevelopment.ps1`。结果与实际地址见[开发验收](LabelSystem开发验收.md)。
+新入口为`backend/standalone_labelsystem.py`，启用`LABELSYSTEM_API_URL`模式；原始`local_server.py`、Docker独立账号模式仍保留兼容，不能当作本次接入启动命令。本机部署脚本见`deployment/Install-LabelSystemLocal.ps1`，当前结果见[本地部署与159来源](本地部署与159来源.md)。
 
 权限映射：print.view控制读取，print.template.manage控制模板和规则管理（规则管理额外要求管理员），print.device.manage控制设备管理；首打/补打/确认/核对分别检查对应功能码，后台再复核。账号管理和密码仍统一由Label system负责。
 

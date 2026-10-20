@@ -129,3 +129,16 @@ def test_bad_password_does_not_fall_back_to_local(bridge):
 def test_device_token_routes_are_blocked_without_a_browser_session(bridge, app):
     client = app.test_client()
     assert client.get("/api/agent/jobs").status_code == 409
+
+
+def test_fixed_development_http_origin_is_allowed(monkeypatch):
+    monkeypatch.setenv("LABELSYSTEM_API_URL", "http://172.16.1.159:9891")
+    monkeypatch.setenv("LABELSYSTEM_API_HTTP_ORIGIN", "http://172.16.1.159:9891")
+    assert labelsystem.api_base_url() == "http://172.16.1.159:9891"
+
+
+def test_other_http_origin_is_rejected(monkeypatch):
+    monkeypatch.setenv("LABELSYSTEM_API_URL", "http://172.16.1.160:9891")
+    monkeypatch.setenv("LABELSYSTEM_API_HTTP_ORIGIN", "http://172.16.1.159:9891")
+    with pytest.raises(labelsystem.AuthorityError, match="labelsystem_https_required"):
+        labelsystem.api_base_url()

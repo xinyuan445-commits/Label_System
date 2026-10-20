@@ -13,8 +13,14 @@ def main() -> None:
     parser.add_argument("--application-only", action="store_true")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    paths = ["backend/app", "backend/local_server.py", "backend/standalone_labelsystem.py",
-             "frontend/dist", "connector/dist/blg-connector-windows.exe", "deployment"]
+    paths = [
+        "backend/app",
+        "backend/local_server.py",
+        "backend/standalone_labelsystem.py",
+        "frontend/dist",
+        "connector/dist/blg-connector-windows.exe",
+        "deployment/Run-LabelSystemLocal.ps1",
+    ]
     for name in paths:
         if not (root / name).exists():
             raise SystemExit("Missing build input: " + name)

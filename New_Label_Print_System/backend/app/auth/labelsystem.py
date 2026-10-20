@@ -34,6 +34,22 @@ def enabled() -> bool:
     return bool(os.environ.get("LABELSYSTEM_API_URL", "").strip())
 
 
+def api_base_url() -> str:
+    """Return the fixed upstream origin after enforcing its transport boundary."""
+    base = os.environ.get("LABELSYSTEM_API_URL", "").rstrip("/")
+    uri = urlsplit(base)
+    if uri.username or uri.password or not uri.hostname or uri.path or uri.query or uri.fragment:
+        raise AuthorityError("labelsystem_configuration_invalid")
+    if uri.scheme == "https":
+        return base
+    if uri.scheme == "http" and uri.hostname in {"127.0.0.1", "localhost"}:
+        return base
+    allowed = os.environ.get("LABELSYSTEM_API_HTTP_ORIGIN", "").rstrip("/")
+    if uri.scheme == "http" and allowed and base == allowed:
+        return base
+    raise AuthorityError("labelsystem_https_required")
+
+
 class AuthorityError(Exception):
     def __init__(self, code: str, status: int = 503) -> None:
         self.code, self.status = code, status
@@ -50,14 +66,7 @@ class AuthoritySession:
 
 
 def call(path: str, token: str = "", body: dict[str, Any] | None = None) -> Any:  # noqa: ANN401 -- JSON transport
-    base = os.environ.get("LABELSYSTEM_API_URL", "").rstrip("/")
-    uri = urlsplit(base)
-    if uri.username or uri.password or not uri.hostname or uri.path or uri.query or uri.fragment:
-        raise AuthorityError("labelsystem_configuration_invalid")
-    if uri.scheme != "https" and not (
-        uri.scheme == "http" and uri.hostname in {"127.0.0.1", "localhost"}
-    ):
-        raise AuthorityError("labelsystem_https_required")
+    base = api_base_url()
     headers = {"Accept": "application/json"}
     if token:
         headers["Authorization"] = "Bearer " + token

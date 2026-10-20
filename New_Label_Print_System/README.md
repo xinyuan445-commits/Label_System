@@ -1,5 +1,7 @@
 # 标签打印系统 · BarcodeLabelGen
 
+2026-10-20部署调整：独立网页和打印助手均运行在使用电脑本地；桌面入口为`http://127.0.0.1:18003/bills`，业务来源固定连接159的9891及888。159上的独立18003网页、计划任务、专用防火墙规则和`D:\NewLabelPrintDevelopment`已清理，9891/9881及数据库保留。安装、启动和迁移结果见[本地部署与159来源](docs/本地部署与159来源.md)。
+
 2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
 
 以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
@@ -8,7 +10,7 @@
 
 当前统一维护仓库：[xinyuan445-commits/Label_System](https://github.com/xinyuan445-commits/Label_System)，本项目位于`New_Label_Print_System/`目录并保持独立部署。原`New_Label_Print_System`仓库保留历史基线参考，不再作为当前代码提交目标。
 
-当前代码版本为 `0.23.2`，本项目的定制功能记录在 [CHANGELOG.md](CHANGELOG.md) 的 Unreleased 部分。文档核对日期：2026-10-19。
+当前代码版本为 `0.23.2`，本项目的定制功能记录在 [CHANGELOG.md](CHANGELOG.md) 的 Unreleased 部分。文档核对日期：2026-10-20。
 
 ## 从这里开始
 
@@ -37,6 +39,10 @@
 - 个人常用单据、生成记录、账号功能权限与菜单显示、浅色/深色主题。
 
 ## Windows 本机启动
+
+Label system接入模式使用[本地安装脚本](deployment/Install-LabelSystemLocal.ps1)，复用Label system账号和159上的888数据。构建与安装命令见[本地部署与159来源](docs/本地部署与159来源.md)。安装后随Windows登录自动启动，日常无需手动启动服务。
+
+下面的`start.ps1`只用于原通用模式开发，不带Label system账号、017正式任务和固定159来源，不能替代当前接入安装入口。
 
 需要 Python 3.12、uv、Node.js 22；连接 U8 还需 Microsoft ODBC Driver 17 或 18。助手开发另需 Go 1.25。
 
@@ -71,6 +77,7 @@ docker compose exec web flask seed-admin
 
 ## U8 边界
 
+- 当前Label system接入固定使用`UFDATA_888_2021`，来源服务器为159；正式打印记录经159的Business API/017管理。
 - `ufdata_998_2021`：测试查询、打印及三表追溯登记。
 - `ufdata_008_2021`：正式账套，只读查询；应用阻止打印准备、补打与登记。
 - `U8_BARCODE_ACCOUNT_CODE` 是条码中的账套段，默认 `008`，与实际连接数据库独立。

@@ -10,6 +10,7 @@ import json
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import Response, abort, send_from_directory
 
@@ -19,7 +20,24 @@ def main() -> None:
     settings = json.loads(config_path.read_text(encoding="utf-8-sig"))
     if settings["u8Database"].casefold() != "ufdata_888_2021":
         raise SystemExit("Standalone development requires account 888")
-    os.environ["LABELSYSTEM_API_URL"] = settings["labelSystemApiUrl"]
+    source_host = str(settings.get("sourceHost", "")).strip()
+    api_url = str(settings["labelSystemApiUrl"]).rstrip("/")
+    api_uri = urlsplit(api_url)
+    u8_host = str(settings.get("u8Server", "")).split(",", 1)[0].strip()
+    if (
+        not source_host
+        or api_uri.hostname != source_host
+        or u8_host.casefold() != source_host.casefold()
+    ):
+        raise SystemExit("Label system API and U8 must use the configured source host")
+    if settings.get("hosts") != ["127.0.0.1"] or int(settings.get("port", 0)) != 18003:
+        raise SystemExit("Local printing workspace must only listen on 127.0.0.1:18003")
+    os.environ["LABELSYSTEM_API_URL"] = api_url
+    if api_uri.scheme == "http":
+        allowed_http_origin = str(settings.get("labelSystemApiHttpOrigin", "")).rstrip("/")
+        if allowed_http_origin != api_url:
+            raise SystemExit("The fixed HTTP Label system origin must be explicitly approved")
+        os.environ["LABELSYSTEM_API_HTTP_ORIGIN"] = allowed_http_origin
     os.environ["U8_DATABASE"] = "ufdata_888_2021"
     os.environ["U8_BARCODE_ACCOUNT_CODE"] = "888"
     for name in ("SERVER", "USER", "PASSWORD", "ODBC_DRIVER"):

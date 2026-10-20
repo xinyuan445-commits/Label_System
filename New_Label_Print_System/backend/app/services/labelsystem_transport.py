@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from app.auth.labelsystem import AuthorityError, authority
+from app.auth.labelsystem import AuthorityError, api_base_url, authority
 
 
 class IntegrationError(AuthorityError):
@@ -24,22 +22,12 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def exchange(method: str, path: str, body: object = None) -> tuple[bytes, str]:
-    base = os.environ.get("LABELSYSTEM_API_URL", "").rstrip("/")
-    uri = urlsplit(base)
-    if (
-        uri.username
-        or uri.password
-        or not uri.hostname
-        or uri.path
-        or uri.query
-        or uri.fragment
-        or not (
-            uri.scheme == "https"
-            or uri.scheme == "http"
-            and uri.hostname in {"localhost", "127.0.0.1"}
-        )
-    ):
-        raise IntegrationError("integration_configuration_invalid", "账号服务地址配置无效。", 503)
+    try:
+        base = api_base_url()
+    except AuthorityError:
+        raise IntegrationError(
+            "integration_configuration_invalid", "账号服务地址配置无效。", 503
+        ) from None
     if not path.startswith("/api/v1/") or ".." in path or "?" in path or "#" in path:
         raise IntegrationError("integration_route_invalid", "接口地址无效。", 400)
     headers = {"Accept": "application/json", "Authorization": "Bearer " + authority().token()}
