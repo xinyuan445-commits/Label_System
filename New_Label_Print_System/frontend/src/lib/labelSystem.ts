@@ -152,12 +152,28 @@ export function requestId(): string {
   const hex = Array.from(bytes, (x) => x.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+const requestPrefix = "labelsystem.request.v2:";
+const requestResetKey = "labelsystem.request.reset:20261020-1";
+
+export function clearObsoletePrintRequests() {
+  if (typeof localStorage === "undefined" || localStorage.getItem(requestResetKey)) return;
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(requestPrefix)) keys.push(key);
+  }
+  keys.forEach((key) => localStorage.removeItem(key));
+  localStorage.setItem(requestResetKey, "1");
+}
+clearObsoletePrintRequests();
+
 export async function durable<T>(
   key: string,
   body: Record<string, unknown>,
   call: (body: Record<string, unknown>) => Promise<T>,
 ): Promise<T> {
-  const storageKey = "labelsystem.request.v2:" + key;
+  clearObsoletePrintRequests();
+  const storageKey = requestPrefix + key;
   const fingerprint = JSON.stringify(body);
   const old = JSON.parse(localStorage.getItem(storageKey) ?? "null") as {
     fingerprint: string;
@@ -196,7 +212,8 @@ export async function durable<T>(
 }
 export type PendingCreation = { key: string; kind: string; request: Record<string, unknown> };
 export function pendingCreations(userId: number): PendingCreation[] {
-  const prefix = `labelsystem.request.v2:${userId}:`;
+  clearObsoletePrintRequests();
+  const prefix = `${requestPrefix}${userId}:`;
   const result: PendingCreation[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);

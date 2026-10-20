@@ -2,6 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { ApiError } from "./api";
 import {
   durable,
+  clearObsoletePrintRequests,
   configureStation,
   station,
   pendingCreations,
@@ -66,6 +67,12 @@ it("normal sends contact the local assistant without a server simulation route",
   const [path, options] = vi.mocked(fetch).mock.calls[0];
   expect(path).toBe("http://127.0.0.1:9110/v2/print-labels");
   expect((options?.headers as Record<string, string>)["X-CSRF-Token"]).toBeUndefined();
+});
+it("removes obsolete local print requests after the 888 test-data reset", () => {
+  localStorage.setItem("labelsystem.request.v2:1:first:old", "{}");
+  clearObsoletePrintRequests();
+  expect(localStorage.getItem("labelsystem.request.v2:1:first:old")).toBeNull();
+  expect(localStorage.getItem("labelsystem.request.reset:20261020-1")).toBe("1");
 });
 it("receipt recovery retains the original job and attempt on the local assistant", async () => {
   configureStation({ simulationOnly: false });
