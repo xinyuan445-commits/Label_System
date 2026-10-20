@@ -83,11 +83,14 @@ public sealed partial class PrintRepository
                         var repeat=item.S("status")=="ACTIVE";
                         await db.Execute("""
                             INSERT dbo.business_operation_line(operation_id,line_no,line_status,source_line_id,erp_position_id,
-                              material_code,batch_no,unit_code,requested_qty,generated_label_id,to_warehouse_code,to_location_code)
-                            VALUES(@op,@line,'SUCCESS',@prefix+@source,@origin,@material,@batch,@unit,0,@label,@warehouse,@location);
+                              label_id,selection_source,inventory_qty_snapshot,material_code,batch_no,unit_code,requested_qty,
+                              to_warehouse_code,to_location_code)
+                            VALUES(@op,@line,'SUCCESS',@prefix+@source,@origin,@label,@selection,@balance,
+                              @material,@batch,@unit,0,@warehouse,@location);
                             """,("@op",op),("@line",++lineNo),("@prefix",repeat?"RR:":"RF:"),("@source",row.SourceKey),
                             ("@origin",item.L("originLineId").ToString(CultureInfo.InvariantCulture)),("@material",item.S("material_code")),
                             ("@batch",item.S("batch_no")),("@unit",item.S("unit_code")),("@label",item.L("labelId")),
+                            ("@selection",repeat?"PRINT_REPRINT":"PRINT_TARGET"),("@balance",item.D("current_qty")),
                             ("@warehouse",item.S("to_warehouse_code")),("@location",item.S("to_location_code")));
                     }
                     continue;
@@ -215,12 +218,12 @@ public sealed partial class PrintRepository
             SELECT p.id AS labelId,
               CASE WHEN l.source_line_id LIKE 'RF:%' THEN TRY_CONVERT(bigint,l.erp_position_id) ELSE l.id END AS originLineId,
               p.row_version AS expectedRowVersion
-            FROM dbo.business_operation_line l JOIN dbo.product_label p ON p.id=l.generated_label_id
+            FROM dbo.business_operation_line l JOIN dbo.product_label p ON p.id=COALESCE(l.generated_label_id,l.label_id)
             WHERE l.operation_id=@op AND (l.source_line_id LIKE 'PS:%' OR l.source_line_id LIKE 'RF:%') ORDER BY l.line_no;
             """,("@op",op));
         var repeats=await db.Query("""
             SELECT p.id AS labelId,p.row_version AS expectedRowVersion,COUNT(*) AS copies
-            FROM dbo.business_operation_line l JOIN dbo.product_label p ON p.id=l.generated_label_id
+            FROM dbo.business_operation_line l JOIN dbo.product_label p ON p.id=l.label_id
             WHERE l.operation_id=@op AND l.source_line_id LIKE 'RR:%'
             GROUP BY p.id,p.row_version ORDER BY p.id;
             """,("@op",op));
