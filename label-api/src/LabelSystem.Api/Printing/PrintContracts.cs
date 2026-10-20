@@ -67,6 +67,8 @@ public sealed record PrintSnapshot(
 
 public sealed record PrintOutput(Guid OutputId, long LineId, string Kind, string Phase,
     long? FlowId, PrintSnapshot Snapshot);
+public sealed record ArchivedPrintOutput(Guid JobId, Guid OutputId, string Printer,
+    long TemplateVersionId, PrintSnapshot Snapshot, JsonObject Manifest);
 public sealed record PrintJob(Guid JobId, long OperationId, string OperatorId, string Phase,
     string Status, Guid DeviceId, string Printer, long TemplateVersionId, string RowVersion,
     string? ManifestHash, JsonObject? Manifest, IReadOnlyList<PrintOutput> Outputs,

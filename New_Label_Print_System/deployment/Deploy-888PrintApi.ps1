@@ -63,8 +63,20 @@ try {
                 ($cfg | ConvertTo-Json -Depth 20),
                 (New-Object Text.UTF8Encoding($false)))
             Stop-WebAppPool -Name 'LabelSystemDevPrintPool'
+            $deadline = (Get-Date).AddSeconds(20)
+            do {
+                Start-Sleep -Milliseconds 250
+                $poolState = (Get-WebAppPoolState -Name 'LabelSystemDevPrintPool').Value
+            } until ($poolState -eq 'Stopped' -or (Get-Date) -gt $deadline)
+            if ($poolState -ne 'Stopped') { throw 'Development API pool did not stop.' }
             Set-ItemProperty 'IIS:\Sites\LabelSystemDevPrint' -Name physicalPath -Value $release
             Start-WebAppPool -Name 'LabelSystemDevPrintPool'
+            $deadline = (Get-Date).AddSeconds(20)
+            do {
+                Start-Sleep -Milliseconds 250
+                $poolState = (Get-WebAppPoolState -Name 'LabelSystemDevPrintPool').Value
+            } until ($poolState -eq 'Started' -or (Get-Date) -gt $deadline)
+            if ($poolState -ne 'Started') { throw 'Development API pool did not start.' }
             [pscustomobject]@{
                 url = 'http://172.16.1.159:9891'
                 account = '888'

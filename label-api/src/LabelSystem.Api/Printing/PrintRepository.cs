@@ -111,6 +111,27 @@ public sealed partial class PrintRepository(SqlConnectionFactory connections,
     public Task<PrintJob> Get(Guid jobId, SessionUser user, CancellationToken ct) =>
         Transaction(async db => { var row = await JobRow(db, jobId); Owner(row, user); return await ReadJob(db, row); }, ct);
 
+    public Task<ArchivedPrintOutput?> ArchivedFirstPrint(long labelId,long templateVersionId,CancellationToken ct) =>
+        Transaction(async db =>
+        {
+            var row=await db.One("""
+                SELECT TOP(1) o.print_job_id,l.print_output_id,o.print_printer,o.print_template_version_id,
+                  l.print_snapshot_json,o.print_manifest_json
+                FROM dbo.inventory_flow f
+                JOIN dbo.business_operation_line l ON l.id=f.print_output_line_id
+                JOIN dbo.business_operation o ON o.id=f.operation_id
+                WHERE f.label_id=@label AND f.operation_type='PRINT' AND o.print_scope=@scope
+                  AND o.print_template_version_id=@template AND o.archive_status='COMPLETE'
+                  AND o.print_manifest_json IS NOT NULL
+                ORDER BY f.id;
+                """,("@label",labelId),("@scope",Scope),("@template",templateVersionId));
+            if(row is null)return null;
+            return new ArchivedPrintOutput(Guid.Parse(row.S("print_job_id")),Guid.Parse(row.S("print_output_id")),
+                row.S("print_printer"),row.L("print_template_version_id"),
+                JsonSerializer.Deserialize<PrintSnapshot>(row.S("print_snapshot_json"),PrintRules.Json)!,
+                JsonNode.Parse(row.S("print_manifest_json"))!.AsObject());
+        },ct);
+
     public Task<IReadOnlyList<JsonObject>> List(SessionUser user, CancellationToken ct) =>
         Transaction<IReadOnlyList<JsonObject>>(async db => await db.Query("""
             SELECT TOP(100) print_job_id AS jobId,print_phase AS phase,status,created_at,updated_at,

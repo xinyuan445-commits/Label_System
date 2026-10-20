@@ -55,6 +55,17 @@ public sealed class PrintService(PrintRepository repository,PrintArtifacts artif
     public async Task<PrintJob> Render(PrintJob job,SessionUser user,CancellationToken ct)
     {
         if(job.Phase!="PREPARING")return job;
+        if(job.Outputs.Count>0 && job.Outputs.All(output=>output.Kind=="REPRINT") &&
+            job.Outputs.Select(output=>output.Snapshot.LabelId).Distinct().Count()==1)
+        {
+            var source=await repository.ArchivedFirstPrint(job.Outputs[0].Snapshot.LabelId,job.TemplateVersionId,ct);
+            if(source is not null && job.Outputs.All(output=>
+                PrintRules.Hash(output.Snapshot)==PrintRules.Hash(source.Snapshot)))
+            {
+                var reused=await artifacts.Reuse(job,source,repository.Scope,ct);
+                if(reused is not null)return await repository.SaveManifest(job.JobId,reused,user,ct);
+            }
+        }
         foreach(var output in job.Outputs.Where(o=>o.Kind=="FIRST"))
             await gateway.ValidateInitialRegistrationAsync(PrintRules.Registration(repository.Scope,output,user.Name),ct);
         var template=await repository.TemplateVersion(job.TemplateVersionId,ct);

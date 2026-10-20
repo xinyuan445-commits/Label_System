@@ -80,6 +80,14 @@ export function PrintWorkspacePage({ initialTab = "pending" }: { initialTab?: st
   useEffect(() => {
     void refresh().catch((e) => setError(errorText(e)));
   }, [refresh]);
+  useEffect(() => {
+    if (!jobs.some((item) => item.phase === "PREPARING")) return;
+    const timer = window.setInterval(
+      () => void refresh().catch((e) => setError(errorText(e))),
+      2000,
+    );
+    return () => window.clearInterval(timer);
+  }, [jobs, refresh]);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");

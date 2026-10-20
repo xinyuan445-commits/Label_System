@@ -158,6 +158,81 @@ public sealed class PrintArtifacts(IOptionsMonitor<PrintingOptions> options,IHtt
         return content;
     }
 
+    public async Task<JsonObject?> Reuse(PrintJob job,ArchivedPrintOutput source,string scope,CancellationToken ct)
+    {
+        if(source.TemplateVersionId!=job.TemplateVersionId)return null;
+        var sourcePages=source.Manifest["pages"]?.AsArray().OfType<JsonObject>().ToArray();
+        var sourcePage=sourcePages?.SingleOrDefault(page=>page.S("outputId")==source.OutputId.ToString());
+        if(sourcePage is null)return null;
+        var width=source.Manifest.D("widthMm");
+        var height=source.Manifest.D("heightMm");
+        if(width<=0||height<=0||source.Manifest["fontManifest"] is null ||
+            source.Manifest.L("templateVersionId")!=job.TemplateVersionId)return null;
+
+        var pdf=await Read(sourcePage.S("pdfPath"),sourcePage.S("pdfSha256"),ct);
+        byte[] payload;
+        var extension=job.Printer=="Microsoft Print to PDF"?".pdf":".png";
+        if(extension==".pdf")payload=pdf;
+        else
+        {
+            // Historical PDF-only bundles do not contain a printer raster. They use the normal
+            // immutable-template renderer once; physical-printer archives can be reused directly.
+            if(source.Printer=="Microsoft Print to PDF")return null;
+            var bundle=await Read(source.Manifest.S("bundlePath"),source.Manifest.S("bundleSha256"),ct);
+            using var archive=new ZipArchive(new MemoryStream(bundle),ZipArchiveMode.Read);
+            var entry=archive.GetEntry(sourcePage.S("file"));
+            if(entry is null || entry.Length>128*1024*1024)return null;
+            await using var stream=entry.Open();
+            using var buffer=new MemoryStream();
+            await stream.CopyToAsync(buffer,ct);
+            payload=buffer.ToArray();
+            if(Convert.ToHexString(SHA256.HashData(payload))!=sourcePage.S("sha256"))
+                throw new ApiException(503,"PRINT_ARTIFACT_UNAVAILABLE","打印文件校验失败。");
+        }
+
+        var content=new JsonObject
+        {
+            ["version"]=2,["scope"]=scope,["jobId"]=job.JobId.ToString(),["deviceId"]=job.DeviceId.ToString(),
+            ["printer"]=job.Printer,["widthMm"]=width,["heightMm"]=height,["reprint"]=true,
+            ["templateVersionId"]=job.TemplateVersionId,["templateHash"]=source.Manifest.S("templateHash"),
+            ["fontManifest"]=source.Manifest["fontManifest"]!.DeepClone(),["pages"]=new JsonArray(),
+            ["reusedFromJobId"]=source.JobId.ToString(),["reusedFromOutputId"]=source.OutputId.ToString()
+        };
+        using var outputBuffer=new MemoryStream();
+        var filenames=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pdfPath=await Store(job.JobId.ToString("N"),pdf,"pdf",ct);
+        var pdfHash=Convert.ToHexString(SHA256.HashData(pdf));
+        var payloadHash=Convert.ToHexString(SHA256.HashData(payload));
+        using(var outputArchive=new ZipArchive(outputBuffer,ZipArchiveMode.Create,true))
+        {
+            foreach(var output in job.Outputs)
+            {
+                var file=output.OutputId.ToString("N")+extension;
+                var filename=extension==".pdf"?BusinessFilename(output,filenames):file;
+                content["pages"]!.AsArray().Add(new JsonObject
+                {
+                    ["outputId"]=output.OutputId.ToString(),["file"]=file,["filename"]=filename,
+                    ["sha256"]=payloadHash,["pdfPath"]=pdfPath,["pdfSha256"]=pdfHash
+                });
+                var entry=outputArchive.CreateEntry(file,CompressionLevel.Fastest);
+                entry.LastWriteTime=new DateTimeOffset(2000,1,1,0,0,0,TimeSpan.Zero);
+                await using var stream=entry.Open();
+                await stream.WriteAsync(payload,ct);
+            }
+            var metadata=outputArchive.CreateEntry("manifest.json");
+            metadata.LastWriteTime=new DateTimeOffset(2000,1,1,0,0,0,TimeSpan.Zero);
+            await using var manifestStream=metadata.Open();
+            await manifestStream.WriteAsync(Encoding.UTF8.GetBytes(PrintRules.Canonical(content)),ct);
+        }
+        var result=outputBuffer.ToArray();
+        if(result.Length>64*1024*1024)throw new ApiException(422,"PRINT_BUNDLE_TOO_LARGE","打印文件过大，请减少标签。");
+        content["bundlePath"]=await Store(job.JobId.ToString("N"),result,"zip",ct);
+        content["bundleSha256"]=Convert.ToHexString(SHA256.HashData(result));
+        var canonical=Encoding.UTF8.GetBytes(PrintRules.Canonical(content));
+        content["manifestPath"]=await Store(job.JobId.ToString("N"),canonical,"json",ct);
+        return content;
+    }
+
     public static string BusinessFilename(PrintOutput output,ISet<string>? used=null)
     {
         static string Safe(string value)
