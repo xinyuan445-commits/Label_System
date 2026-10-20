@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Join-Path $env:LOCALAPPDATA 'NewLabelPrintSystem'
 $configPath = Join-Path $root 'Config\standalone.json'
 if (-not (Test-Path -LiteralPath $configPath)) {

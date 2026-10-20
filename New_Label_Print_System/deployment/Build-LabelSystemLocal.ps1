@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory)][string]$OutputPath,
     [string]$GoCommand = 'go'
 )
@@ -17,3 +17,5 @@ if (-not (Test-Path -LiteralPath $python)) { throw 'Run uv sync in backend befor
 if ($LASTEXITCODE -ne 0) { throw 'Local package failed.' }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install-LabelSystemLocal.ps1') `
     -Destination (Join-Path (Split-Path -Parent $destination) 'Install-LabelSystemLocal.ps1') -Force
+Copy-Item -LiteralPath (Join-Path $repo '启动标签打印系统.cmd') `
+    -Destination (Join-Path (Split-Path -Parent $destination) '启动标签打印系统.cmd') -Force

@@ -40,7 +40,7 @@
 
 ## Windows 本机启动
 
-Label system接入模式使用[本地安装脚本](deployment/Install-LabelSystemLocal.ps1)，复用Label system账号和159上的888数据。构建与安装命令见[本地部署与159来源](docs/本地部署与159来源.md)。安装后使用桌面“启动标签打印系统.cmd”手动启动网页和助手，不随Windows登录自动运行。
+Label system接入模式使用[本地安装脚本](deployment/Install-LabelSystemLocal.ps1)，复用Label system账号和159上的888数据。构建与安装命令见[本地部署与159来源](docs/本地部署与159来源.md)。安装后双击项目根目录的“启动标签打印系统.cmd”手动启动网页和助手，不随Windows登录自动运行。
 
 下面的`start.ps1`只用于原通用模式开发，不带Label system账号、017正式任务和固定159来源，不能替代当前接入安装入口。
 

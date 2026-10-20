@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackagePath,
     [Parameter(Mandatory)][string]$PrivateSettingsPath,
@@ -128,10 +128,7 @@ foreach ($name in 'NewLabelPrintSystem.vbs','LabelPrintingAssistant.vbs') {
 $desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) '启动标签打印系统.cmd'
 $oldDesktop = Join-Path ([Environment]::GetFolderPath('Desktop')) '标签打印系统.url'
 if (Test-Path -LiteralPath $oldDesktop) { Remove-Item -LiteralPath $oldDesktop -Force }
-$desktopCommand = '@echo off' + "`r`n" +
-    'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%LOCALAPPDATA%\NewLabelPrintSystem\Start-LabelPrintSystem.ps1"' + "`r`n" +
-    'if errorlevel 1 pause' + "`r`n"
-[IO.File]::WriteAllText($desktop, $desktopCommand, [Text.Encoding]::Default)
+if (Test-Path -LiteralPath $desktop) { Remove-Item -LiteralPath $desktop -Force }
 $runArguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
     $runner + '" -ConfigPath "' + $configPath + '"'
 Start-Process -FilePath 'powershell.exe' -ArgumentList $runArguments -WindowStyle Hidden
