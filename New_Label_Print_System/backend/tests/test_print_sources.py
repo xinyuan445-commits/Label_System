@@ -80,3 +80,35 @@ def test_stock_missing_latest_goods_fails_closed(monkeypatch, raw):
     row = trace_reader(monkeypatch, [("888|M|B|100|SN1", Decimal(35), 0, raw)])
     with pytest.raises(IntegrationError):
         print_sources.stock_trace(row)
+
+
+def test_original_label_prefers_frozen_unit_name(monkeypatch):
+    code = "888|M|B|2.00|2610200001"
+
+    def invoke(method, path, body=None):
+        if path.endswith("/labels/resolve"):
+            return {
+                "label": {"labelId": 7, "rowVersion": "01", "status": "ACTIVE", "quantity": "2"},
+                "inventory": {"unitCode": "0101", "unitName": "张"},
+            }
+        if path.endswith("/original"):
+            return {
+                "snapshot": json.dumps(
+                    {
+                        "serialNo": "2610200001",
+                        "quantity": "2",
+                        "unitCode": "0101",
+                        "variables": {"单位": "张"},
+                    }
+                ),
+                "templateId": 3,
+                "templateVersionId": 5,
+                "jobId": "job",
+                "outputId": "output",
+            }
+        if path.endswith("/templates/3"):
+            return {"draft_canvas_json": json.dumps({"sourceDesigner": {"templateId": 9}})}
+        raise AssertionError((method, path, body))
+
+    monkeypatch.setattr(print_sources, "invoke", invoke)
+    assert print_sources.original_label(code)["unit"] == "张"

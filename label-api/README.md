@@ -8,7 +8,7 @@
 
 2026-10-19位置字段修复：打印来源标签明细直接保存目标仓库、货位；拆包明细保存拆包时位置；FIRST/REPRINT明细保存准备发送时的当前位置。DBD26103204既有两条明细已由原关联流水回填，Code、数量、流水、同步任务和旧三表未改。旧三表是迁移期兼容层，本地新表不依赖`TraceBackGoods`补齐打印审计字段。
 
-`0.11.0` 增加“物料档案”同步。通过 Gateway 完整读取在用物料，校验来源账套、数量和重复项后批量事务写入迁移 016 的 `u8_material_cache`。页面物料搜索读取当前账套本地缓存；无标签退料上传保留 U8 实时物料、单位和批次校验。首次未同步返回 `MATERIAL_CACHE_NOT_READY`，失败保留上次成功缓存。
+`0.11.0` 增加“物料档案”同步。通过 Gateway 完整读取在用物料，校验来源账套、数量和重复项后批量事务写入迁移 016 的 `u8_material_cache`。页面物料搜索读取当前账套本地缓存；无标签退料上传保留 U8 实时物料、单位和批次校验。首次未同步返回 `MATERIAL_CACHE_NOT_READY`，失败保留上次成功缓存。打印数据继续以单位编码参与库存身份和TraceBack登记，模板变量`单位`在首打及补打任务生成时解析为U8计量单位名称。
 
 自动测试：`dotnet test tests/LabelSystem.Api.Tests/LabelSystem.Api.Tests.csproj -c Release`。设置进程环境变量 `LABELSYSTEM_TEST_SQL` 可启用 SQL 集成测试（连接串仅在进程内提供，不写入仓库）；测试只创建并删除带 GUID 的 `LabelSystem_MaterialTest_` 临时库，验证迁移 016、并发锁、原子替换、停用、恢复和失败回滚。
 

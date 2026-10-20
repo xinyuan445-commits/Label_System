@@ -384,7 +384,12 @@ def original_label(query: str) -> dict[str, Any]:
         "item_name": snapshot.get("materialName") or inventory.get("materialName", ""),
         "batch": snapshot.get("batchNo") or inventory.get("batchNo", ""),
         "quantity": quantity,
-        "unit": snapshot.get("unitCode") or inventory.get("unitCode", ""),
+        "unit": (
+            (snapshot.get("variables") or {}).get("单位")
+            or inventory.get("unitName")
+            or snapshot.get("unitCode")
+            or inventory.get("unitCode", "")
+        ),
         "warehouse": snapshot.get("warehouseCode") or inventory.get("warehouseCode", ""),
         "location": snapshot.get("locationCode") or inventory.get("locationCode", ""),
         "specification": "",

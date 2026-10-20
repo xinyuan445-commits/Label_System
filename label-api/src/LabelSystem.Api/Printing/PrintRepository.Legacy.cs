@@ -43,7 +43,7 @@ public sealed partial class PrintRepository
             original.IdentityHash,null,original.SourceBusinessType??"LEGACY","",
             string.IsNullOrWhiteSpace(original.ErpDocumentNo)?original.PdaDocumentNo??"":original.ErpDocumentNo,
             null,null,evidence.PrintedAt,new JsonObject());
-        snapshot=WithVariables(snapshot);
+        snapshot=WithVariables(snapshot,original.UnitName);
         var payload=new JsonObject
         {
             ["evidenceHash"]=evidence.EvidenceHash,["initialFlowId"]=evidence.InitialFlowId,

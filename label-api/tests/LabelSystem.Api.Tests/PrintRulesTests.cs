@@ -15,6 +15,15 @@ public sealed class PrintRulesTests
     private static PrintOutput Output(long line=11,long label=1,long? flow=null)=>new(Guid.NewGuid(),line,"FIRST","READY",flow,Snapshot(label));
 
     [Fact]
+    public void PrintedUnitUsesDisplayNameWhileRegistrationKeepsCode()
+    {
+        var snapshot=PrintRepository.WithVariables(Snapshot(),"张");
+        Assert.Equal("张",snapshot.Variables["单位"]?.ToString());
+        Assert.Equal("EA",snapshot.UnitCode);
+        Assert.Equal("EA",PrintRepository.WithVariables(Snapshot()).Variables["单位"]?.ToString());
+    }
+
+    [Fact]
     public void InitialRegistrationSurvivesAttemptAndOutputIdentityChanges()
     {
         var first=PrintRules.Registration("test|888",Output(),"操作员");

@@ -116,7 +116,7 @@ public sealed partial class PrintRepository
                     if(registered is null) throw PrintRules.Conflict("PRINT_CODE_CONFLICT","已有标签码登记不完整。");
                     snapshot=snapshot with { RuleVersionId=registered["rule_version_id"] is null?null:registered.L("rule_version_id") };
                 }
-                snapshot=WithVariables(snapshot);
+                snapshot=WithVariables(snapshot,row.S("unit_name"));
                 await LockLabel(db,target.LabelId,op);
                 await InsertLine(db,op,++number,Guid.NewGuid(),"FIRST",snapshot,row);
             }
@@ -160,6 +160,7 @@ public sealed partial class PrintRepository
             var snapshot=JsonSerializer.Deserialize<PrintSnapshot>(source.S("print_snapshot_json"),PrintRules.Json)!;
             if(snapshot.Code!=row.S("label_code") || snapshot.LabelId!=request.LabelId)
                 throw PrintRules.Conflict("PRINT_SNAPSHOT_CONFLICT","原打印内容不匹配。");
+            snapshot=WithDisplayUnit(snapshot,row.S("unit_name"));
             var jobId=Guid.NewGuid();
             var op=await InsertOperation(db,jobId,"REPRINT",request.ClientRequestId,hash,user,device,
                 printer,source.L("print_template_version_id"),request.Reason);
@@ -262,16 +263,25 @@ public sealed partial class PrintRepository
             """,("@n",serial),("@version",version),("@key",partition));
         return day+serial.ToString("D4",CultureInfo.InvariantCulture);
     }
-    private Task<JsonObject?> TargetQuery(PrintDb db,long id) => db.One("""
+    private Task<JsonObject?> TargetQuery(PrintDb db,long id)
+    {
+        var database=labelOptions.CurrentValue.ErpDatabaseName;
+        if(database.Length is <1 or >128 || database.Any(c=>!(char.IsAsciiLetterOrDigit(c)||c=='_')))
+            throw new InvalidOperationException("Invalid ERP database name.");
+        return db.One($$"""
         SELECT p.*,f.material_code,f.batch_no,f.unit_code,f.serial_no,f.manufacture_date,f.expiry_date,
           f.inventory_attributes_json,f.attribute_schema_version,f.inventory_identity_hash,
-          f.to_warehouse_code,f.to_location_code,m.material_name
+          f.to_warehouse_code,f.to_location_code,m.material_name,
+          COALESCE(NULLIF(u.cComunitName COLLATE DATABASE_DEFAULT,N''),f.unit_code) AS unit_name
         FROM dbo.product_label p WITH(UPDLOCK,HOLDLOCK)
         JOIN dbo.inventory_flow f WITH(UPDLOCK,HOLDLOCK) ON f.id=p.last_flow_id AND f.label_id=p.id
         LEFT JOIN dbo.u8_material_cache m ON m.material_code=f.material_code
           AND m.source_account_id=@account AND m.source_database_name=@database
+        LEFT JOIN [{{database}}].dbo.ComputationUnit u
+          ON u.cComunitCode COLLATE DATABASE_DEFAULT=f.unit_code
         WHERE p.id=@id;
-        """,("@id",id),("@account",labelOptions.CurrentValue.ErpAccountId),("@database",labelOptions.CurrentValue.ErpDatabaseName));
+        """,("@id",id),("@account",labelOptions.CurrentValue.ErpAccountId),("@database",database));
+    }
     private async Task<JsonObject> Target(PrintDb db,long id) => await TargetQuery(db,id)
         ?? throw new ApiException(404,"PRINT_TARGET_NOT_FOUND","标签不存在。");
     private static async Task LockLabel(PrintDb db,long label,long operation)
@@ -293,14 +303,22 @@ public sealed partial class PrintRepository
             origin.S("erp_document_id"),origin.S("erp_document_no"),origin["erp_line_id"]?.ToString(),
             version,BusinessClock.Now.ToString("O"),new JsonObject{["行号"]=origin.S("line_no")});
     }
-    private static PrintSnapshot WithVariables(PrintSnapshot s) => s with {Variables=new JsonObject
+    public static PrintSnapshot WithVariables(PrintSnapshot s,string? unitName=null) => s with {Variables=new JsonObject
     {
-        ["条码"]=s.Code,["sn"]=s.SerialNo,["数量"]=s.Quantity,["单位"]=s.UnitCode,
+        ["条码"]=s.Code,["sn"]=s.SerialNo,["数量"]=s.Quantity,["单位"]=DisplayUnit(s,unitName),
         ["物料编码"]=s.MaterialCode,["物料名称"]=s.MaterialName,["批号"]=s.BatchNo,
         ["单据编码"]=s.SourceDocumentNo,["行号"]=s.Variables.S("行号"),
         ["仓库编码"]=s.WarehouseCode,["货位编码"]=s.LocationCode,
         ["Code"]=s.Code,["quantity"]=s.Quantity
     }};
+    private static PrintSnapshot WithDisplayUnit(PrintSnapshot s,string? unitName)
+    {
+        var variables=(JsonObject)s.Variables.DeepClone();
+        variables["单位"]=DisplayUnit(s,unitName);
+        return s with {Variables=variables};
+    }
+    private static string DisplayUnit(PrintSnapshot s,string? unitName) =>
+        string.IsNullOrWhiteSpace(unitName)?s.UnitCode:unitName.Trim();
     private static async Task InsertLine(PrintDb db,long op,int number,Guid output,string kind,PrintSnapshot s,JsonObject current)
     {
         await db.Execute("""
