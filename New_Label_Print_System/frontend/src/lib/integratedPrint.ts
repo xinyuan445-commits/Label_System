@@ -9,6 +9,22 @@ import {
   type PendingLabel,
 } from "./labelSystem";
 
+export type SourceRepeat = { labelId: number; expectedRowVersion: string; copies: number };
+
+export function sourceReprintRequest(
+  repeat: SourceRepeat,
+  source: { deviceId: string; printer: string },
+) {
+  return {
+    labelId: repeat.labelId,
+    expectedRowVersion: repeat.expectedRowVersion,
+    copies: repeat.copies,
+    reason: "单据页面再次打印",
+    deviceId: source.deviceId,
+    printer: source.printer,
+  };
+}
+
 export async function sourcePrint(
   kind: "bill" | "stock",
   body: Record<string, unknown>,
@@ -23,6 +39,7 @@ export async function sourcePrint(
     ls<{
       operationId: number;
       targets: { labelId: number; originLineId: number; expectedRowVersion: string }[];
+      reprints: SourceRepeat[];
       templateVersionId: number;
       deviceId: string;
       printer: string;
@@ -45,6 +62,15 @@ export async function sourcePrint(
           printer: source.printer,
         },
         (request) => ls<PrintJob>("/print/jobs/first", request),
+      ),
+    );
+  }
+  for (const repeat of source.reprints ?? []) {
+    jobs.push(
+      await durable(
+        `${userId}:reprint:source:${source.operationId}:${repeat.labelId}`,
+        sourceReprintRequest(repeat, source),
+        (request) => ls<PrintJob>("/print/jobs/reprint", request),
       ),
     );
   }

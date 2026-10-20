@@ -63,18 +63,37 @@ public sealed partial class PrintRepository
             {
                 await db.Scalar("DECLARE @n int; EXEC @n=sys.sp_getapplock @Resource=@key,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=10000; IF @n<0 THROW 50001,N'来源正在处理',1;SELECT 1;",("@key","print-source:"+row.SourceKey));
                 var allocated=await db.Query("""
-                    SELECT l.requested_qty,p.label_code,p.current_qty,p.status FROM dbo.business_operation_line l
+                    SELECT l.id AS originLineId,l.requested_qty,p.id AS labelId,p.label_code,p.current_qty,p.status,
+                      p.locked_operation_id,p.row_version AS expectedRowVersion,l.material_code,l.batch_no,l.unit_code,
+                      l.to_warehouse_code,l.to_location_code
+                    FROM dbo.business_operation_line l
                     JOIN dbo.business_operation o ON o.id=l.operation_id JOIN dbo.product_label p ON p.id=l.generated_label_id
                     WHERE o.operation_type='LABEL_SOURCE' AND l.source_line_id='PS:'+@source;
                     """,("@source",row.SourceKey));
-                var local=allocated.Sum(a=>a.D("requested_qty"));
-                var included=allocated.Where(a=>row.LegacyCodes.Contains(a.S("label_code"),StringComparer.Ordinal)).Sum(a=>a.D("requested_qty"));
-                if(row.SourceKind=="STOCK")
+                if(allocated.Count>0)
                 {
-                    local=allocated.Where(a=>a.S("status")=="PENDING_PRINT"||!row.LegacyCodes.Contains(a.S("label_code"),StringComparer.Ordinal)).Sum(a=>a.D("current_qty"));
-                    included=0;
+                    if(allocated.Any(a=>a["locked_operation_id"] is not null) ||
+                       allocated.Select(a=>a.S("status")).Distinct(StringComparer.Ordinal).Count()>1)
+                        throw PrintRules.Conflict("PRINT_RECOVERY_REQUIRED","原打印任务尚未完成，请在打印记录中恢复。");
+                    var reusable=MatchSourceRepeats(allocated,row.Amounts);
+                    if(reusable.Count!=row.Amounts.Count)
+                        throw PrintRules.Conflict("PRINT_SOURCE_REPEAT_MISMATCH","原标签暂不可直接再次打印，请到打印记录恢复原任务。");
+                    foreach(var item in reusable)
+                    {
+                        var repeat=item.S("status")=="ACTIVE";
+                        await db.Execute("""
+                            INSERT dbo.business_operation_line(operation_id,line_no,line_status,source_line_id,erp_position_id,
+                              material_code,batch_no,unit_code,requested_qty,generated_label_id,to_warehouse_code,to_location_code)
+                            VALUES(@op,@line,'SUCCESS',@prefix+@source,@origin,@material,@batch,@unit,0,@label,@warehouse,@location);
+                            """,("@op",op),("@line",++lineNo),("@prefix",repeat?"RR:":"RF:"),("@source",row.SourceKey),
+                            ("@origin",item.L("originLineId").ToString(CultureInfo.InvariantCulture)),("@material",item.S("material_code")),
+                            ("@batch",item.S("batch_no")),("@unit",item.S("unit_code")),("@label",item.L("labelId")),
+                            ("@warehouse",item.S("to_warehouse_code")),("@location",item.S("to_location_code")));
+                    }
+                    continue;
                 }
-                var external=Math.Max(0,row.LegacyQuantity-included);
+                if(row.LegacyCodes.Count>0 || row.LegacyQuantity>0)
+                    throw PrintRules.Conflict("PRINT_LEGACY_EVIDENCE_REQUIRED","该明细已有历史标签，请在补打页按原条码补打。");
                 var overlapping=await db.Query("""
                     SELECT p.label_code,p.current_qty,p.status,o.erp_document_type FROM dbo.product_label p
                     JOIN dbo.inventory_flow f ON f.id=p.last_flow_id
@@ -89,21 +108,9 @@ public sealed partial class PrintRepository
                     ("@wh",row.WarehouseCode),("@loc",row.LocationCode),("@source",row.SourceKey));
                 if(row.SourceKind=="BILL" && overlapping.Any(p=>p.S("erp_document_type")=="U8_STOCK"))
                     throw PrintRules.Conflict("PRINT_SOURCE_OVERLAP","此库存已有存货打印标签，请核对原标签后补打。");
-                if(row.SourceKind=="STOCK")external+=Convert.ToDecimal(await db.Scalar("""
-                    SELECT ISNULL(SUM(p.current_qty),0) FROM dbo.product_label p JOIN dbo.inventory_flow f ON f.id=p.last_flow_id
-                    WHERE p.status='PENDING_PRINT' AND f.material_code=@material AND ISNULL(f.batch_no,'')=@batch
-                     AND (f.unit_code=@unit OR EXISTS(SELECT 1 FROM UFDATA_888_2021.dbo.ComputationUnit u WHERE
-                       u.cComunitCode COLLATE DATABASE_DEFAULT=@unit AND u.cComunitName COLLATE DATABASE_DEFAULT=f.unit_code))
-                     AND f.to_warehouse_code=@wh AND ISNULL(f.to_location_code,'')=@loc
-                     AND NOT EXISTS(SELECT 1 FROM dbo.business_operation_line l WHERE l.generated_label_id=p.id
-                       AND l.source_line_id='PS:'+@source);
-                    """,("@material",row.MaterialCode),("@batch",row.BatchNo),("@unit",row.UnitCode),
-                    ("@wh",row.WarehouseCode),("@loc",row.LocationCode),("@source",row.SourceKey)),CultureInfo.InvariantCulture);
-                if(row.SourceKind=="STOCK")external+=overlapping.Where(p=>p.S("status")!="PENDING_PRINT" && p.S("label_code")!="" &&
-                    !row.LegacyCodes.Contains(p.S("label_code"),StringComparer.Ordinal)).Sum(p=>p.D("current_qty"));
+                if(row.SourceKind=="STOCK" && overlapping.Count>0)
+                    throw PrintRules.Conflict("PRINT_SOURCE_OVERLAP","此库存已有标签，请按原标签补打。");
                 var requested=row.Amounts.Sum();
-                if(requested>row.EligibleQuantity-external-local)
-                    throw PrintRules.Conflict("PRINT_SOURCE_EXHAUSTED","来源数量已打印或已占用，请查询原任务。");
                 var parents=row.SourceKind=="BILL"?await db.Query("""
                     SELECT p.id,p.current_qty,p.last_flow_id,l.id AS origin_line,f.inventory_attributes_json,f.inventory_identity_hash,
                       f.to_warehouse_code,f.to_location_code FROM dbo.product_label p
@@ -205,10 +212,34 @@ public sealed partial class PrintRepository
     private static async Task<JsonObject> SourceTargets(PrintDb db,long op)
     {
         var rows=await db.Query("""
-            SELECT p.id AS labelId,l.id AS originLineId,p.row_version AS expectedRowVersion
+            SELECT p.id AS labelId,
+              CASE WHEN l.source_line_id LIKE 'RF:%' THEN TRY_CONVERT(bigint,l.erp_position_id) ELSE l.id END AS originLineId,
+              p.row_version AS expectedRowVersion
             FROM dbo.business_operation_line l JOIN dbo.product_label p ON p.id=l.generated_label_id
-            WHERE l.operation_id=@op AND l.source_line_id LIKE 'PS:%' ORDER BY l.line_no;
+            WHERE l.operation_id=@op AND (l.source_line_id LIKE 'PS:%' OR l.source_line_id LIKE 'RF:%') ORDER BY l.line_no;
             """,("@op",op));
-        return new JsonObject{["operationId"]=op,["targets"]=new JsonArray(rows.Select(x=>(JsonNode)x).ToArray())};
+        var repeats=await db.Query("""
+            SELECT p.id AS labelId,p.row_version AS expectedRowVersion,COUNT(*) AS copies
+            FROM dbo.business_operation_line l JOIN dbo.product_label p ON p.id=l.generated_label_id
+            WHERE l.operation_id=@op AND l.source_line_id LIKE 'RR:%'
+            GROUP BY p.id,p.row_version ORDER BY p.id;
+            """,("@op",op));
+        return new JsonObject{
+            ["operationId"]=op,
+            ["targets"]=new JsonArray(rows.Select(x=>(JsonNode)x).ToArray()),
+            ["reprints"]=new JsonArray(repeats.Select(x=>(JsonNode)x).ToArray())
+        };
+    }
+
+    public static List<JsonObject> MatchSourceRepeats(IReadOnlyList<JsonObject> allocated,IReadOnlyList<decimal> amounts)
+    {
+        if(allocated.Select(a=>a.S("status")).Distinct(StringComparer.Ordinal).Count()>1)return [];
+        var active=allocated.Where(a=>a.S("status")=="ACTIVE" && a.S("label_code")!="")
+            .OrderBy(a=>a.L("labelId")).ToArray();
+        if(active.Length>0)
+            return amounts.Select((_,index)=>active[index%active.Length]).ToList();
+        var pending=allocated.Where(a=>a.S("status")=="PENDING_PRINT")
+            .GroupBy(a=>a.L("labelId")).Select(group=>group.First()).OrderBy(a=>a.L("labelId")).ToArray();
+        return pending.Length==amounts.Count?pending.ToList():[];
     }
 }

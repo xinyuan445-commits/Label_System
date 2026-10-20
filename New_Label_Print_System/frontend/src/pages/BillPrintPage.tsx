@@ -144,7 +144,7 @@ export function BillPrintPage() {
   const [batchPackagingError, setBatchPackagingError] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [defaultTemplateId, setDefaultTemplateId] = useState("");
-  const [pendingMode, setPendingMode] = useState(false);
+  const pendingMode = false;
   const [pdaLabels, setPdaLabels] = useState<PdaLabel[]>([]);
   const [pdaOpen, setPdaOpen] = useState(false);
   const [printerSettings, setPrinterSettings] = useState(readLocalPrinterSettings);
@@ -214,8 +214,7 @@ export function BillPrintPage() {
         setCode(requestedCode);
         setStartDate(requestedDate);
         setEndDate(requestedDate);
-        const fromPending = route.get("pending") === "1";
-        setPendingMode(fromPending);
+        const fromPending = false;
         const searchId = ++searchRequestId.current;
         const detailId = ++detailRequestId.current;
         setBusy(true);
@@ -350,7 +349,6 @@ export function BillPrintPage() {
     searchRequestId.current += 1;
     detailRequestId.current += 1;
     setBillType(type);
-    setPendingMode(false);
     setPdaLabels([]);
     setBills([]);
     setBill(null);
@@ -401,7 +399,6 @@ export function BillPrintPage() {
     if (!billType) return;
     const requestId = ++searchRequestId.current;
     detailRequestId.current += 1;
-    setPendingMode(false);
     setPdaLabels([]);
     setBusy(true);
     setError("");

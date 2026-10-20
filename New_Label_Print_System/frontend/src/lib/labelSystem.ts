@@ -176,6 +176,7 @@ export async function durable<T>(
       error instanceof ApiError &&
       [
         "PRINT_SOURCE_EXHAUSTED",
+        "PRINT_SOURCE_REPEAT_MISMATCH",
         "print_source_not_required",
         "PRINT_SOURCE_OVERLAP",
         "PRINT_SOURCE_INVALID",

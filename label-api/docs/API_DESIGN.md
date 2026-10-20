@@ -30,6 +30,9 @@
 - POST labels/legacy-baseline：特殊权限核验原始打印依据，写 LEGACY_FIRST_PRINT_BASELINE，不伪造 PRINT 或旧 +Q。
 - POST previews：templateVersionId/variables，返回示例 PDF，不分配 Code；GET/POST barcode-preview 返回示例 PNG。
 - POST jobs/first / jobs/reprint：200 PrintJob；GUID clientRequestId 防重。首打前端不传数量，补打取原快照。
+- POST source-targets：首次来源生成待打印标签；相同来源再次提交时按请求张数返回原标签补打目标，
+  不再按页面打印进度拒绝输出，也不新建Code或重复登记首次正数量。未完成任务仍返回恢复要求。
+  “是否首次”以稳定来源键关联的新表标签和TraceBack返回的完整Code为准，不以已打/剩余数量为准。
 - POST jobs/{id}/render：恢复原准备任务；GET bundle / pages/{outputId} 取得原归档文件。
 - POST jobs/{id}/dispatch-authorizations：GUID clientRequestId、expectedRowVersion、outputIds；
   返回 {payload,signature}，原设备和摘要从服务器取，不接受客户端任意替换。
