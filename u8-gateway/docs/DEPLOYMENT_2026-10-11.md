@@ -1,5 +1,7 @@
 # 2026-10-11 IIS 部署记录
 
+文档核对：2026-11-04。本文件保留各日期部署和验收原始结论，早期“生产硬阻断”“仅888”和旧版本不可当作现行配置；0.9.2起支持受控008生产，开发打印与生产分别发布。环境、门禁及当前验收边界见[项目当前状态](../../docs/PROJECT_STATUS.md)。本轮未部署、执行SQL或更改开关。
+
 2026-10-19 已发布 Gateway `0.10.0`，新增 `GET /api/v1/reference-data/materials/snapshot` 完整物料快照。查询固定使用 `Inventory.dEDate IS NULL` 且料号非空，上限 200,000 条且超限拒绝，返回规范化纯账套码、数据库和完整数量；原实时搜索接口保持不变。008 返回 31,512 条，Business API `0.11.0` 已同步并逐项比对全部料号、名称、规格、单位及批次标志，实时复核样本也一致。站点和应用池正常，健康检查 `running / 0.10.0.0`；当前 production / 008 配置及写入门禁保留，未向 U8 或 TraceBack 写数据。发布前程序备份为 `D:\U8Gateway\backups\20261019_095610-pre-materials-0.10.0\site`。
 
 2026-10-16 14:29 已发布 Gateway `0.9.2`并将运行配置切换到 `production / 008 / UFDATA_008_2021`。新版增加独立生产写入门禁：Gateway 总写入、生产写入、精确账套/数据库白名单和 `ENABLE PRODUCTION 008 UFDATA_008_2021` 确认必须同时命中，Business API 仍保留第二层独立开关。修正了模板切换时已有 Business API JSON 节点未实际更新的问题，并让 U8 连接测试返回可安全展示的登录错误。最终站点备份为 `D:\U8Gateway\backups\20261016_143729-pre-0.9.2-final`；Release 构建 0 警告、0 错误，写入门禁和 TraceBack 合同烟测通过。切换前确认 008 SQL、U8 COM 登录、`LabelSystem_Prod` 迁移和正式本地管理员/ERP 操作员映射；切换后 Gateway `running / 0.9.2.0`，Business API `ready / 0.10.1`，两层写入已按用户授权开启。产品标签 `008|3601-17-ELCR5-3072-RR|2026090101|100.00|2609020052` 经 Gateway 与 Business API 实时查询为 `AVAILABLE / 100`，当前位置 `KML_BH / 673`；只建立了本地镜像，未代用户创建 U8 单据或写入 TraceBack 业务流水。

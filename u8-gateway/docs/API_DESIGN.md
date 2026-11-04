@@ -1,5 +1,12 @@
 # U8 Gateway API 设计
 
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。生产9880/008已具备受控写入门禁；开发9881/888已接打印初始登记，不能再以“仅影子库、尚未发布”概括该开发链路。生产打印新接口未发布，修改/delete能力仍关闭。
+
+本文件记录现有合同；盘点原单回填、范围查询和差异角色仅为[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)中的拟议接口，不能以已存在query/create/verify能力代替Update开发及验收。
+
+<details>
+<summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
+
 2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
 
 以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
@@ -11,6 +18,8 @@
 最新开发部署：新接口程序仅在专用回环9881站点运行，连接888/UFDATA_888_2021，两层Gateway写入开关关闭；实际只读快照验证31409条物料。生产9880/008不变，本轮不在真实888写追溯或U8单据，见 [开发部署](../../docs/test-builds/2026-10-19-print-development.md)。
 
 2026-10-19隔离验证：新initial-registrations、validate、initial-print-evidence和snapshots已由实际Web API管线连接888逻辑账套临时影子库执行。首打正数只登记一次；OnlyCode拒写时Order/Goods回滚；旧库提交后丢响应再交原事件不重复加数。接口未部署到既有服务，临时库已删除，真实历史数据及其他故障点未穷举。详见 [验收报告](../../docs/test-builds/2026-10-19-print-phase1-isolated.md)。
+
+</details>
 
 ## 物料档案完整快照（0.10.0）
 
@@ -30,9 +39,9 @@
 
 `GET /api/v1/reference-data/document-master-data` 使用固定 SQL 读取 `PurchaseType`、`SaleType`、`foreigncurrency` 和 `exch`，返回采购类型、销售类型、币种及最新可用汇率。接口不接受客户端表名、字段名或 SQL，不写 U8；888 已只读验证返回 16 个采购类型、11 个销售类型和 4 个币种。
 
-## 九类新增候选运行时（0.3.9）
+## 九类新增运行时基础与能力边界
 
-库存单据适配器已为六类库存单据实现 `USERPCO.VoucherCO.GetNewVouchCode + Insert`；采购适配器为采购到货和委外到货实现 `VoucherCO_PU.GetVoucherNO + VoucherSave`；销售适配器为发货单实现 `VoucherCO_SA.GetVoucherNO + Save`。保存后均按单号解析 ID，再使用既有只读加载器回查表头、明细、货位和版本；未回查确认不得返回成功。请求继续经过字段白名单、操作凭证、幂等记录和四重写入门禁。测试环境九类单据的 `create`、`verify`、`unverify` 已开放；`update` 和 `delete` 仍关闭。服务器总开关只允许 `UFDATA_888_2021` 和 888 账套。
+六类库存新增实现 `USERPCO.VoucherCO.GetNewVouchCode + Insert`；采购使用 `VoucherCO_PU.GetVoucherNO + VoucherSave`，发货使用 `VoucherCO_SA.GetVoucherNO + Save`。保存后解析ID并回查表头、明细、货位和版本，未确认不得返回成功。create/verify/unverify能力存在不等于九类已完成现场验收；update/delete仍关闭。请求经过字段白名单、凭证、幂等、写入总开关及账套门禁；除888测试外，0.9.2起已支持独立门禁和精确白名单约束的008生产。
 
 库存类单据自动取号先尝试组件单据类型，再尝试合同登记的 `numberType`。888 当前映射为采购入库 `24`、销售出库 `0303`、材料出库 `0412`、调拨 `0304`、货位调整 `0313`、盘点 `0307`。每次取号使用新的表头 DOM；取得单号后重新生成表头，并按单据合同写入单号字段：普通库存单为 `ccode`、调拨为 `ctvcode`、货位调整为 `cvouchcode`、盘点为 `ccvcode`，随后才调用 `Insert`。取号失败发生在 `Insert` 前，必须返回明确失败，不得误记为结果未知。
 
@@ -210,12 +219,12 @@ U8 登录许可饱和返回 `U8_LICENSE_UNAVAILABLE`；反射或参数绑定发�
 
 Gateway 使用 `sp_getapplock` 和 `Serializable` 事务，先复核最新流水 ID、余额、Goods 唯一性及 JSON，再原子写入 `TraceBackOrder`、`TraceBackGoods`、`TraceBackOnlyCode`。相同确定性 Goods UUID 且内容完全一致的重试返回 `alreadyApplied=true`；内容不同返回 `TRACEBACK_EVENT_CONFLICT`。来源变化返回 `TRACEBACK_SNAPSHOT_CHANGED`，写后负余额返回 `TRACEBACK_NEGATIVE_BALANCE`。`validateOnly=true` 只用于部署诊断，完整执行后回滚并且 `snapshot` 为空。
 
-来源写接口受内部认证、环境/生产开关和精确账套/数据库白名单共同控制，拒绝不匹配目标（TRACEBACK_WRITE_ACCOUNT_BLOCKED），不接受客户端SQL。生产版本首次打印未上线；新初始登记见下节，仅专用开发9881部署且禁写，写入验收使用此前合成影子库。普通sync-events不能代替不存在Code的初始登记；托盘不进入接口。
+来源写接口受内部认证、环境/生产开关和精确账套/数据库白名单共同控制，拒绝不匹配目标（TRACEBACK_WRITE_ACCOUNT_BLOCKED），不接受客户端SQL。首打初始登记见下节：开发9881/888已有真实SQL及用户PDF验收，生产008打印仍未发布。普通sync-events不能代替不存在Code的初始登记；托盘不进入接口。盘点差异角色尚未实现。
 
 888 已完成数据量、重复值、真实字段类型和实际执行计划核查；由于关联键均为 `varchar(3500)`，本次未创建原字段索引，后续哈希索引方案见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
-# 开发中：初始打印兼容登记合同（2026-10-19）
+## 初始打印兼容登记合同（开发888已验收，生产未发布）
 
-源码及重点隔离SQL验收完成；专用开发回环9881已部署，实际888写入关闭。017已在现有LabelSystem_Dev安装；三表数量写入验收仅发生在此前合成影子库，已清理。生产008、U8 COM和真实打印未操作。
+专用开发回环9881已部署，已在现有LabelSystem_Dev/888完成重点真实SQL、原事件恢复及用户PDF首打逐标签核对。017仅Dev安装；生产008新打印接口和实体标签机仍未验收，不能以旧影子库报告概括全部当前验收。
 
 | 路由 | 用途 |
 | --- | --- |

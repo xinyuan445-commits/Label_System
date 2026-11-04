@@ -1,5 +1,12 @@
 # U8 Gateway
 
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../docs/PROJECT_STATUS.md)。源码API版本0.10.0；生产9880已支持受控008写入，开发9881服务888打印兼容。独立生产门禁、账套/数据库白名单、操作能力和Business API开关继续共同约束写入；修改和删除仍关闭。
+
+只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。三类库存来源事件及首打初始三表登记使用不同接口；打印登记已有888/PDF验收，生产008打印尚未发布。盘点原单实盘回填/Update和追溯差异事件尚未实现，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
+
+<details>
+<summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
+
 2026-10-19正常模式更新：当前状态与操作以[正常打印、PDF及数据清理](../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)为准。888已取消模拟运行，使用本机0.7.1助手；PDF目标可正式首打、补打及回执恢复。左侧仅“标签打印”，四项功能在页内。测试任务与标签及对应888旧三表登记已清理；保留编码占号及流水，清理完成时打印任务0条，后续以实际记录为准，原业务保留。生产008未动，未发送实体打印。
 
 以下既往接入记录中涉及模拟、禁打、0.7.0及清理前数量的段落属于此前阶段；当前部署与操作以以上更新为准。核心业务防重合同继续有效。
@@ -12,7 +19,11 @@
 
 `0.10.0` 新增只读 `GET /api/v1/reference-data/materials/snapshot`，单次查询完整读取 `Inventory.dEDate IS NULL` 且料号非空的档案，附带来源账套、数据库和条数；上限 200,000 条，超限明确拒绝。原 `GET /reference-data/materials` 继续实时查询，供 Business API 上传前复核。缓存及同步状态由 Business API 保存。
 
-## 账套写入
+</details>
+
+## 账套写入版本记录（历史）
+
+以下按版本保留当时门禁；0.9.2及之后支持受控生产，不能把0.7.x的“生产硬阻断”用于描述当前版本。
 
 `0.9.2` 增加受控生产写入门禁：Gateway 只有同时开启总写入和生产写入、环境为 `production`、当前数据库与账套严格命中白名单，并输入 `ENABLE PRODUCTION 账套 数据库` 时才能写 U8 和 TraceBack。Business API 保留第二层独立开关。配置模板仍默认只读，应用模板不会自动开启生产写入。本版同时修正 Business API 外置 JSON 已有节点在模板切换时未被更新的问题，并让 U8 连接测试返回可安全展示的登录失败原因。
 
@@ -110,16 +121,17 @@ u8-gateway/
 
 Gateway `0.7.1` 提供 `GET /api/v1/traceback/labels/{code}` 和 `POST /api/v1/traceback/labels/snapshots`。批量请求最多 100 个完整 Code，响应顺序与去重后的请求顺序一致。读取前校验三张表及必要关联字段；负余额、数量无效、Goods 缺失或重复、JSON 无效和 Code 身份冲突均返回结构化异常状态。Order 关联异常只使来源字段留空，不猜测业务来源。
 
-`POST /api/v1/traceback/labels/sync-events` 接收单个稳定同步事件。Gateway 先锁定事件和 Order UUID，复核原 Code 的最新流水 ID 与余额，再在一个 SQL 事务中写入缺失的 Order、Goods 和 OnlyCode；相同 Goods UUID 的完全一致重试直接返回已完成结果，不一致则返回冲突。写接口只允许 `UFDATA_888_2021`，其他账套在连接数据库前即返回 `TRACEBACK_WRITE_ACCOUNT_BLOCKED`。诊断用 `validateOnly=true` 会完整执行并回滚，不保留旧表数据。
+`POST /api/v1/traceback/labels/sync-events` 接收单个稳定同步事件。先锁事件及Order UUID，复核原Code最新流水/余额，再在一个事务内写Order、Goods、OnlyCode；相同Goods UUID且内容一致的重试返回已完成，不一致返回冲突。支持888测试和受独立生产门禁控制的008，必须命中精确账套/数据库白名单；不匹配返回 `TRACEBACK_WRITE_ACCOUNT_BLOCKED`。`validateOnly=true` 为诊断写事务后回滚，不保留业务行。
 
-当前不包含托盘。部分移动的目标标签和无标签红字在首次打印前保持无 Code 的 `PENDING_PRINT`，因此本阶段只写来源事件，打印目标正流水待打印平台接入。详细口径见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
-# 开发中：初始打印登记（2026-10-19）
+当前不包含托盘。部分移动目标和无标签红字在首打前保持无Code的PENDING_PRINT；实际首打经独立初始登记接口写唯一目标正流水，不能提前写空Code。该打印链已在开发888/PDF验收，尚未发布生产008。详细口径见根目录 `docs/TRACEBACK_COEXISTENCE_PLAN.md`。
 
-已增加initial-registrations及只读预检、历史打印证据读取接口，专用开发9881已部署但禁写；生产9880未更新。
+## 初始打印登记（开发888已验收）
+
+initial-registrations、只读预检及历史打印证据接口已部署开发9881，首打登记和恢复已通过888真实SQL及用户PDF核对；生产9880未发布同等打印新接口。
 原读快照仍按完整 Code 汇总、最新流水 Goods 定位。首打初始正数使用独立路径；
 旧 sync-events 继续处理来源事件，不负责创建不存在的新 Code。
 三表写入采用稳定 UUID、服务端重算载荷摘要和同事务校验，重放返回原 flowId。
 PRINT/REPRINT 的本地零数量登记由 Business API 负责，补打不调用此写入。
 环境、生产开关、精确账套/数据库白名单及内部认证继续有效，没有迁移或改写旧表结构。
-本轮只运行纯合同冒烟/构建，未调用真实业务接口，未操作 888/008 数据。
+本次2026-11-04仅整理文档，没有调用打印或写入接口；历史验收范围以对应日期证据为准。
 合同及限制见 [打印规格](../docs/PRINT_PHASE1_SPEC.md)、[开发记录](../docs/PRINT_PHASE1_IMPLEMENTATION.md)。
