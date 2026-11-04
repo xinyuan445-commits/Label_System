@@ -9,8 +9,16 @@ namespace U8Gateway.Contracts.Sources
     {
         public string AccountId { get; set; }
         public string DatabaseName { get; set; }
-        public ApprovalDocumentSummary Document { get; set; }
+        public InventoryCountHeader Document { get; set; }
         public IList<InventoryCountSourceLine> Lines { get; set; } = new List<InventoryCountSourceLine>();
+    }
+
+    public sealed class InventoryCountHeader : ApprovalDocumentSummary
+    {
+        public string InCategoryCode { get; set; }
+        public string InCategoryName { get; set; }
+        public string OutCategoryCode { get; set; }
+        public string OutCategoryName { get; set; }
     }
 
     public sealed class InventoryCountSourceLine

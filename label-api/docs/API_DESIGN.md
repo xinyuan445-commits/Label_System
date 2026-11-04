@@ -1,10 +1,10 @@
 # Label System API
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.0共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.1共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
 
-三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.0盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.1盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
 
-## 盘点只读采集接口（0.12.0已部署）
+## 盘点原单及自动校验接口（0.12.1已部署）
 
 - GET /api/v1/inventory-counts/capabilities：盘点权限内返回来源账套/库、collectionEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000。
 - GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=：固定代理Gateway未审核列表，最多100条，hasMore时缩小查询范围。
@@ -13,7 +13,10 @@
 
 逐码结果status为MATCHED、LABEL_INVALID、OUTSIDE_SOURCE、AMBIGUOUS_SOURCE、IDENTITY_NOT_SUPPORTED、UNIT_MISMATCH、QUANTITY_REQUIRED或NOT_FOUND。MATCHED仅表示当前资料匹配，不证明原单范围已盘完整或期间没有移动；所有结果canSubmit=false。原单变更返回409 COUNT_SOURCE_CHANGED，账套不符返回COUNT_ACCOUNT_MISMATCH；本机应保留采集，不覆盖原基线。
 
-以上接口由服务器固定校验inventory-count功能权限，不依赖客户端X-Function-Code；不提供匿名任务或离线写令牌。对应客户端使用独立IndexedDB，采集未上传服务端，不将“已保存本机”显示为“已同步”。本轮无数据库迁移。
+以上接口由服务器固定校验inventory-count功能权限，不依赖客户端X-Function-Code；不提供匿名任务或离线写令牌。H5复用普通IndexedDB草稿与009服务端同步，已保存本机/已同步/已上传ERP分别显示；只读盘点接口自身不保存草稿。本轮无数据库迁移。
+
+
+0.12.1原单document新增inCategoryCode、inCategoryName、outCategoryCode、outCategoryName，原样承接Gateway的盘盈/盘亏类别并纳入完整fingerprint。类别变化导致旧指纹失效；保留旧草稿，重新选同一原单更新基线。H5显示原单类别并只读，不能用客户端类别默认值覆盖。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

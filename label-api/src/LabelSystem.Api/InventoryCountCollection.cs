@@ -8,7 +8,9 @@ using Microsoft.Extensions.Options;
 namespace LabelSystem.Api;
 
 public sealed record InventoryCountHeader(long Id, string DocumentNo, DateTime? DocumentDate,
-    string WarehouseCode, string Status, string? AuditedBy, DateTime? AuditedAt, string Version, int LineCount);
+    string WarehouseCode, string Status, string? AuditedBy, DateTime? AuditedAt, string Version, int LineCount,
+    string? InCategoryCode = null, string? InCategoryName = null,
+    string? OutCategoryCode = null, string? OutCategoryName = null);
 public sealed record InventoryCountSourceLine(long Id, int LineNo, string MaterialCode, string MaterialName,
     string BatchNo, string WarehouseCode, string LocationCode, string UnitCode, decimal BookQuantity,
     decimal? ActualQuantity, IReadOnlyList<string> FreeItems, bool RequiresAuxiliaryUnit);

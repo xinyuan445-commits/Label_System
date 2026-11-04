@@ -435,11 +435,11 @@ const rdStyleSelectOptions = computed<SearchSelectOption[]>(() =>
   visibleRdStyles.value.map((item) => ({ value: item.code, label: item.name })),
 )
 const inRdStyleSelectOptions = computed<SearchSelectOption[]>(() =>
-  rdStyleOptions.value.filter((item) => item.direction === 'IN' && item.isTerminal)
+  props.documentType === 'inventory-count' ? countCategoryOptions('IN') : rdStyleOptions.value.filter((item) => item.direction === 'IN' && item.isTerminal)
     .map((item) => ({ value: item.code, label: item.name })),
 )
 const outRdStyleSelectOptions = computed<SearchSelectOption[]>(() =>
-  rdStyleOptions.value.filter((item) => item.direction === 'OUT' && item.isTerminal)
+  props.documentType === 'inventory-count' ? countCategoryOptions('OUT') : rdStyleOptions.value.filter((item) => item.direction === 'OUT' && item.isTerminal)
     .map((item) => ({ value: item.code, label: item.name })),
 )
 const purchaseTypeSelectOptions = computed<SearchSelectOption[]>(() =>
@@ -477,9 +477,22 @@ function formatQty(value: number | null): string {
   return Number(value).toFixed(6).replace(/\.?0+$/, '')
 }
 
+function countCategoryOptions(direction: 'IN' | 'OUT'): SearchSelectOption[] {
+  const header = inventoryCountSource.value?.document
+  const code = direction === 'IN' ? header?.inCategoryCode : header?.outCategoryCode
+  const name = direction === 'IN' ? header?.inCategoryName : header?.outCategoryName
+  return code ? [{ value: code, label: name || code }] : []
+}
+
+function applyCountHeader(): void {
+  if (props.documentType !== 'inventory-count') return
+  headerFieldValues.value['header.inCategoryCode'] = inventoryCountSource.value?.document.inCategoryCode ?? ''
+  headerFieldValues.value['header.outCategoryCode'] = inventoryCountSource.value?.document.outCategoryCode ?? ''
+}
+
 function fieldVisible(key: string): boolean {
   if (props.documentType === 'inventory-count') {
-    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.remark'].includes(key)
+    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.inCategoryCode', 'header.outCategoryCode', 'header.remark'].includes(key)
     if (key === 'body.quantity') return true
   }
   if (props.documentType === 'transfer-order' &&
@@ -935,6 +948,7 @@ async function loadReferenceData(): Promise<void> {
 }
 
 function setHeaderField(key: string, value: string | number): void {
+  if (props.documentType === 'inventory-count' && ['header.inCategoryCode', 'header.outCategoryCode'].includes(key)) return
   headerFieldValues.value[key] = value
 }
 
@@ -1457,6 +1471,7 @@ async function openSourceDocumentSelection(): Promise<void> {
 function clearSourceDocument(): void {
   if (props.documentType === 'inventory-count' && lines.value.length) { notify('请先重置当前单据', 'error'); return }
   inventoryCountSource.value = null
+  applyCountHeader()
   sourceDocumentType.value = ''
   sourceDocumentTypeLabel.value = ''
   sourceDocumentNo.value = ''
@@ -1578,6 +1593,7 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
   headerFieldValues.value = draft.headerFieldValues && typeof draft.headerFieldValues === 'object'
     ? draft.headerFieldValues
     : {}
+  applyCountHeader()
   selectedSourceLines.value = Array.isArray(draft.selectedSourceLines)
     ? draft.selectedSourceLines
     : []
@@ -2022,6 +2038,7 @@ onMounted(async () => {
       inventoryCountSource.value = sourceSelection.inventoryCountSource
       warehouseCode.value = inventoryCountSource.value.document.warehouseCode
       documentDate.value = inventoryCountSource.value.document.documentDate?.slice(0, 10) ?? ''
+      applyCountHeader()
     }
     sourceDocumentType.value = sourceSelection.sourceType
     sourceDocumentTypeLabel.value = sourceSelection.sourceTypeLabel
@@ -2269,16 +2286,16 @@ onBeforeRouteLeave((to) => {
               v-else-if="field.key === 'header.outCategoryCode'"
               :model-value="String(headerFieldValues[field.key] ?? '')"
               :options="outRdStyleSelectOptions"
-              :disabled="referenceDataLoading"
-              placeholder="编号或名称"
+              :disabled="referenceDataLoading || documentType === 'inventory-count'"
+              :placeholder="documentType === 'inventory-count' ? '未设置' : '编号或名称'"
               @update:model-value="setHeaderField(field.key, $event)"
             />
             <SearchSelect
               v-else-if="field.key === 'header.inCategoryCode'"
               :model-value="String(headerFieldValues[field.key] ?? '')"
               :options="inRdStyleSelectOptions"
-              :disabled="referenceDataLoading"
-              placeholder="编号或名称"
+              :disabled="referenceDataLoading || documentType === 'inventory-count'"
+              :placeholder="documentType === 'inventory-count' ? '未设置' : '编号或名称'"
               @update:model-value="setHeaderField(field.key, $event)"
             />
             <input

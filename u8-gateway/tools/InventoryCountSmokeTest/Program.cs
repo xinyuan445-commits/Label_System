@@ -16,6 +16,15 @@ internal static class Program
         {
             Equal("008", U8InventoryCountReader.NormalizeAccount("(default)@008"));
             Equal("888", U8InventoryCountReader.NormalizeAccount("888"));
+            var header = U8InventoryCountReader.MapHeader(new ApprovalDocumentSummary
+                { Id = 12, DocumentNo = "COUNT12", WarehouseCode = "W1", Status = "pending", Version = "0x01", LineCount = 1 },
+                new Dictionary<string, object> { ["InCategoryCode"] = " 107 ", ["InCategoryName"] = "盘盈入库",
+                    ["OutCategoryCode"] = "207", ["OutCategoryName"] = "盘亏出库" });
+            Equal("107", header.InCategoryCode); Equal("盘盈入库", header.InCategoryName);
+            Equal("207", header.OutCategoryCode); Equal("盘亏出库", header.OutCategoryName);
+            Equal(12L, header.Id); Equal("0x01", header.Version); Equal(1, header.LineCount);
+            Equal("", U8InventoryCountReader.MapHeader(header,
+                new Dictionary<string, object> { ["InCategoryCode"] = DBNull.Value }).InCategoryCode);
             var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
             {
                 ["autoID"] = 41, ["irowno"] = 2, ["cInvCode"] = "M1", ["cCVBatch"] = "B1",

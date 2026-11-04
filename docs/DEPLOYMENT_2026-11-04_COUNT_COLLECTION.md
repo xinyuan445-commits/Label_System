@@ -60,3 +60,14 @@ H5升级0.2.0-dev.84，重启本项目5175进程并通过原启动脚本后台�
 验证23项自动测试通过（共用组件流程/SSR渲染及同步并发保护10项，原模型/缓存/壳13项），类型检查和生产构建通过。运行配置与编译模块版本dev.84，首页、业务入口、共用制单和选单模块HTTP200；Business API9890 ready/0.12.0，Gateway9880 running/0.11.0.0。H5仍为172.16.10.45:5175，连接9890正式008；本次未发布API/Gateway/APK，没有SQL迁移或U8/旧三表写入。
 
 ERP盘点原单回填及差异落账尚未实现，管理页盘点上传禁用；完成做单仅保存标准待上传草稿。未强制刷新PDA，用户保存当前输入后重新打开功能；物理扫码、声音、断网及实际视觉/滚动仍待现场验收。未查看截图、清空存储或推送GitHub。
+
+
+## 同日后续：原单盈亏类别（dev.85 / API0.12.1 / Gateway0.11.1）
+
+修复盘点表头遗漏盘盈类别/盘亏类别：原单document返回cIRdCode、cORdCode及对应Rd_Style名称，H5选单回填并只读显示，使用原单名称不依赖档案预加载；草稿恢复、换单/清除保持一致。类别值纳入完整源指纹，旧基线需保留数据后重新选择同一原单。
+
+先888后008部署。开发API新路径D:\LabelSystem\DevPrinting\releases\20261104_201007_count_categories\api，配置版本0.12.1-count-dev；生产API新路径D:\LabelSystem\Api\releases\20261104_201014_count_categories\api，配置版本0.12.1。两者程序集0.12.1，沿用原web.config和外置配置，仅更新配置版本。Gateway保留原物理目录，仅更新Api/Contracts/U8三个DLL至0.11.1；App_Data、加密配置及API Key不改。
+
+服务停止后更新并启动，健康检查通过。两个环境的真实原单GET均返回盘盈107/盘盈入库、盘亏207/盘亏出库；验证过程只读，无迁移、无U8/旧三表业务写入。H5已重启5175到dev.85，运行版本和共用制单模块HTTP200，API9890 ready、Gateway9880 running；APK不变。IIS池重启后原登录会话可能失效，重新登录即可。
+
+H5 24项自动测试和类型/构建通过；API盘点21项测试、Gateway只读合同测试及两端Release发布构建通过。备份位于D:\LabelSystem\backups\20261104_201007_count_categories_888及20261104_201014_count_categories_008，保存前API路径、配置及三个Gateway旧DLL；回退时停池后恢复，启动验证。配置备份只留服务器。ERP盘点上传仍禁用；实机视觉/扫码待验，未截图或清除设备数据，未推送GitHub。

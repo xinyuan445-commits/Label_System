@@ -21,6 +21,10 @@ export interface CountSource {
     documentNo: string
     documentDate: string | null
     warehouseCode: string
+    inCategoryCode?: string | null
+    inCategoryName?: string | null
+    outCategoryCode?: string | null
+    outCategoryName?: string | null
     status: string
     version: string
     lineCount: number

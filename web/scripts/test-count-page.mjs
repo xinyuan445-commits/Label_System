@@ -13,7 +13,8 @@ import ts from 'typescript'
 const root = fileURLToPath(new URL('../src/', import.meta.url))
 const source = () => ({ accountId: '888', databaseName: 'UFDATA_888_2021',
   document: { id: 12, documentNo: 'COUNT12', documentDate: '2026-11-04', warehouseCode: 'W1',
-    status: 'pending', version: '0x01', lineCount: 1 },
+    status: 'pending', version: '0x01', lineCount: 1,
+    inCategoryCode: '107', inCategoryName: '盘盈入库', outCategoryCode: '207', outCategoryName: '盘亏出库' },
   lines: [{ id: 41, lineNo: 1, materialCode: 'M1', materialName: '物料', batchNo: 'B1',
     warehouseCode: 'W1', locationCode: 'L1', unitCode: 'U1', bookQuantity: 10,
     actualQuantity: null, freeItems: Array(10).fill(''), requiresAuxiliaryUnit: false }], fingerprint: 'A'.repeat(64) })
@@ -150,6 +151,7 @@ test('盘点和材料出库共用同一制单组件；盘点选单渲染没有�
   const form = f.load('@/views/OutboundDocumentView.vue').default
   const countHtml = await SSR.renderToString(Vue.createSSRApp(form, { documentType: 'inventory-count' }))
   assert.match(countHtml, /单据管理/); assert.match(countHtml, /下一步/)
+  assert.match(countHtml, /盘盈类别/); assert.match(countHtml, /盘亏类别/)
   assert.doesNotMatch(countHtml, /采集记录|联网核验|采集模式/)
 })
 
@@ -169,6 +171,30 @@ test('标准选单整单确认，带回完整原单；明细仍用共用选单�
   assert.equal(v.documentDate.value, '2026-11-04'); assert.equal(v.warehouseCode.value, 'W1')
   await v.openSourceDetails()
   assert.equal(f.routes.at(-1).name, 'source-document-details')
+})
+
+test('盘盈盘亏类别来自原单，档案未加载时显示原名称；保存恢复及清除不串值', async t => {
+  const f = fixture(t), v = await f.select()
+  assert.equal(v.fieldVisible('header.inCategoryCode'), true)
+  assert.equal(v.fieldVisible('header.outCategoryCode'), true)
+  assert.equal(v.headerFieldValues.value['header.inCategoryCode'], '107')
+  assert.equal(v.headerFieldValues.value['header.outCategoryCode'], '207')
+  assert.equal(v.inRdStyleSelectOptions.value[0].label, '盘盈入库')
+  assert.equal(v.outRdStyleSelectOptions.value[0].label, '盘亏出库')
+  v.setHeaderField('header.inCategoryCode', 'OTHER')
+  assert.equal(v.headerFieldValues.value['header.inCategoryCode'], '107')
+  await scanAndConfirm(f, v, '1')
+  const [doc] = await f.docs()
+  assert.equal(doc.payload.headerFieldValues['header.outCategoryCode'], '207')
+  f.load('@/services/outbound-document-drafts').requestOutboundDocumentEdit({ documentType: 'inventory-count', documentId: doc.id })
+  const restored = await f.mount()
+  assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '107')
+  assert.equal(restored.outRdStyleSelectOptions.value[0].label, '盘亏出库')
+  await restored.removeLine(restored.lines.value[0].id)
+  restored.clearSourceDocument()
+  assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '')
+  assert.equal(restored.headerFieldValues.value['header.outCategoryCode'], '')
+  assert.equal(restored.inRdStyleSelectOptions.value.length, 0)
 })
 
 test('扫码一次实时查标签，确认数量0后才入明细和标准IndexedDB；没有独立采集流程', async t => {

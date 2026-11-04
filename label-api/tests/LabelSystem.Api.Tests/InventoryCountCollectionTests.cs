@@ -82,6 +82,22 @@ public sealed class InventoryCountCollectionTests
     }
 
     [Fact]
+    public void SourceCategoriesSurviveGatewayJsonAndChangeFingerprint()
+    {
+        var source = Source() with { Document = Source().Document with {
+            InCategoryCode = "107", InCategoryName = "盘盈入库",
+            OutCategoryCode = "207", OutCategoryName = "盘亏出库" } };
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var restored = JsonSerializer.Deserialize<InventoryCountSource>(JsonSerializer.Serialize(source, options), options)!;
+        Assert.Equal("107", restored.Document.InCategoryCode);
+        Assert.Equal("盘盈入库", restored.Document.InCategoryName);
+        Assert.Equal("207", restored.Document.OutCategoryCode);
+        Assert.Equal("盘亏出库", restored.Document.OutCategoryName);
+        Assert.NotEqual(InventoryCountRules.Fingerprint(source), InventoryCountRules.Fingerprint(source with {
+            Document = source.Document with { InCategoryCode = "108" } }));
+    }
+
+    [Fact]
     public void DuplicateCodesIncludingCaseAndWhitespaceAreRejected()
     {
         var error = Assert.Throws<ApiException>(() => InventoryCountRules.RequireObservationList([

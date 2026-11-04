@@ -42,7 +42,8 @@ namespace U8Gateway.U8.Sources
             ApprovalDocumentDetail before = _documents.Get("inventory-count", id);
             if (before == null) return null;
             RequirePending(before);
-            var result = new InventoryCountSource { AccountId = _account, DatabaseName = _database, Document = before };
+            var result = new InventoryCountSource { AccountId = _account, DatabaseName = _database };
+            var header = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             // Preserve the native line identity. SELECT d.* lets optional free-item columns be
             // read when present without inventing fields absent from a particular U8 schema.
             const string sql = @"
@@ -57,6 +58,23 @@ where d.ID=@id order by d.autoID;";
                 command.Parameters.Add("@take", SqlDbType.Int).Value = MaximumLines + 1;
                 command.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
                 connection.Open();
+                using (var headerCommand = new SqlCommand(@"
+select h.cIRdCode InCategoryCode, i.cRdName InCategoryName,
+       h.cORdCode OutCategoryCode, o.cRdName OutCategoryName
+from dbo.CheckVouch h
+left join dbo.Rd_Style i on i.cRdCode=h.cIRdCode
+left join dbo.Rd_Style o on o.cRdCode=h.cORdCode
+where h.ID=@id;", connection))
+                {
+                    headerCommand.CommandTimeout = 30;
+                    headerCommand.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
+                    using (SqlDataReader reader = headerCommand.ExecuteReader())
+                    {
+                        if (!reader.Read()) throw new InvalidOperationException("盘点单已变化，请重新查询。");
+                        for (int n = 0; n < reader.FieldCount; n++) header[reader.GetName(n)] = reader.GetValue(n);
+                        if (reader.Read()) throw new InvalidOperationException("盘点类别重复，请核对原单。");
+                    }
+                }
                 using (SqlDataReader reader = command.ExecuteReader())
                     while (reader.Read())
                     {
@@ -72,18 +90,24 @@ where d.ID=@id order by d.autoID;";
                 before.LineCount != result.Lines.Count || after.LineCount != result.Lines.Count ||
                 result.Lines.Select(l => l.Id).Distinct().Count() != result.Lines.Count)
                 throw new InvalidOperationException("盘点单已变化，请重新查询。");
-            result.Document = after;
             // The source has a separate, complete line collection; do not serialize the
             // approval reader's second, incomplete projection of the same lines.
-            result.Document = new ApprovalDocumentSummary
+            result.Document = MapHeader(after, header);
+            return result;
+        }
+
+        public static InventoryCountHeader MapHeader(ApprovalDocumentSummary after, IDictionary<string, object> header)
+        {
+            return new InventoryCountHeader
             {
                 Id = after.Id, DocumentType = after.DocumentType, DocumentNo = after.DocumentNo,
                 DocumentDate = after.DocumentDate, WarehouseCode = after.WarehouseCode,
                 PartnerName = after.PartnerName, CreatedBy = after.CreatedBy, Status = after.Status,
                 AuditedBy = after.AuditedBy, AuditedAt = after.AuditedAt, Version = after.Version,
-                LineCount = result.Lines.Count, TotalQuantity = after.TotalQuantity
+                LineCount = after.LineCount, TotalQuantity = after.TotalQuantity,
+                InCategoryCode = Text(header, "InCategoryCode"), InCategoryName = Text(header, "InCategoryName"),
+                OutCategoryCode = Text(header, "OutCategoryCode"), OutCategoryName = Text(header, "OutCategoryName")
             };
-            return result;
         }
 
         public static string NormalizeAccount(string account)
