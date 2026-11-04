@@ -1,5 +1,7 @@
 # Label System Business API IIS 部署
 
+2026-11-04已部署0.12.0，生产9890保留008/LabelSystem_Prod，开发9891保留888/LabelSystem_Dev。新增盘点只读采集，ERP上传仍关闭；没有新增迁移。源码默认版本和服务器配置版本分别核对，详见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。部署脚本等待应用池到达Stopped/Started后继续，不能在Stopping时立即启动。
+
 ## 固定资源
 
 | 项目 | 值 |

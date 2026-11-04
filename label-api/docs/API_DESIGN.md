@@ -1,10 +1,10 @@
 # Label System API
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。现有接口合同与已部署环境分别记录：打印路由部署在开发9891/888，生产9890未发布同等打印能力；Dev已有017，Test/Prod未记录安装。
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.0共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
 
-三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.0源码新增盘点原单只读/核验，尚未部署；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)。
+三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.0盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
 
-## 盘点只读采集接口（0.12.0源码，未部署）
+## 盘点只读采集接口（0.12.0已部署）
 
 - GET /api/v1/inventory-counts/capabilities：盘点权限内返回来源账套/库、collectionEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000。
 - GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=：固定代理Gateway未审核列表，最多100条，hasMore时缩小查询范围。

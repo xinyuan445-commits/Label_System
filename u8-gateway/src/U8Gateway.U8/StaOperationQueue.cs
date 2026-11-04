@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Concurrent;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using U8Gateway.Core.U8;
@@ -29,7 +31,7 @@ namespace U8Gateway.U8
             }
 
             _items = new BlockingCollection<IWorkItem>(capacity);
-            _mutex = new Mutex(false, mutexName);
+            _mutex = OpenSharedMutex(mutexName);
             _mutexTimeout = TimeSpan.FromSeconds(mutexTimeoutSeconds);
             _thread = new Thread(Work)
             {
@@ -38,6 +40,30 @@ namespace U8Gateway.U8
             };
             _thread.SetApartmentState(ApartmentState.STA);
             _thread.Start();
+        }
+
+        private static Mutex OpenSharedMutex(string name)
+        {
+            var security = new MutexSecurity();
+            security.AddAccessRule(new MutexAccessRule(WindowsIdentity.GetCurrent().User,
+                MutexRights.FullControl, AccessControlType.Allow));
+            security.AddAccessRule(new MutexAccessRule(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
+                MutexRights.FullControl, AccessControlType.Allow));
+            security.AddAccessRule(new MutexAccessRule(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
+                MutexRights.FullControl, AccessControlType.Allow));
+            // Different IIS application pools must still serialize COM operations.
+            // Queue users only need to wait and release; they cannot change the ACL.
+            security.AddAccessRule(new MutexAccessRule(new SecurityIdentifier("S-1-5-32-568"),
+                MutexRights.Synchronize | MutexRights.Modify, AccessControlType.Allow));
+            try
+            {
+                bool created;
+                return new Mutex(false, name, out created, security);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Mutex.OpenExisting(name, MutexRights.Synchronize | MutexRights.Modify);
+            }
         }
 
         public Task<T> ExecuteAsync<T>(Func<T> action)

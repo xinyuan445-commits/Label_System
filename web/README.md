@@ -1,12 +1,12 @@
 # 标签管理系统 H5
 
-当前状态核对：2026-11-04。源码H5为0.2.0-dev.82，已安装APK基线0.5.4/110；盘点新页面及桥补丁尚未发布。默认5175，当前runtime-config虽标development，实际apiBaseUrl仍为159:9890，不能按客户端环境名推断888。部署及验收见[当前状态](../docs/PROJECT_STATUS.md)。
+当前状态核对：2026-11-04。H5 0.2.0-dev.82已在172.16.10.45:5175后台启动，PX101A已覆盖安装APK0.5.5/111。配套API/Gateway已部署。当前runtime-config虽标development，实际apiBaseUrl仍为159:9890正式008，不能按客户端环境名推断888。详见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)和[当前状态](../docs/PROJECT_STATUS.md)。
 
 盘点改用独立InventoryCountView：选择未审核原盘点单，写本机IndexedDB，采集/明确填写实盘，再联网只读核验；新页面没有上传ERP按钮。其他制单/审核页面保持原入口，电脑打印仍独立本机18003。新盘点需要配套Business API 0.12.0、Gateway 0.11.0，不能只更H5便认定可用。
 
 新盘点每次扫码/保存数量均事务落盘，不读Code打印数量，不靠sessionStorage保数据；同任务重扫拒绝并触发失败反馈，改数从明细进入。离线只收Code/实盘；联网核验读取当前三表，按最多100码拆批，结果不完整或采集修订改变时拒绝旧核验。
 
-新桥按可信消息暂停已加载盘点页的远程探测遮罩，并回确认；旧APK未确认则显示需更新。桥源码已编译但未安装，且无网冷启动仍未实现。原单完整范围、回填和改账也未开放。详见[离线采集边界](../docs/INVENTORY_COUNT_PLAN.md#offline-counting)及[复核/后置记录](../docs/INVENTORY_COUNT_REVIEW.md)。
+新桥按可信消息暂停已加载盘点页的远程探测遮罩，并回确认；旧APK未确认则显示需更新。PX101A已安装0.5.5并验证桥HTTP，但实际断网/扫码仍需现场验收，无网冷启动仍未实现。原单完整范围、回填和改账也未开放。详见[离线采集边界](../docs/INVENTORY_COUNT_PLAN.md#offline-counting)及[复核/后置记录](../docs/INVENTORY_COUNT_REVIEW.md)。
 
 验证：npm run test:inventory-count（13项）；npm run typecheck；npm run build。测试使用fake-indexeddb隔离数据，包含并发重扫、重开恢复、保存失败回滚、账套隔离、核验乱序及历史上传前拦截，不读取真实浏览器草稿。
 
@@ -52,7 +52,7 @@ npm run dev
 
 当前网页地址为 `http://172.16.10.45:5175/`。电脑 IP 或端口变化后，在登录页进入“设置 > 地址设置”修改地址，并同步维护 Business API 的精确 CORS 来源。
 
-运行时配置位于 `public/runtime-config.json`。development 的登录、设置、源单、标签/托盘和九类单据上传均调用 `http://172.16.1.159:9890` 的 Business API；本地模拟登录、模拟源单和模拟业务上传已关闭。`enableMockScanner` 只模拟扫码输入事件，不生成标签数据。当前 H5 版本为 `0.2.0-dev.81`。
+运行时配置位于 `public/runtime-config.json`。development 档位的登录、设置、源单、标签/托盘和业务上传调用 `http://172.16.1.159:9890` 正式Business API；盘点只允许采集/核验。本地模拟登录、模拟源单和模拟业务上传已关闭。`enableMockScanner` 只模拟扫码输入事件，不生成标签数据。当前 H5 版本为 `0.2.0-dev.82`。
 
 调拨单不在表头选择调出、调入仓库。扫码后调出仓库和货位取标签当前位置，明细编辑选择调入仓库及调入货位；需要货位管理的调入仓库必须选择货位。调出、调入类别分别默认匹配缓存中的“调拨出库”“调拨入库”，仍允许用户改选。
 

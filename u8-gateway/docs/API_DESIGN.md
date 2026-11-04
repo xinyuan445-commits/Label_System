@@ -1,10 +1,10 @@
 # U8 Gateway API 设计
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。生产9880/008已具备受控写入门禁；开发9881/888已接打印初始登记，不能再以“仅影子库、尚未发布”概括该开发链路。生产打印新接口未发布，修改/delete能力仍关闭。
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.11.0共享程序集已部署9880/008和9881/888，生产受控写入门禁保留；开发888已有打印初始登记验收，生产008打印工作流未配置/验收，修改/delete能力仍关闭。见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
 
 本文件记录现有合同；盘点原单回填、范围查询和差异角色仅为[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)中的拟议接口，不能以已存在query/create/verify能力代替Update开发及验收。
 
-## 盘点原单只读（0.11.0源码，未部署）
+## 盘点原单只读（0.11.0已部署）
 
 GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=&limit=固定查询未审核盘点单，最多100条，保留hasMore；GET /api/v1/inventory-counts/{id}返回规范化accountId、databaseName、document及完整lines。
 

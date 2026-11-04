@@ -1,5 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.AccessControl;
+using System.Security.Principal;
+using System.Threading;
+using U8Gateway.U8;
 using U8Gateway.Contracts.Approvals;
 using U8Gateway.U8.Sources;
 
@@ -31,6 +36,7 @@ internal static class Program
             Reject(() => U8InventoryCountReader.RequirePending(new ApprovalDocumentSummary { Status = "audited" }));
             Reject(() => U8InventoryCountReader.RequirePending(new ApprovalDocumentSummary { Status = "pending", AuditedBy = "auditor" }));
             Reject(() => U8InventoryCountReader.RequirePending(null));
+            SharedMutexContract();
             Console.WriteLine("inventory count read contract passed (no SQL/COM)");
             return 0;
         }
@@ -38,6 +44,27 @@ internal static class Program
     }
     private static void Equal(object expected, object actual)
     { if (!Equals(expected, actual)) throw new InvalidOperationException("Inventory count read contract mismatch."); }
+    private static void SharedMutexContract()
+    {
+        var name = @"Local\LabelSystem.QueueTest." + Guid.NewGuid().ToString("N");
+        using (var queue = new StaOperationQueue(mutexName: name))
+        using (var handle = Mutex.OpenExisting(name, MutexRights.ReadPermissions))
+        {
+            var rules = handle.GetAccessControl().GetAccessRules(true, false, typeof(SecurityIdentifier))
+                .Cast<MutexAccessRule>();
+            Equal(true, rules.Any(rule => rule.IdentityReference.Value == "S-1-5-32-568" &&
+                rule.AccessControlType == AccessControlType.Allow &&
+                rule.MutexRights == (MutexRights.Synchronize | MutexRights.Modify)));
+            Equal(42, queue.ExecuteAsync(() => 42).GetAwaiter().GetResult());
+        }
+        var limited = new MutexSecurity();
+        limited.AddAccessRule(new MutexAccessRule(WindowsIdentity.GetCurrent().User,
+            MutexRights.Synchronize | MutexRights.Modify, AccessControlType.Allow));
+        bool created;
+        using (var existing = new Mutex(false, name, out created, limited))
+        using (var queue = new StaOperationQueue(mutexName: name))
+            Equal(43, queue.ExecuteAsync(() => 43).GetAwaiter().GetResult());
+    }
     private static void Reject(Action action)
     {
         try { action(); } catch (InvalidOperationException) { return; }

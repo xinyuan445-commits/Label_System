@@ -56,6 +56,15 @@ try {
         param($RequestedPort)
         $ErrorActionPreference = 'Stop'
         Import-Module WebAdministration
+
+        function Wait-PoolState([string]$Name, [string]$Expected) {
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Get-WebAppPoolState -Name $Name).Value -ne $Expected) {
+                if ((Get-Date) -ge $deadline) { throw "应用池 $Name 未进入 $Expected 状态。" }
+                Start-Sleep -Milliseconds 250
+            }
+        }
+
         $siteName = 'U8Gateway'
         $poolName = 'U8GatewayPool'
         $sitePath = 'D:\U8Gateway\site'
@@ -67,6 +76,7 @@ try {
         if (Test-Path "IIS:\Sites\$siteName") { Stop-Website -Name $siteName }
         if (Test-Path "IIS:\AppPools\$poolName") {
             Stop-WebAppPool -Name $poolName -ErrorAction SilentlyContinue
+            Wait-PoolState $poolName 'Stopped'
         }
 
         New-Item -ItemType Directory -Path $sitePath -Force | Out-Null
@@ -85,6 +95,7 @@ try {
         Set-ItemProperty "IIS:\AppPools\$poolName" managedPipelineMode 'Integrated'
         Set-ItemProperty "IIS:\AppPools\$poolName" enable32BitAppOnWin64 $true
         Set-ItemProperty "IIS:\AppPools\$poolName" startMode 'AlwaysRunning'
+        Set-ItemProperty "IIS:\AppPools\$poolName" processModel.idleTimeout ([TimeSpan]::Zero)
         Set-ItemProperty "IIS:\AppPools\$poolName" processModel.loadUserProfile $true
 
         if (-not (Test-Path "IIS:\Sites\$siteName")) {
@@ -97,10 +108,12 @@ try {
         }
 
         & icacls $sitePath /grant "IIS AppPool\${poolName}:(OI)(CI)(RX)" /T /Q | Out-Null
+        Set-ItemProperty "IIS:\Sites\$siteName" applicationDefaults.preloadEnabled $true
         & icacls "$sitePath\App_Data" /grant "IIS AppPool\${poolName}:(OI)(CI)(M)" /T /Q | Out-Null
         & icacls $dataPath /grant "IIS AppPool\${poolName}:(OI)(CI)(M)" /T /Q | Out-Null
 
         Start-WebAppPool -Name $poolName
+        Wait-PoolState $poolName 'Started'
         Start-Website -Name $siteName
         Start-Sleep -Seconds 2
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:$RequestedPort/api/v1/health" -UseBasicParsing

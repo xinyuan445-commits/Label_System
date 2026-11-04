@@ -84,6 +84,14 @@ try {
         $ErrorActionPreference = 'Stop'
         Import-Module WebAdministration
 
+        function Wait-PoolState([string]$Name, [string]$Expected) {
+            $deadline = (Get-Date).AddSeconds(30)
+            while ((Get-WebAppPoolState -Name $Name).Value -ne $Expected) {
+                if ((Get-Date) -ge $deadline) { throw "应用池 $Name 未进入 $Expected 状态。" }
+                Start-Sleep -Milliseconds 250
+            }
+        }
+
         $siteName = 'LabelSystemApi'
         $poolName = 'LabelSystemApiPool'
         $releaseId = (Get-Date).ToString('yyyyMMdd_HHmmss')
@@ -117,6 +125,7 @@ try {
         if (Test-Path "IIS:\Sites\$siteName") { Stop-Website -Name $siteName }
         if (Test-Path "IIS:\AppPools\$poolName") {
             Stop-WebAppPool -Name $poolName -ErrorAction SilentlyContinue
+            Wait-PoolState $poolName 'Stopped'
         }
 
         if (Test-Path -LiteralPath $newConfigPath) {
@@ -147,6 +156,7 @@ try {
         & icacls $configPath /inheritance:r /grant:r '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' "IIS AppPool\${poolName}:(R)" /Q | Out-Null
 
         Start-WebAppPool -Name $poolName
+        Wait-PoolState $poolName 'Started'
         Start-Website -Name $siteName
         Start-Sleep -Seconds 2
         $health = Invoke-RestMethod -Uri "http://127.0.0.1:$RequestedPort/api/v1/health" -UseBasicParsing

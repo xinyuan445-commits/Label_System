@@ -1,5 +1,7 @@
 # APK 图标和启动展示
 
+2026-11-04发布APK0.5.5/111：保留本页图标和启动过渡，增加已加载盘点采集页的断网健康探测保护/能力确认。PX101A已覆盖安装并验证桥HTTP，物理扫码/断网续扫仍待现场验收，详见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+
 `app-icon.svg` 为蓝底、白色标签与条码、绿色确认标记的矢量源文件。`preview.png` 为 512 像素预览；Android 48/72/96/144/192 像素图标位于 `label_system/miniapp/android/nativeResources/res/mipmap-*`。`startup.xml` 为浅灰底应用图标和名称的启动布局。
 
 图标导出使用 `scripts/render_apk_branding.mjs` 与 `sharp`。当前桌面依赖路径由 Codex 的 workspace dependencies 提供，通过进程变量 `LABEL_SYSTEM_NODE_MODULES` 指定；未指定时按 Node 本地依赖查找。SVG 和生成的 PNG 均保存于仓库，APK 与签名材料继续被忽略。

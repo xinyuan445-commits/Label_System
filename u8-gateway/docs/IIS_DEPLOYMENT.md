@@ -1,5 +1,7 @@
 # IIS 独立部署
 
+2026-11-04已发布0.11.0至生产9880/008及独立开发9881/888，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。不同应用池共用Global U8互斥锁；新锁仅向IIS_IUSRS授予Synchronize/Modify。历史锁若仅允许原应用池，首次升级需由服务器管理员给现存锁补齐同等权限，不能用独立锁绕开串行规则。部署脚本等待应用池到达Stopped/Started后继续。
+
 ## 目标
 
 - 站点：`U8Gateway`
