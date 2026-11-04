@@ -10,7 +10,8 @@ namespace LabelSystem.Api.Tests;
 public sealed class InventoryCountCollectionTests
 {
     private static InventoryCountSource Source() => new("888", "UFDATA_888_2021",
-        new(12, "COUNT12", new DateTime(2026, 11, 4), "W1", "pending", null, null, "0x01", 1),
+        new(12, "COUNT12", new DateTime(2026, 11, 4), "W1", "pending", null, null, "0x01", 1,
+            CountByLocation: true, WarehousePositionManaged: true),
         [new(41, 1, "M1", "物料", "B1", "W1", "L1", "U1", 10m, null, new string[10], false)]);
     private static TraceBackLabelSnapshot Label(string code = "888|M1|B1|999.00|001") => new(
         code, "001", 10m, 25, "goods", "order", "M1", "物料", "B1", "U1", "个", "W1", "仓库",
@@ -161,7 +162,7 @@ public sealed class InventoryCountCollectionTests
     {
         var fake = new ReadOnlyHandler();
         var observations = Enumerable.Range(0, 101).Select(n => new InventoryCountObservation("TAG" + n, "1")).ToArray();
-        var result = await Service(fake).ValidateDirectAsync(new("888", "UFDATA_888_2021", "W1", observations), default);
+        var result = await Service(fake).ValidateDirectAsync(new("888", "UFDATA_888_2021", "W1", observations, true), default);
         Assert.Equal(2, fake.SnapshotCalls);
         Assert.Equal(101, result.Items.Count);
         Assert.All(result.Items, row => { Assert.Equal("MATCHED", row.Status); Assert.Equal(10m, row.Label!.AvailableQty); });
@@ -177,6 +178,43 @@ public sealed class InventoryCountCollectionTests
         Assert.Equal("COUNT_OBSERVATIONS_INVALID", (await Assert.ThrowsAsync<ApiException>(() => service.ValidateDirectAsync(
             new("888", "UFDATA_888_2021", "W1", [Observation(), Observation()]), default))).Code);
         Assert.Equal(0, fake.SnapshotCalls);
+    }
+
+    [Fact]
+    public void NativeCountFlagIsIndependentFromWarehouseManagement()
+    {
+        var source = Source() with { Document = Source().Document with { CountByLocation = false, WarehousePositionManaged = true } };
+        InventoryCountRules.RequireSource(source, "888", "UFDATA_888_2021");
+        var result = InventoryCountRules.Match(source, Observation(), Label() with { LocationCode = "OTHER" });
+        Assert.Equal("MATCHED", result.Status); Assert.Equal("OTHER", result.LocationCode);
+        Assert.Equal("LOCATION_REQUIRED", InventoryCountRules.MatchDirect("W1", Observation(), Label() with { LocationCode = "" }, true).Status);
+        Assert.Equal("MATCHED", InventoryCountRules.MatchDirect("W1", Observation(), Label() with { LocationCode = "" }, false).Status);
+        Assert.Throws<ApiException>(() => InventoryCountRules.RequireSource(source with {
+            Document = source.Document with { CountByLocation = null } }, "888", "UFDATA_888_2021"));
+    }
+
+    [Fact]
+    public async Task WarehouseFlagsRejectUnknownCrossAccountOrStaleStateBeforeSnapshots()
+    {
+        var fake = new ReadOnlyHandler { PositionManaged = false };
+        Assert.False((await Service(fake).GetWarehouseAsync("W1", default)).PositionManaged);
+        foreach (bool? flag in new bool?[] { null, true })
+            Assert.Equal("COUNT_POSITION_CHANGED", (await Assert.ThrowsAsync<ApiException>(() => Service(fake).ValidateDirectAsync(
+                new("888", "UFDATA_888_2021", "W1", [Observation()], flag), default))).Code);
+        Assert.Equal(0, fake.SnapshotCalls);
+        Assert.Equal("COUNT_ACCOUNT_MISMATCH", (await Assert.ThrowsAsync<ApiException>(() => Service(
+            new ReadOnlyHandler { WarehouseAccount = "008" }).GetWarehouseAsync("W1", default))).Code);
+        Assert.Equal("COUNT_WAREHOUSE_INVALID", (await Assert.ThrowsAsync<ApiException>(() => Service(
+            new ReadOnlyHandler { PositionManaged = null }).GetWarehouseAsync("W1", default))).Code);
+    }
+
+    [Fact]
+    public async Task WarehouseConfigurationChangedDuringCompletionRejectsResult()
+    {
+        var fake = new ReadOnlyHandler { ChangeWarehouseAfterSnapshots = true };
+        Assert.Equal("COUNT_POSITION_CHANGED", (await Assert.ThrowsAsync<ApiException>(() => Service(fake).ValidateDirectAsync(
+            new("888", "UFDATA_888_2021", "W1", [Observation()], true), default))).Code);
+        Assert.Equal(1, fake.SnapshotCalls);
     }
 
     private static InventoryCountCollectionService Service(ReadOnlyHandler handler) => new(
@@ -198,11 +236,17 @@ public sealed class InventoryCountCollectionTests
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
         public int SnapshotCalls { get; private set; }
         public bool ChangeAfterSnapshots { get; init; }
+        public bool? PositionManaged { get; init; } = true;
+        public bool ChangeWarehouseAfterSnapshots { get; init; }
+        public string WarehouseAccount { get; init; } = "888";
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             object data;
             if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/api/v1/inventory-counts/12")
                 data = ChangeAfterSnapshots && SnapshotCalls > 0 ? Source() with { Document = Source().Document with { Version = "0x02" } } : Source();
+            else if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/api/v1/inventory-counts/warehouses/W1")
+                data = new InventoryCountWarehouse(WarehouseAccount, "UFDATA_888_2021", "W1", "仓库",
+                    ChangeWarehouseAfterSnapshots && SnapshotCalls > 0 ? !PositionManaged : PositionManaged);
             else
             {
                 Assert.Equal(HttpMethod.Post, request.Method);

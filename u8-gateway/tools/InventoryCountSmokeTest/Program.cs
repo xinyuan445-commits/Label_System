@@ -19,7 +19,13 @@ internal static class Program
             var header = U8InventoryCountReader.MapHeader(new ApprovalDocumentSummary
                 { Id = 12, DocumentNo = "COUNT12", WarehouseCode = "W1", Status = "pending", Version = "0x01", LineCount = 1 },
                 new Dictionary<string, object> { ["InCategoryCode"] = " 107 ", ["InCategoryName"] = "盘盈入库",
-                    ["OutCategoryCode"] = "207", ["OutCategoryName"] = "盘亏出库" });
+                    ["OutCategoryCode"] = "207", ["OutCategoryName"] = "盘亏出库",
+                    ["CountByLocation"] = "0", ["WarehousePositionManaged"] = true });
+            Equal((bool?)false, header.CountByLocation); Equal((bool?)true, header.WarehousePositionManaged);
+            Equal((bool?)true, U8InventoryCountReader.ReadFlag(new Dictionary<string, object> { ["x"] = "1" }, "x"));
+            Equal((bool?)false, U8InventoryCountReader.ReadFlag(new Dictionary<string, object> { ["x"] = false }, "x"));
+            Equal(null, U8InventoryCountReader.ReadFlag(new Dictionary<string, object> { ["x"] = DBNull.Value }, "x"));
+            Reject(() => U8InventoryCountReader.ReadFlag(new Dictionary<string, object> { ["x"] = "unknown" }, "x"));
             Equal("107", header.InCategoryCode); Equal("盘盈入库", header.InCategoryName);
             Equal("207", header.OutCategoryCode); Equal("盘亏出库", header.OutCategoryName);
             Equal(12L, header.Id); Equal("0x01", header.Version); Equal(1, header.LineCount);

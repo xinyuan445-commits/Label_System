@@ -38,6 +38,21 @@ namespace U8Gateway.Api.Controllers
             catch (InvalidOperationException) { return Error(HttpStatusCode.Conflict, "COUNT_SOURCE_CHANGED", "盘点单不可用或已变化，请重新选择。"); }
         }
 
+        [HttpGet, Route("warehouses/{code}")]
+        public IHttpActionResult Warehouse(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code) || code.Trim().Length > 20)
+                return Error(HttpStatusCode.BadRequest, "COUNT_WAREHOUSE_INVALID", "请选择仓库。");
+            try
+            {
+                var result = Reader().GetWarehouse(code);
+                return result == null ? Error(HttpStatusCode.NotFound, "COUNT_WAREHOUSE_NOT_FOUND", "仓库不存在或已停用。")
+                    : Ok(ApiResponse<InventoryCountWarehouse>.Ok(result, GatewayRequestContext.Id));
+            }
+            catch (SqlException) { return Error(HttpStatusCode.ServiceUnavailable, "COUNT_WAREHOUSE_QUERY_FAILED", "仓库查询失败。"); }
+            catch (InvalidOperationException) { return Error(HttpStatusCode.Conflict, "COUNT_WAREHOUSE_INVALID", "仓库货位状态需核对。"); }
+        }
+
         private static U8InventoryCountReader Reader()
         {
             GatewaySettings s = AppRuntime.CurrentSettings;

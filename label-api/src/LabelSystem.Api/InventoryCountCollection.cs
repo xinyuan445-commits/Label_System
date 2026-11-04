@@ -10,7 +10,10 @@ namespace LabelSystem.Api;
 public sealed record InventoryCountHeader(long Id, string DocumentNo, DateTime? DocumentDate,
     string WarehouseCode, string Status, string? AuditedBy, DateTime? AuditedAt, string Version, int LineCount,
     string? InCategoryCode = null, string? InCategoryName = null,
-    string? OutCategoryCode = null, string? OutCategoryName = null);
+    string? OutCategoryCode = null, string? OutCategoryName = null,
+    bool? CountByLocation = null, bool? WarehousePositionManaged = null);
+public sealed record InventoryCountWarehouse(string AccountId, string DatabaseName, string WarehouseCode,
+    string WarehouseName, bool? PositionManaged);
 public sealed record InventoryCountSourceLine(long Id, int LineNo, string MaterialCode, string MaterialName,
     string BatchNo, string WarehouseCode, string LocationCode, string UnitCode, decimal BookQuantity,
     decimal? ActualQuantity, IReadOnlyList<string> FreeItems, bool RequiresAuxiliaryUnit);
@@ -20,11 +23,12 @@ public sealed record InventoryCountObservation(string Code, string? Quantity);
 public sealed record InventoryCountValidateRequest(string AccountId, string DatabaseName,
     string SourceFingerprint, IReadOnlyList<InventoryCountObservation> Observations);
 public sealed record InventoryCountObservationResult(string Code, string Status, string Message,
-    long? SourceLineId = null, string? MaterialName = null, decimal? Balance = null, long? LatestFlowId = null);
+    long? SourceLineId = null, string? MaterialName = null, decimal? Balance = null, long? LatestFlowId = null,
+    string? LocationCode = null);
 public sealed record InventoryCountValidationResult(string SourceFingerprint,
     IReadOnlyList<InventoryCountObservationResult> Items, bool CanSubmit = false);
 public sealed record InventoryCountDirectValidateRequest(string AccountId, string DatabaseName, string WarehouseCode,
-    IReadOnlyList<InventoryCountObservation> Observations);
+    IReadOnlyList<InventoryCountObservation> Observations, bool? CountByLocation = null);
 public sealed record InventoryCountDirectCheck(string Code, string Status, string Message,
     InventoryObjectLine? Label = null, long? LatestFlowId = null);
 public sealed record InventoryCountDirectResult(IReadOnlyList<InventoryCountDirectCheck> Items, bool CanSubmit = false);
@@ -54,6 +58,9 @@ public static partial class InventoryCountRules
             !string.IsNullOrWhiteSpace(source.Document.AuditedBy) || source.Document.AuditedAt.HasValue ||
             string.IsNullOrWhiteSpace(source.Document.Version))
             throw new ApiException(409, "COUNT_SOURCE_UNAVAILABLE", "盘点单不可用，请重新选择。");
+        if (source.Document.CountByLocation is null || source.Document.WarehousePositionManaged is null ||
+            source.Document.CountByLocation == true && source.Document.WarehousePositionManaged != true)
+            throw new ApiException(409, "COUNT_POSITION_INVALID", "盘点货位状态需核对，请重新选单。");
         if (source.Lines is null || source.Lines.Count == 0 || source.Lines.Count > 5000 ||
             source.Document.LineCount != source.Lines.Count || source.Lines.Any(l => l is null || l.Id <= 0 ||
                 string.IsNullOrWhiteSpace(l.MaterialCode) || string.IsNullOrWhiteSpace(l.WarehouseCode)) ||
@@ -79,7 +86,9 @@ public static partial class InventoryCountRules
             return new(code, "LABEL_INVALID", "标签待核对。");
         var candidates = source.Lines.Where(line => Same(line.MaterialCode, snapshot.MaterialCode) &&
             Same(line.BatchNo, snapshot.BatchNo) && Same(line.WarehouseCode, snapshot.WarehouseCode) &&
-            Same(line.LocationCode, snapshot.LocationCode)).ToArray();
+            (source.Document.CountByLocation == false || Same(line.LocationCode, snapshot.LocationCode))).ToArray();
+        if (source.Document.CountByLocation == true && string.IsNullOrWhiteSpace(snapshot.LocationCode))
+            return new(code, "LOCATION_REQUIRED", "标签缺少货位，请核对。");
         if (candidates.Length == 0) return new(code, "OUTSIDE_SOURCE", "标签不属于此盘点单。");
         if (candidates.Length > 1) return new(code, "AMBIGUOUS_SOURCE", "原单有重复明细，请核对。");
         var match = candidates[0];
@@ -89,11 +98,11 @@ public static partial class InventoryCountRules
             return new(code, "UNIT_MISMATCH", "计量单位不一致。");
         if (!TryQuantity(observation.Quantity, out _))
             return new(code, "QUANTITY_REQUIRED", "请输入有效实盘数量。", match.Id, match.MaterialName);
-        return new(code, "MATCHED", "", match.Id, match.MaterialName, snapshot.Balance, snapshot.LatestFlowId);
+        return new(code, "MATCHED", "", match.Id, match.MaterialName, snapshot.Balance, snapshot.LatestFlowId, snapshot.LocationCode);
     }
 
     public static InventoryCountDirectCheck MatchDirect(string warehouse, InventoryCountObservation observation,
-        TraceBackLabelSnapshot snapshot)
+        TraceBackLabelSnapshot snapshot, bool countByLocation = false)
     {
         var code = observation.Code.Trim();
         if (!Same(code, snapshot.Code) || snapshot.Status is not ("AVAILABLE" or "USED_UP") ||
@@ -102,6 +111,7 @@ public static partial class InventoryCountRules
             string.IsNullOrWhiteSpace(snapshot.MaterialCode) || string.IsNullOrWhiteSpace(snapshot.UnitCode))
             return new(code, "LABEL_INVALID", "标签待核对。");
         if (!Same(warehouse, snapshot.WarehouseCode)) return new(code, "OUTSIDE_WAREHOUSE", "标签不属于所选仓库。");
+        if (countByLocation && string.IsNullOrWhiteSpace(snapshot.LocationCode)) return new(code, "LOCATION_REQUIRED", "标签缺少货位，请核对。");
         if (!TryQuantity(observation.Quantity, out _)) return new(code, "QUANTITY_REQUIRED", "请输入有效实盘数量。");
         return new(code, "MATCHED", "", new(snapshot.Code, "PRODUCT_LABEL", snapshot.MaterialCode,
             snapshot.MaterialName ?? snapshot.MaterialCode, snapshot.BatchNo ?? "", snapshot.UnitCode,
@@ -123,6 +133,16 @@ public static partial class InventoryCountRules
 
 public sealed partial class U8GatewayClient
 {
+    public async Task<InventoryCountWarehouse> GetInventoryCountWarehouseAsync(string code, CancellationToken ct)
+    {
+        using var message = CreateRequest(HttpMethod.Get, "/api/v1/inventory-counts/warehouses/" + Uri.EscapeDataString(code));
+        using var response = await Client().SendAsync(message, ct);
+        var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<InventoryCountWarehouse>>(JsonOptions, ct);
+        if (!response.IsSuccessStatusCode || envelope?.Success != true || envelope.Data is null)
+            throw new ApiException(response.IsSuccessStatusCode ? 502 : (int)response.StatusCode,
+                envelope?.Code ?? "COUNT_WAREHOUSE_QUERY_FAILED", envelope?.Message ?? "仓库查询失败。");
+        return envelope.Data;
+    }
     public async Task<InventoryCountSource> GetInventoryCountSourceAsync(long id, CancellationToken ct)
     {
         using var message = CreateRequest(HttpMethod.Get, $"/api/v1/inventory-counts/{id}");
@@ -137,6 +157,20 @@ public sealed partial class U8GatewayClient
 
 public sealed class InventoryCountCollectionService(U8GatewayClient gateway, IOptionsMonitor<LabelSystemOptions> settings)
 {
+    public async Task<InventoryCountWarehouse> GetWarehouseAsync(string code, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(code) || code.Trim().Length > 20)
+            throw new ApiException(400, "COUNT_WAREHOUSE_REQUIRED", "请选择仓库。");
+        var result = await gateway.GetInventoryCountWarehouseAsync(code.Trim(), ct);
+        var options = settings.CurrentValue;
+        if (!string.Equals(result.AccountId, options.ErpAccountId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(result.DatabaseName, options.ErpDatabaseName, StringComparison.OrdinalIgnoreCase))
+            throw new ApiException(409, "COUNT_ACCOUNT_MISMATCH", "仓库账套不一致，请重新打开单据。");
+        if (result.PositionManaged is null || !string.Equals(result.WarehouseCode, code.Trim(), StringComparison.OrdinalIgnoreCase))
+            throw new ApiException(502, "COUNT_WAREHOUSE_INVALID", "仓库货位状态需核对。");
+        return result;
+    }
+
     public async Task<InventoryCountDirectResult> ValidateDirectAsync(InventoryCountDirectValidateRequest request, CancellationToken ct)
     {
         InventoryCountRules.RequireObservationList(request.Observations);
@@ -150,14 +184,20 @@ public sealed class InventoryCountCollectionService(U8GatewayClient gateway, IOp
                 throw new ApiException(409, "COUNT_ACCOUNT_MISMATCH", "盘点账套不一致，请重新打开单据。");
         }
         RequireAccount();
+        var warehouse = await GetWarehouseAsync(request.WarehouseCode, ct);
+        if (request.CountByLocation is null || request.CountByLocation != warehouse.PositionManaged)
+            throw new ApiException(409, "COUNT_POSITION_CHANGED", "仓库货位设置已变化，请重置后重试。");
         var snapshots = new Dictionary<string, TraceBackLabelSnapshot>(StringComparer.OrdinalIgnoreCase);
         foreach (var batch in request.Observations.Chunk(100))
             foreach (var snapshot in await gateway.GetTraceBackSnapshotsAsync(batch.Select(row => row.Code.Trim()).ToArray(), ct))
                 if (!snapshots.TryAdd(snapshot.Code, snapshot))
                     throw new ApiException(502, "COUNT_SNAPSHOT_INVALID", "标签查询返回重复，请重试。");
         RequireAccount();
+        var after = await GetWarehouseAsync(request.WarehouseCode, ct);
+        if (after.PositionManaged != warehouse.PositionManaged)
+            throw new ApiException(409, "COUNT_POSITION_CHANGED", "仓库货位设置已变化，请重置后重试。");
         return new(request.Observations.Select(row => snapshots.TryGetValue(row.Code.Trim(), out var snapshot)
-            ? InventoryCountRules.MatchDirect(request.WarehouseCode.Trim(), row, snapshot)
+            ? InventoryCountRules.MatchDirect(request.WarehouseCode.Trim(), row, snapshot, request.CountByLocation.Value)
             : new InventoryCountDirectCheck(row.Code.Trim(), "NOT_FOUND", "未找到标签。")).ToArray());
     }
 
@@ -228,6 +268,8 @@ public static class InventoryCountCollectionEndpoints
         });
         group.MapGet("/{id:long}", async (HttpContext h, long id, InventoryCountCollectionService service, CancellationToken ct) =>
             ApiResults.Ok(h, await service.GetSourceAsync(id, ct)));
+        group.MapGet("/warehouses/{code}", async (HttpContext h, string code, InventoryCountCollectionService service, CancellationToken ct) =>
+            ApiResults.Ok(h, await service.GetWarehouseAsync(code, ct)));
         group.MapPost("/{id:long}/validate", async (HttpContext h, long id, InventoryCountValidateRequest request,
             InventoryCountCollectionService service, CancellationToken ct) => ApiResults.Ok(h, await service.ValidateAsync(id, request, ct)));
         group.MapPost("/validate-direct", async (HttpContext h, InventoryCountDirectValidateRequest request,

@@ -19,6 +19,17 @@ namespace U8Gateway.Contracts.Sources
         public string InCategoryName { get; set; }
         public string OutCategoryCode { get; set; }
         public string OutCategoryName { get; set; }
+        public bool? CountByLocation { get; set; }
+        public bool? WarehousePositionManaged { get; set; }
+    }
+
+    public sealed class InventoryCountWarehouse
+    {
+        public string AccountId { get; set; }
+        public string DatabaseName { get; set; }
+        public string WarehouseCode { get; set; }
+        public string WarehouseName { get; set; }
+        public bool PositionManaged { get; set; }
     }
 
     public sealed class InventoryCountSourceLine

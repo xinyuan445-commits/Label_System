@@ -82,3 +82,16 @@ H5 24项自动测试和类型/构建通过；API盘点21项测试、Gateway只�
 先发布888，再发布008。API程序集0.12.2，开发配置0.12.2-count-dev，生产配置0.12.2。开发新路径D:\LabelSystem\DevPrinting\releases\20261104_202855_count_direct\api，生产新路径D:\LabelSystem\Api\releases\20261104_202901_count_direct\api；包DLL SHA256与本地发布文件一致。两站健康ready，原配置仅改版本，账套、写入和打印设置保留。回退备份分别为D:\LabelSystem\backups\20261104_202855_count_direct_888及20261104_202901_count_direct_008，内存会话随池重启失效，需要重新登录。
 
 H5重启本项目5175到dev.86，运行配置和制单模块HTTP200；仍连接9890正式008。Gateway0.11.1/原路径、APK0.5.5/111不变。H5 27项测试、API盘点24项及类型/Release构建通过；无原单批量校验使用隔离HTTP桩验证，不能当作实机验收。无数据库迁移、无测试业务写入、未清空设备数据；ERP盘点原单回填/无原单新增及差异落账仍未完成，上传禁用，未推送GitHub。
+
+
+## 同日后续：是否盘货位（dev.87 / API0.12.3 / Gateway0.11.2）
+
+H5共用表头增加“是否盘货位”只读状态。有原单取CheckVouch.bPosCheck（实际nchar的0/1），另带Warehouse.bWhPos；两者不互相冒充。无原单选仓库后实时读取bWhPos，启用为是、未启用为否，未知/失败不当作否；不依赖Position条数。仓库快照与布尔状态保存在标准草稿，明确的false可离线恢复；旧原单快照缺状态须重选同一原单，保留已盘数量。
+
+新增两层GET /api/v1/inventory-counts/warehouses/{code}，参数化查询未停用仓库并验证账套。无原单validate-direct增加countByLocation布尔值，标签批量查询前后各实时复核仓库设置；变化拒绝并提示重置。盘货位时标签货位必需，不盘货位时匹配仓库维度并保留标签最新位置。无迁移、U8/TraceBack业务写入或仓位缓存表变更。
+
+先888后008部署：开发API D:\LabelSystem\DevPrinting\releases\20261104_204508_count_location\api，配置0.12.3-count-dev；生产API D:\LabelSystem\Api\releases\20261104_204516_count_location\api，配置0.12.3。Gateway原目录只更新Api/Contracts/U8三个DLL至0.11.2；程序包哈希验证，外置配置仅改API版本，原账套和写入/打印配置保留。备份在D:\LabelSystem\backups\20261104_204508_count_location_888及20261104_204516_count_location_008，包含旧API路径、配置及三个Gateway旧DLL。另修正错误提示为重置后重试，最终API DLL与本地发布哈希一致。
+
+两账套真实只读GET验证：888原单PDD26101316不盘货位，008原单PDD26111535盘货位；888仓库JML_B1、008仓库JML_C1启用货位管理，两账套JML_B1_FBX未启用，返回真实布尔值。未创建测试单据、标签或数量流水。Business API均ready、Gateway均running；H5已重启5175到dev.87，运行配置和模块HTTP200，仍接9890正式008。APK0.5.5/111不变，设备数据未清除；重新登录并刷新页面后测试。
+
+H5 30项、API盘点27项及Gateway只读合同测试通过，包含未知标志、空货位列表、快速切仓旧响应、离线false恢复、缺货位拦截及完成中配置变化；类型/Release构建通过。未查看截图或做物理扫码/外观验收。ERP上传仍禁用，未推送GitHub。回退停对应池恢复备份后启动并核验健康/来源，不回退业务数据。

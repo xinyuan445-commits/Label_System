@@ -60,8 +60,10 @@ where d.ID=@id order by d.autoID;";
                 connection.Open();
                 using (var headerCommand = new SqlCommand(@"
 select h.cIRdCode InCategoryCode, i.cRdName InCategoryName,
+       h.bPosCheck CountByLocation, w.bWhPos WarehousePositionManaged,
        h.cORdCode OutCategoryCode, o.cRdName OutCategoryName
 from dbo.CheckVouch h
+left join dbo.Warehouse w on w.cWhCode=h.cWhCode
 left join dbo.Rd_Style i on i.cRdCode=h.cIRdCode
 left join dbo.Rd_Style o on o.cRdCode=h.cORdCode
 where h.ID=@id;", connection))
@@ -93,7 +95,34 @@ where h.ID=@id;", connection))
             // The source has a separate, complete line collection; do not serialize the
             // approval reader's second, incomplete projection of the same lines.
             result.Document = MapHeader(after, header);
+            if (!result.Document.CountByLocation.HasValue || !result.Document.WarehousePositionManaged.HasValue)
+                throw new InvalidOperationException("盘点货位状态不明确，请核对原单。");
             return result;
+        }
+
+        public InventoryCountWarehouse GetWarehouse(string code)
+        {
+            if (string.IsNullOrWhiteSpace(code) || code.Trim().Length > 20)
+                throw new ArgumentException("请选择有效仓库。");
+            using (var connection = new SqlConnection(_connectionString))
+            using (var command = new SqlCommand(@"select cWhCode,cWhName,bWhPos from dbo.Warehouse
+where cWhCode=@code and dWhEndDate is null;", connection))
+            {
+                command.Parameters.Add("@code", SqlDbType.NVarChar, 20).Value = code.Trim();
+                command.CommandTimeout = 20;
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                {
+                    if (!reader.Read()) return null;
+                    var flag = ReadFlag(new Dictionary<string, object> { ["flag"] = reader["bWhPos"] }, "flag");
+                    if (!flag.HasValue) throw new InvalidOperationException("仓库货位管理状态不明确。");
+                    var result = new InventoryCountWarehouse { AccountId = _account, DatabaseName = _database,
+                        WarehouseCode = Convert.ToString(reader["cWhCode"]).Trim(),
+                        WarehouseName = Convert.ToString(reader["cWhName"]).Trim(), PositionManaged = flag.Value };
+                    if (reader.Read()) throw new InvalidOperationException("仓库档案重复，请核对。");
+                    return result;
+                }
+            }
         }
 
         public static InventoryCountHeader MapHeader(ApprovalDocumentSummary after, IDictionary<string, object> header)
@@ -106,7 +135,9 @@ where h.ID=@id;", connection))
                 AuditedBy = after.AuditedBy, AuditedAt = after.AuditedAt, Version = after.Version,
                 LineCount = after.LineCount, TotalQuantity = after.TotalQuantity,
                 InCategoryCode = Text(header, "InCategoryCode"), InCategoryName = Text(header, "InCategoryName"),
-                OutCategoryCode = Text(header, "OutCategoryCode"), OutCategoryName = Text(header, "OutCategoryName")
+                OutCategoryCode = Text(header, "OutCategoryCode"), OutCategoryName = Text(header, "OutCategoryName"),
+                CountByLocation = ReadFlag(header, "CountByLocation"),
+                WarehousePositionManaged = ReadFlag(header, "WarehousePositionManaged")
             };
         }
 
@@ -145,6 +176,15 @@ where h.ID=@id;", connection))
         {
             object value;
             return row.TryGetValue(field, out value) && value != DBNull.Value ? value : null;
+        }
+        public static bool? ReadFlag(IDictionary<string, object> row, string field)
+        {
+            object value = Value(row, field);
+            if (value == null) return null;
+            string text = Convert.ToString(value, CultureInfo.InvariantCulture).Trim();
+            if (text == "1" || string.Equals(text, "true", StringComparison.OrdinalIgnoreCase)) return true;
+            if (text == "0" || string.Equals(text, "false", StringComparison.OrdinalIgnoreCase)) return false;
+            throw new InvalidOperationException("货位状态无效，请核对。");
         }
         private static string Text(IDictionary<string, object> row, string field) =>
             Convert.ToString(Value(row, field), CultureInfo.InvariantCulture)?.Trim() ?? "";

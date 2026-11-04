@@ -25,6 +25,8 @@ export interface CountSource {
     inCategoryName?: string | null
     outCategoryCode?: string | null
     outCategoryName?: string | null
+    countByLocation?: boolean | null
+    warehousePositionManaged?: boolean | null
     status: string
     version: string
     lineCount: number
@@ -46,6 +48,7 @@ export interface CountTask {
   validationToken: string | null
 }
 export interface CountCheck {
+  locationCode?: string | null
   code: string
   status: string
   message: string

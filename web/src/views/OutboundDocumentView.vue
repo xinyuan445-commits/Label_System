@@ -63,7 +63,7 @@ import { readSession } from '@/services/auth'
 import { playScanFeedback } from '@/services/shell-config'
 import { applyCountChecks, applyDirectCountChecks, countFormLine, countSourceLines, preserveLegacyCountDocuments, requireCountForm } from '@/services/inventory-count-documents'
 import { countCodeKey, type CountSource } from '@/services/inventory-count-model'
-import { getCountContext, validateDirectCount, validateInventoryCountItems, type CountContext } from '@/services/inventory-count-api'
+import { getCountContext, getCountWarehouse, validateDirectCount, validateInventoryCountItems, type CountContext, type CountWarehouse } from '@/services/inventory-count-api'
 import { getRuntimeConfig } from '@/services/runtime-config'
 
 type LineObjectType = 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
@@ -131,6 +131,7 @@ interface MaterialOutboundSubmissionGroup {
 interface OutboundDraft {
   inventoryCountSource?: CountSource
   inventoryCountContext?: CountContext
+  inventoryCountWarehouse?: CountWarehouse
   documentDate: string
   documentDirection: 'BLUE' | 'RED'
   sourceDocumentType: string
@@ -168,6 +169,16 @@ const sourceDocumentTypeLabel = ref('')
 const sourceDocumentNo = ref('')
 const inventoryCountSource = ref<CountSource | null>(null)
 const inventoryCountContext = ref<CountContext | null>(null)
+const inventoryCountWarehouse = ref<CountWarehouse | null>(null)
+const countWarehouseLoading = ref(false)
+let countWarehouseRequest = 0
+const countByLocation = computed<boolean | null>(() => {
+  if (inventoryCountSource.value) return inventoryCountSource.value.document.countByLocation ?? null
+  const warehouse = inventoryCountWarehouse.value
+  return warehouse && warehouse.warehouseCode === warehouseCode.value &&
+    warehouse.accountId === inventoryCountContext.value?.accountId && warehouse.databaseName === inventoryCountContext.value?.databaseName &&
+    typeof warehouse.positionManaged === 'boolean' ? warehouse.positionManaged : null
+})
 const countSaving = ref(false), countLookupBusy = ref(false)
 const countVisibleLines = ref(30)
 const customerCode = ref('')
@@ -503,7 +514,7 @@ function applyCountHeader(overwrite = false): void {
 
 function fieldVisible(key: string): boolean {
   if (props.documentType === 'inventory-count') {
-    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.inCategoryCode', 'header.outCategoryCode', 'header.remark'].includes(key)
+    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.inCategoryCode', 'header.outCategoryCode', 'header.countByLocation', 'header.remark'].includes(key)
     if (key === 'body.quantity') return true
   }
   if (props.documentType === 'transfer-order' &&
@@ -528,7 +539,7 @@ function fieldVisible(key: string): boolean {
 
 function fieldRequired(key: string): boolean {
   if (props.documentType === 'inventory-count') {
-    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.inCategoryCode', 'header.outCategoryCode'].includes(key)
+    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.inCategoryCode', 'header.outCategoryCode', 'header.countByLocation'].includes(key)
     if (key === 'body.quantity') return true
   }
   if (props.documentType === 'transfer-order' && key === 'body.targetWarehouseCode') return true
@@ -543,6 +554,7 @@ function isBlank(value: unknown): boolean {
 
 function headerValue(key: string): unknown {
   const values: Record<string, unknown> = {
+    'header.countByLocation': countByLocation.value === null ? '' : countByLocation.value ? '1' : '0',
     'header.documentDate': documentDate.value,
     'header.partnerCode': customerCode.value,
     'header.warehouseCode': warehouseCode.value,
@@ -1021,7 +1033,29 @@ function applyReferenceDefaults(): void {
   }
 }
 
-function handleWarehouseChange(): void {
+async function refreshCountWarehouse(): Promise<void> {
+  const revision = ++countWarehouseRequest
+  if (props.documentType !== 'inventory-count' || inventoryCountSource.value) return
+  const code = warehouseCode.value
+  inventoryCountWarehouse.value = null
+  countWarehouseLoading.value = false
+  if (!code) return
+  if (!navigator.onLine) { notify('请联网读取仓库', 'error'); return }
+  countWarehouseLoading.value = true
+  try {
+    const snapshot = await getCountWarehouse(code)
+    if (revision !== countWarehouseRequest || warehouseCode.value !== code || inventoryCountSource.value) return
+    if (snapshot.warehouseCode !== code || typeof snapshot.positionManaged !== 'boolean' ||
+        snapshot.accountId !== inventoryCountContext.value?.accountId || snapshot.databaseName !== inventoryCountContext.value?.databaseName) {
+      throw new Error('仓库资料需核对，请重新选择')
+    }
+    inventoryCountWarehouse.value = snapshot
+  } catch (error) {
+    if (revision === countWarehouseRequest) notify(error instanceof Error ? error.message : '仓库读取失败', 'error')
+  } finally { if (revision === countWarehouseRequest) countWarehouseLoading.value = false }
+}
+
+async function handleWarehouseChange(): Promise<void> {
   if (props.documentType === 'inventory-count') {
     const fixedWarehouse = inventoryCountSource.value?.document.warehouseCode || lines.value[0]?.warehouseCode
     if (fixedWarehouse && warehouseCode.value !== fixedWarehouse) {
@@ -1036,6 +1070,7 @@ function handleWarehouseChange(): void {
   if (targetLocationCode.value && !validPositions.has(targetLocationCode.value)) {
     targetLocationCode.value = ''
   }
+  if (props.documentType === 'inventory-count' && !inventoryCountSource.value && inventoryCountWarehouse.value?.warehouseCode !== warehouseCode.value) await refreshCountWarehouse()
 }
 
 function handleTargetWarehouseChange(): void {
@@ -1252,7 +1287,7 @@ async function addCountBarcode(rawCode: string): Promise<void> {
       if (lookup.pallet || lookup.lines.length !== 1) throw new Error('请扫描产品标签')
       label = lookup.lines[0]
     }
-    openLineConfirmation([countFormLine(inventoryCountSource.value, rawCode, createLineId(), label, warehouseCode.value)])
+    openLineConfirmation([countFormLine(inventoryCountSource.value, rawCode, createLineId(), label, warehouseCode.value, countByLocation.value === true)])
   } catch (error) {
     notify(error instanceof Error ? error.message : '标签查询失败', 'error'); playScanFeedback('error')
   } finally {
@@ -1504,6 +1539,7 @@ function clearSourceDocument(): void {
       outboundCategoryCode.value === materialOutboundSourceCategoryCode) {
     outboundCategoryCode.value = ''
   }
+  if (props.documentType === 'inventory-count') { inventoryCountWarehouse.value = null; void refreshCountWarehouse() }
 }
 
 function buildMaterialOutboundSubmissionGroups(
@@ -1564,6 +1600,7 @@ function createDraft(): OutboundDraft {
   return {
     inventoryCountSource: props.documentType === 'inventory-count' ? inventoryCountSource.value ?? undefined : undefined,
     inventoryCountContext: props.documentType === 'inventory-count' ? inventoryCountContext.value ?? undefined : undefined,
+    inventoryCountWarehouse: props.documentType === 'inventory-count' ? inventoryCountWarehouse.value ?? undefined : undefined,
     documentDate: documentDate.value,
     documentDirection: documentDirection.value,
     sourceDocumentType: sourceDocumentType.value,
@@ -1578,7 +1615,9 @@ function createDraft(): OutboundDraft {
     outboundCategoryCode: outboundCategoryCode.value.trim(),
     productionBatch: productionBatch.value.trim(),
     remark: remark.value.trim(),
-    headerFieldValues: filterConfiguredValues('header', headerFieldValues.value),
+    headerFieldValues: filterConfiguredValues('header', props.documentType === 'inventory-count'
+      ? { ...headerFieldValues.value, 'header.countByLocation': headerValue('header.countByLocation') as string }
+      : headerFieldValues.value),
     selectedSourceLines: selectedSourceLines.value,
     materialRequirements: materialRequirements.value,
     overIssueTargets: overIssueTargets.value,
@@ -1598,6 +1637,9 @@ function hasUnsavedChanges(): boolean {
 function applyDraft(draft: Partial<OutboundDraft>): void {
   countVisibleLines.value = 30
   inventoryCountSource.value = draft.inventoryCountSource ?? null
+  countWarehouseRequest++
+  countWarehouseLoading.value = false
+  inventoryCountWarehouse.value = draft.inventoryCountWarehouse ?? null
   inventoryCountContext.value = draft.inventoryCountContext ?? (inventoryCountSource.value
     ? { accountId: inventoryCountSource.value.accountId, databaseName: inventoryCountSource.value.databaseName } : null)
   currentStep.value = 1
@@ -1708,9 +1750,9 @@ async function saveCompletedDocument(): Promise<StoredOutboundDocument | null> {
       lines.value = applyCountChecks(source, lines.value, checked.items)
     } else {
       if (!inventoryCountContext.value) throw new Error('请联网重新打开盘点单')
-      const checked = await validateDirectCount(inventoryCountContext.value, warehouseCode.value, observations)
+      const checked = await validateDirectCount(inventoryCountContext.value, warehouseCode.value, observations, countByLocation.value!)
       if (snapshotDraft() !== before) throw new Error('单据有变化，请重试')
-      lines.value = applyDirectCountChecks(warehouseCode.value, lines.value, checked.items)
+      lines.value = applyDirectCountChecks(warehouseCode.value, lines.value, checked.items, countByLocation.value!)
     }
   }
   const payload = createDraft()
@@ -1804,6 +1846,9 @@ function validateHeader(): string {
     if (source && (warehouseCode.value !== source.document.warehouseCode ||
         documentDate.value !== source.document.documentDate?.slice(0, 10))) return '原单表头不一致，请重新选单'
     if (!inventoryCountContext.value?.accountId || !inventoryCountContext.value.databaseName) return '请联网重新打开盘点单'
+    if (countWarehouseLoading.value) return '正在读取仓库，请稍候'
+    if (warehouseCode.value && countByLocation.value === null) return source ? '请重新选择原单' : '请重新选择仓库'
+    if (source?.document.countByLocation === true && source.document.warehousePositionManaged !== true) return '原单货位状态需核对'
     for (const direction of ['IN', 'OUT'] as const) {
       const key = direction === 'IN' ? 'header.inCategoryCode' : 'header.outCategoryCode'
       const code = String(headerFieldValues.value[key] ?? '')
@@ -2104,6 +2149,7 @@ onMounted(async () => {
     try { inventoryCountContext.value = await getCountContext() }
     catch (error) { notify(error instanceof Error ? error.message : '盘点配置读取失败', 'error') }
   }
+  if (props.documentType === 'inventory-count' && !inventoryCountSource.value && warehouseCode.value && countByLocation.value === null && navigator.onLine) await refreshCountWarehouse()
   const returnRequirement = consumeReturnRequirementSelection(props.documentType)
   if (
     returnRequirement && props.documentType === 'material-outbound' &&
@@ -2220,7 +2266,7 @@ onBeforeRouteLeave((to) => {
               v-model="warehouseCode"
               :options="warehouseSelectOptions"
               label-only
-              :disabled="referenceDataLoading || (documentType === 'inventory-count' && (!!inventoryCountSource || lines.length > 0 || countSaving || countLookupBusy || finishing))"
+              :disabled="referenceDataLoading || (documentType === 'inventory-count' && (!inventoryCountContext || !!inventoryCountSource || lines.length > 0 || countSaving || countLookupBusy || finishing))"
               placeholder="编号或名称"
               @update:model-value="handleWarehouseChange"
             />
@@ -2304,7 +2350,15 @@ onBeforeRouteLeave((to) => {
           <label v-for="field in headerExtraFields" :key="field.key" class="field">
             <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
             <SearchSelect
-              v-if="field.key === 'header.purchaseTypeCode'"
+              v-if="field.key === 'header.countByLocation'"
+              :model-value="String(headerValue(field.key))"
+              :options="[{ value: '1', label: '是' }, { value: '0', label: '否' }]"
+              label-only
+              disabled
+              :placeholder="countWarehouseLoading ? '读取中' : '选择仓库后确定'"
+            />
+            <SearchSelect
+              v-else-if="field.key === 'header.purchaseTypeCode'"
               :model-value="String(headerFieldValues[field.key] ?? '')"
               :options="purchaseTypeSelectOptions"
               :disabled="referenceDataLoading"
@@ -2484,7 +2538,7 @@ onBeforeRouteLeave((to) => {
       <button
         class="primary-action"
         type="button"
-        :disabled="finishing || countSaving || countLookupBusy"
+        :disabled="finishing || countSaving || countLookupBusy || countWarehouseLoading"
         @click="currentStep === 1 ? goToScanStep() : finishDocument()"
       >
         {{ currentStep === 1 ? '下一步' : finishing ? '处理中' : '完成做单' }}

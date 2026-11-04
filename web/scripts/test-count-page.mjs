@@ -13,7 +13,7 @@ import ts from 'typescript'
 const root = fileURLToPath(new URL('../src/', import.meta.url))
 const source = () => ({ accountId: '888', databaseName: 'UFDATA_888_2021',
   document: { id: 12, documentNo: 'COUNT12', documentDate: '2026-11-04', warehouseCode: 'W1',
-    status: 'pending', version: '0x01', lineCount: 1,
+    status: 'pending', version: '0x01', lineCount: 1, countByLocation: true, warehousePositionManaged: true,
     inCategoryCode: '107', inCategoryName: '盘盈入库', outCategoryCode: '207', outCategoryName: '盘亏出库' },
   lines: [{ id: 41, lineNo: 1, materialCode: 'M1', materialName: '物料', batchNo: 'B1',
     warehouseCode: 'W1', locationCode: 'L1', unitCode: 'U1', bookQuantity: 10,
@@ -38,6 +38,8 @@ function fixture(t, type = 'inventory-count') {
   const route = { params: { code: type }, query: {}, name: 'work-function' }
   let nativeScan, nativeBack, identity = 0
   const api = { lookups: 0, validations: 0, directValidations: 0,
+    warehouse: async warehouseCode => ({ accountId:'888', databaseName:'UFDATA_888_2021', warehouseCode,
+      warehouseName:warehouseCode, positionManaged: warehouseCode==='W1' }),
     lookup: async () => ({ pallet: null, lines: [label()] }),
     validate: async (src, rows) => ({ canSubmit: false, items: rows.map(row => ({
       code: row.code, status: 'MATCHED', message: '', sourceLineId: 41, materialName: '物料', balance: 10,
@@ -71,6 +73,7 @@ function fixture(t, type = 'inventory-count') {
       searchInventoryCounts: async () => ({ items: [{ ...source().document }], hasMore: false }),
       validateInventoryCountItems: async (...args) => { api.validations++; return api.validate(...args) },
       getCountContext: async () => ({ accountId: '888', databaseName: 'UFDATA_888_2021' }),
+      getCountWarehouse: async code => api.warehouse(code),
       validateDirectCount: async (...args) => { api.directValidations++; return api.directValidate(...args) },
     },
     '@/services/reference-data': Object.fromEntries(['fetchRdStyles','fetchWarehousePositions','fetchDepartments',
@@ -169,6 +172,7 @@ test('盘点和材料出库共用同一制单组件；盘点选单渲染没有�
     const preparedForm = { ...form, setup(props, context) {
       const state=form.setup(props, context)
       state.inventoryCountSource.value=hasSource ? source() : null
+      state.inventoryCountContext.value={accountId:'888',databaseName:'UFDATA_888_2021'}
       state.warehouseCode.value='W1'
       state.headerFieldValues.value={ 'header.inCategoryCode':'107', 'header.outCategoryCode':'207' }
       return state
@@ -202,7 +206,7 @@ test('标准选单整单确认，带回完整原单；明细仍用共用选单�
   assert.equal(v.inventoryCountSource.value.document.id, 12)
   assert.equal(v.selectedSourceLines.value[0].sourceLineId, 41)
   assert.equal(v.documentDate.value, '2026-11-04'); assert.equal(v.warehouseCode.value, 'W1')
-  v.warehouseCode.value='W2'; v.handleWarehouseChange()
+  v.warehouseCode.value='W2'; await v.handleWarehouseChange()
   assert.equal(v.warehouseCode.value,'W1')
   f.load('@/services/outbound-document-drafts').requestOutboundDocumentEdit({ documentType:'inventory-count', documentId:downloaded.id })
   const restored=await f.mount()
@@ -232,6 +236,7 @@ test('盘盈盘亏带原单值且允许改选；保存恢复保持用户选择�
   assert.equal(restored.outRdStyleSelectOptions.value[0].label, '盘亏出库')
   await restored.removeLine(restored.lines.value[0].id)
   restored.clearSourceDocument()
+  await Promise.resolve(); await Promise.resolve()
   assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '107')
   assert.equal(restored.headerFieldValues.value['header.outCategoryCode'], '207')
 })
@@ -256,7 +261,7 @@ test('无原单可选择仓库直接制单，默认类别正确，完成前重�
   assert.equal(v.inventoryCountSource.value, null)
   assert.equal(v.headerFieldValues.value['header.inCategoryCode'], '107')
   assert.equal(v.headerFieldValues.value['header.outCategoryCode'], '207')
-  v.warehouseCode.value = 'W1'; v.handleWarehouseChange()
+  v.warehouseCode.value = 'W1'; await v.handleWarehouseChange()
   v.setHeaderField('header.outCategoryCode', '208')
   await scanAndConfirm(f, v, '2')
   assert.equal(f.api.lookups, 1)
@@ -272,9 +277,9 @@ test('无原单可选择仓库直接制单，默认类别正确，完成前重�
 
 test('无原单离线可保存，联网校验失败保留输入；仓库锁定直到重置', async t => {
   const f = fixture(t), v = await f.mount(); await v.loadReferenceData()
-  v.warehouseCode.value = 'W1'; f.globals.navigator.onLine = false
+  v.warehouseCode.value = 'W1'; await v.handleWarehouseChange(); f.globals.navigator.onLine = false
   await scanAndConfirm(f, v, '0')
-  v.warehouseCode.value = 'W2'; v.handleWarehouseChange()
+  v.warehouseCode.value = 'W2'; await v.handleWarehouseChange()
   assert.equal(v.warehouseCode.value, 'W1')
   await v.finishDocument(); assert.equal(f.api.directValidations, 0)
   const [doc] = await f.docs()
@@ -287,9 +292,53 @@ test('无原单离线可保存，联网校验失败保留输入；仓库锁定�
   assert.equal(f.routes.length, routeCount); assert.equal(restored.lines.value[0].requestedQty, 0)
   assert.equal(restored.completionError.value, '标签不属于所选仓库')
   restored.resetDocument()
-  restored.warehouseCode.value = 'W2'; restored.handleWarehouseChange()
+  restored.warehouseCode.value = 'W2'; await restored.handleWarehouseChange()
   assert.equal(restored.warehouseCode.value, 'W2'); assert.equal(restored.lines.value.length, 0)
   assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '107')
+})
+
+test('仓库货位标志独立于货位列表；原单是否盘货位不照抄仓库标志', async t => {
+  const f=fixture(t),v=await f.mount();await v.loadReferenceData()
+  assert.equal(v.warehousePositionOptions.value.length,0)
+  v.warehouseCode.value='W1';await v.handleWarehouseChange()
+  assert.equal(v.countByLocation.value,true);assert.equal(v.headerValue('header.countByLocation'),'1')
+  v.warehouseCode.value='W2';await v.handleWarehouseChange()
+  assert.equal(v.countByLocation.value,false);assert.equal(v.headerValue('header.countByLocation'),'0')
+  const original=source();original.document.countByLocation=false;original.document.warehousePositionManaged=true
+  v.inventoryCountSource.value=original
+  assert.equal(v.countByLocation.value,false)
+})
+
+test('快速切仓只接受最后响应，查询失败及未知状态不伪装成否', async t => {
+  const f=fixture(t),v=await f.mount();await v.loadReferenceData()
+  const pending=deferred(),warehouse=f.api.warehouse
+  f.api.warehouse=async code=>{if(code==='W1')await pending.promise;return warehouse(code)}
+  v.warehouseCode.value='W1';const first=v.handleWarehouseChange()
+  assert.equal(v.countByLocation.value,null);assert.equal(v.countWarehouseLoading.value,true)
+  v.goToScanStep();assert.equal(v.currentStep.value,1)
+  v.warehouseCode.value='W2';await v.handleWarehouseChange()
+  pending.resolve();await first
+  assert.equal(v.countByLocation.value,false);assert.equal(v.inventoryCountWarehouse.value.warehouseCode,'W2')
+  f.api.warehouse=async()=>{throw new Error('仓库查询失败')}
+  v.warehouseCode.value='W1';await v.handleWarehouseChange()
+  assert.equal(v.countByLocation.value,null);v.goToScanStep();assert.equal(v.currentStep.value,1)
+})
+
+test('盘货位时缺货位拒绝；不盘货位和离线恢复保留明确的否', async t => {
+  const f=fixture(t),v=await f.mount();await v.loadReferenceData()
+  v.warehouseCode.value='W1';await v.handleWarehouseChange();v.goToScanStep()
+  f.api.lookup=async()=>({pallet:null,lines:[{...label(),locationCode:''}]})
+  await v.addBarcode(code);assert.equal(v.editingLine.value,null);assert.equal(f.feedback.at(-1),'error')
+  v.returnToHeaderStep();v.warehouseCode.value='W2';await v.handleWarehouseChange()
+  f.api.lookup=async()=>({pallet:null,lines:[{...label(),warehouseCode:'W2',locationCode:''}]})
+  await scanAndConfirm(f,v,'1')
+  const [doc]=await f.docs()
+  assert.equal(doc.payload.headerFieldValues['header.countByLocation'],'0')
+  assert.equal(doc.payload.inventoryCountWarehouse.positionManaged,false)
+  f.load('@/services/outbound-document-drafts').requestOutboundDocumentEdit({documentType:'inventory-count',documentId:doc.id})
+  f.globals.navigator.onLine=false
+  const restored=await f.mount()
+  assert.equal(restored.countByLocation.value,false)
 })
 
 test('原单确认保存失败不得返回，已有明细不得被另一原单覆盖', async t => {

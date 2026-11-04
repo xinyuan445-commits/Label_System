@@ -1,10 +1,10 @@
 # Label System API
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.2共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.3共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
 
-三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.2盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.3盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
 
-## 盘点原单及自动校验接口（0.12.2已部署）
+## 盘点原单及自动校验接口（0.12.3已部署）
 
 - GET /api/v1/inventory-counts/capabilities：盘点权限内返回来源账套/库、collectionEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000。
 - GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=：固定代理Gateway未审核列表，最多100条，hasMore时缩小查询范围。
@@ -20,6 +20,13 @@
 
 
 0.12.2新增POST /api/v1/inventory-counts/validate-direct，使用同一盘点功能权限。请求accountId、databaseName、warehouseCode及observations[{code,quantity}]；服务器按当前账套校验，最多1000个唯一完整Code，分最多100码一批调用旧三表快照。返回items[{code,status,message,label,latestFlowId}]和canSubmit=false；label为当前产品标签身份/余额，空rowVersion不构成写入授权。状态包括MATCHED、OUTSIDE_WAREHOUSE、LABEL_INVALID、QUANTITY_REQUIRED、NOT_FOUND；负余额、旧表异常、缺失物料/单位拒绝。接口不创建原单、标签镜像或差异流水，缺失仓库/跨账套/重复码拒绝；capabilities新增directDraftEnabled=true，ERP写门禁不变。
+
+
+0.12.3新增GET /api/v1/inventory-counts/warehouses/{code}，沿用盘点权限，返回accountId、databaseName、warehouseCode、warehouseName、positionManaged。从Gateway实时读取启用仓库bWhPos并验证账套/编码；未知、停用或错误不转换为false，不读取货位数量推断。
+
+原单document新增countByLocation（CheckVouch.bPosCheck）、warehousePositionManaged（Warehouse.bWhPos），均纳入完整源指纹。有原单是否盘货位按原单状态，可与仓库管理标志不同；盘货位为true而仓库未管理货位则拒绝。有原单按货位匹配时标签货位必需，不盘货位时仅按仓库维度匹配，仍保留最新标签货位。
+
+validate-direct新增必传countByLocation布尔值；查询标签前后各实时读取仓库标志，缺失/不符/中途变化返回COUNT_POSITION_CHANGED，提示重置后重试；不产生U8写入。新增逐码LOCATION_REQUIRED。状态匹配仍不证明完整应盘范围或允许上传。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

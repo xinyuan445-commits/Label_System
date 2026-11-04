@@ -1,6 +1,6 @@
 # 标签管理系统数据库设计说明
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../PROJECT_STATUS.md)。已记录执行范围：Dev/Test/Prod至016，017仅Dev安装；本次未重新读取线上迁移表，也未执行或改写SQL。不能用“全库最新迁移015”或“所有环境017”概括现状。
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../PROJECT_STATUS.md)。已记录执行范围：Dev/Test/Prod至016，017仅Dev安装；本次未重新读取线上迁移表，也未执行结构或业务数据写入SQL。不能用“全库最新迁移015”或“所有环境017”概括现状。
 
 正式打印记录继续复用业务操作、明细、库存流水、Code登记及同步任务；本地网页SQLite只存设计稿/素材。候选盘点迁移018及其状态/范围约束见[盘点方案](../INVENTORY_COUNT_PLAN.md)，本轮未创建迁移脚本。
 
@@ -782,3 +782,5 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 同日dev.85补齐原单盈亏类别：只读CheckVouch.cIRdCode/cORdCode及Rd_Style.cRdName，编码/名称随原单源快照和普通草稿JSON保存；无新增数据库列、迁移或U8/三表写入。
 
 同日dev.86/API0.12.2支持有/无原单草稿：原单选择确认立即保存完整快照到现有IndexedDB，普通草稿JSON增加inventoryCountContext账套绑定；用户类别覆盖值与原单源快照分开保留。无原单validate-direct仅批量读取旧三表，不新增SQL表/列、迁移、盘点锁或数量流水。
+
+同日dev.87/API0.12.3/Gateway0.11.2补充是否盘货位，源单只读CheckVouch.bPosCheck（实际nchar 0/1）及Warehouse.bWhPos；无原单通过专用仓库只读接口，不按Position条数或旧仓位缓存推断。仓库快照inventoryCountWarehouse及布尔状态保存在普通草稿JSON，不新增SQL列、迁移或数量流水，原有仓位同步合同不变。

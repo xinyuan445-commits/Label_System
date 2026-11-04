@@ -42,7 +42,7 @@ export function countSourceLines(source: CountSource): SourceDocumentLine[] {
 }
 
 export function countFormLine(source: CountSource | null, code: string, id: string, label?: InventoryObjectLine,
-  warehouse = source?.document.warehouseCode ?? ''): CountFormLine {
+  warehouse = source?.document.warehouseCode ?? '', countByLocation = source?.document.countByLocation ?? false): CountFormLine {
   countCodeKey(code)
   if (source) assertCountSource(source)
   if (!warehouse.trim()) throw new Error('请选择仓库')
@@ -56,10 +56,11 @@ export function countFormLine(source: CountSource | null, code: string, id: stri
     throw new Error('标签当前不可用')
   }
   if (!same(warehouse, label.warehouseCode)) throw new Error('标签不属于所选仓库')
+  if (countByLocation && !label.locationCode?.trim()) throw new Error('标签缺少货位，请核对')
   if (!label.materialCode || !label.unitCode) throw new Error('标签资料需核对')
   const candidates = source?.lines.filter(line => same(line.materialCode, label.materialCode) &&
     same(line.batchNo, label.batchNo) && same(line.warehouseCode, label.warehouseCode) &&
-    same(line.locationCode, label.locationCode))
+    (!countByLocation || same(line.locationCode, label.locationCode)))
   if (candidates && candidates.length !== 1) throw new Error(candidates.length ? '原单明细重复，请核对' : '标签不属于所选源单')
   const line = candidates?.[0]
   if (line && (line.requiresAuxiliaryUnit || !Array.isArray(line.freeItems) ||
@@ -87,7 +88,7 @@ export function requireCountForm(source: CountSource | null | undefined,
   }
 }
 
-export function applyCountChecks<T extends { labelCode: string; requestedQty: number }>(
+export function applyCountChecks<T extends { labelCode: string; requestedQty: number; locationCode?: string; locationName?: string }>(
   source: CountSource, lines: T[], checks: CountCheck[]): Array<T & Partial<CountFormLine>> {
   const map = new Map(checks.map(check => [countCodeKey(check.code), check]))
   if (map.size !== lines.length || checks.length !== lines.length) throw new Error('标签校验结果不完整')
@@ -96,20 +97,22 @@ export function applyCountChecks<T extends { labelCode: string; requestedQty: nu
     if (!check || check.status !== 'MATCHED') throw new Error(check?.message || '标签资料需核对')
     const line = source.lines.find(item => item.id === check.sourceLineId)
     if (!line) throw new Error('原单明细不一致')
+    const location = check.locationCode ?? line.locationCode
     return { ...row, materialCode: line.materialCode, materialName: check.materialName || line.materialName,
-      batchNo: line.batchNo, warehouseCode: line.warehouseCode, locationCode: line.locationCode,
+      batchNo: line.batchNo, warehouseCode: line.warehouseCode, locationCode: location,
+      locationName: row.locationCode === location ? row.locationName : undefined,
       unitCode: line.unitCode, availableQty: check.balance ?? null, countPendingIdentity: false }
   })
 }
 
 export function applyDirectCountChecks<T extends { id: string; labelCode: string; requestedQty: number; countQuantityConfirmed?: boolean }>(
-  warehouse: string, lines: T[], checks: DirectCountCheck[]): Array<T & CountFormLine> {
+  warehouse: string, lines: T[], checks: DirectCountCheck[], countByLocation = false): Array<T & CountFormLine> {
   const map = new Map(checks.map(row => [countCodeKey(row.code), row]))
   if (checks.length !== lines.length || map.size !== lines.length) throw new Error('标签校验结果不完整')
   return lines.map(row => {
     const check = map.get(countCodeKey(row.labelCode))
     if (!check || check.status !== 'MATCHED' || !check.label) throw new Error(check?.message || '标签资料需核对')
-    return { ...row, ...countFormLine(null, row.labelCode, row.id, check.label, warehouse),
+    return { ...row, ...countFormLine(null, row.labelCode, row.id, check.label, warehouse, countByLocation),
       requestedQty: row.requestedQty, countQuantityConfirmed: row.countQuantityConfirmed !== false }
   })
 }
@@ -129,7 +132,8 @@ export async function saveCountSourceDraft(source: CountSource, working: Outboun
     sourceDocumentType: 'inventory-count', sourceDocumentTypeLabel: '盘点单', sourceDocumentNo: source.document.documentNo,
     selectedSourceLines: countSourceLines(source), materialRequirements: [], overIssueTargets: {}, lines: previousLines,
     headerFieldValues: { ...fields, 'header.inCategoryCode': source.document.inCategoryCode ?? '',
-      'header.outCategoryCode': source.document.outCategoryCode ?? '' } }
+      'header.outCategoryCode': source.document.outCategoryCode ?? '',
+      'header.countByLocation': typeof source.document.countByLocation === 'boolean' ? (source.document.countByLocation ? '1' : '0') : '' } }
   return saveOutboundDocument({ id: working?.documentId ?? undefined, documentType: 'inventory-count', payload,
     summary: { documentDate: payload.documentDate, sourceTypeLabel: '盘点单', sourceDocumentNo: payload.sourceDocumentNo,
       lineCount: previousLines.length, totalQty: previousLines.reduce((total, row) => total + (Number(row.requestedQty) || 0), 0) } })

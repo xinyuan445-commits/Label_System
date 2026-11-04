@@ -1,10 +1,10 @@
 # U8 Gateway API 设计
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.11.1共享程序集已部署9880/008和9881/888，生产受控写入门禁保留；开发888已有打印初始登记验收，生产008打印工作流未配置/验收，修改/delete能力仍关闭。见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.11.2共享程序集已部署9880/008和9881/888，生产受控写入门禁保留；开发888已有打印初始登记验收，生产008打印工作流未配置/验收，修改/delete能力仍关闭。见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
 
 本文件记录现有合同；盘点原单回填、范围查询和差异角色仅为[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)中的拟议接口，不能以已存在query/create/verify能力代替Update开发及验收。
 
-## 盘点原单只读（0.11.1已部署）
+## 盘点原单只读（0.11.2已部署）
 
 GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=&limit=固定查询未审核盘点单，最多100条，保留hasMore；GET /api/v1/inventory-counts/{id}返回规范化accountId、databaseName、document及完整lines。
 
@@ -13,7 +13,10 @@ GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=&limit=固定查询�
 源单账户/库由服务器配置返回，不接收客户端连接信息、表名或SQL。内部认证沿用原门禁，读接口无SQL写操作、无COM保存。盘点capabilities.create=false、update/delete=false，已有verify/unverify独立保留，不代表标签盘点差异已落账；Business API也须关闭不完整旧新增路径。
 
 
-0.11.1的document新增inCategoryCode/inCategoryName（盘盈）、outCategoryCode/outCategoryName（盘亏）。分别只读CheckVouch.cIRdCode/cORdCode，名称按各自编码关联Rd_Style.cRdName；编码为空保持空，不猜默认类别。采用专用InventoryCountHeader，不改变其他审核单据合同；此表头读取位于原有前后ufts核对之间，关联重复时拒绝返回。
+0.11.1起document新增inCategoryCode/inCategoryName（盘盈）、outCategoryCode/outCategoryName（盘亏）。分别只读CheckVouch.cIRdCode/cORdCode，名称按各自编码关联Rd_Style.cRdName；编码为空保持空，不猜默认类别。采用专用InventoryCountHeader，不改变其他审核单据合同；此表头读取位于原有前后ufts核对之间，关联重复时拒绝返回。
+
+
+0.11.2新增GET /api/v1/inventory-counts/warehouses/{code}：按参数化仓库编码读取未停用Warehouse.cWhCode/cWhName/bWhPos，带规范化账套/数据库。缺失/停用返回404，非法或未知标志拒绝；不依赖Position条数。原单document增加countByLocation/warehousePositionManaged，读取bPosCheck/bWhPos，nchar的0/1和布尔值显式解析，空/未知不当作否。两个标志独立，原单读取仍在前后ufts检查内。无迁移、SQL写入或COM保存。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

@@ -3,14 +3,18 @@ import type { CountCheck, CountDraft, CountSource } from './inventory-count-mode
 import type { InventoryObjectLine } from './inventory-object-lookup'
 
 export interface CountContext { accountId: string; databaseName: string }
+export interface CountWarehouse extends CountContext { warehouseCode: string; warehouseName: string; positionManaged: boolean }
+export async function getCountWarehouse(code: string): Promise<CountWarehouse> {
+  return apiRequest('/api/v1/inventory-counts/warehouses/' + encodeURIComponent(code))
+}
 export interface DirectCountCheck { code: string; status: string; message: string; label?: InventoryObjectLine | null }
 export async function getCountContext(): Promise<CountContext> {
   return apiRequest('/api/v1/inventory-counts/capabilities')
 }
 export async function validateDirectCount(context: CountContext, warehouseCode: string,
-  observations: Array<{ code: string; quantity: string }>): Promise<{ items: DirectCountCheck[]; canSubmit: false }> {
+  observations: Array<{ code: string; quantity: string }>, countByLocation: boolean): Promise<{ items: DirectCountCheck[]; canSubmit: false }> {
   return apiRequest('/api/v1/inventory-counts/validate-direct', { method: 'POST', timeoutMs: 120000,
-    body: JSON.stringify({ ...context, warehouseCode, observations }) })
+    body: JSON.stringify({ ...context, warehouseCode, observations, countByLocation }) })
 }
 
 export interface CountSummary {

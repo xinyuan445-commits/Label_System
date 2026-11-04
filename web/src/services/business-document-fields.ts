@@ -146,6 +146,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
   }
   if (documentType === 'inventory-count') {
     fields.push(
+      field('header.countByLocation', '是否盘货位', 'header', 'text', true),
       field('header.outCategoryCode', '盘亏类别', 'header', 'text', true, true),
       field('header.inCategoryCode', '盘盈类别', 'header', 'text', true, true),
       field('header.inventoryBatch', '盘点批号', 'header', 'text'),
