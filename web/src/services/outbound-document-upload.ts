@@ -1,5 +1,6 @@
 import { apiRequest } from '@/api/client'
 import { readStoredAuthSession } from '@/services/auth-session'
+import { rejectLegacyCountUpload } from '@/services/inventory-count-model'
 import {
   beginOutboundDocumentUpload,
   markOutboundDocumentSubmitted,
@@ -357,6 +358,7 @@ export async function executeOutboundDocument(
   document: StoredOutboundDocument,
   autoApprove: boolean,
 ): Promise<StoredOutboundDocument> {
+  rejectLegacyCountUpload(document.documentType)
   if (!document.serverOperationId) throw new Error('业务组编号缺失')
   const group = await executeOutboundOperationGroup(document.serverOperationId, autoApprove)
   return updateOutboundDocumentGroup(document.id, group)
@@ -366,6 +368,7 @@ export async function uploadOutboundDocument(
   document: StoredOutboundDocument,
   _autoApprove: boolean,
 ): Promise<StoredOutboundDocument> {
+  rejectLegacyCountUpload(document.documentType)
   try {
     const session = readStoredAuthSession()
     if (!session) throw new Error('请先登录')

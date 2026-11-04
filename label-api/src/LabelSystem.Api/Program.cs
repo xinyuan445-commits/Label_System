@@ -5,6 +5,7 @@ using LabelSystem.Api;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<InventoryCountCollectionService>();
 
 var externalConfigPath = Environment.GetEnvironmentVariable("LABELSYSTEM_CONFIG_PATH");
 if (!string.IsNullOrWhiteSpace(externalConfigPath))
@@ -65,6 +66,7 @@ if (app.Configuration.GetValue<bool>("DevelopmentWorkspace:ServeStaticFiles") &&
 }
 app.UseMiddleware<SessionAuthenticationMiddleware>();
 app.MapPrinting();
+app.MapInventoryCountCollection();
 
 app.MapGet("/api/v1/health", async (
     HttpContext context,

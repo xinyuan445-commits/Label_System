@@ -226,6 +226,7 @@ public sealed class MaterialOutboundExecutionService(
     {
         var plan = await executionRepository.GetPlanAsync(groupId, user.Id, cancellationToken);
         var erp = await users.GetErpOperatorAsync(user.Id, cancellationToken);
+        foreach (var operation in plan) InventoryCountRules.RejectLegacyWrite(operation.ErpDocumentType);
         var payloadCache = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
         var result = new List<PreparedGatewayOperation>(plan.Count);
         foreach (var operation in plan)

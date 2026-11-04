@@ -2,7 +2,18 @@
 
 当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。现有接口合同与已部署环境分别记录：打印路由部署在开发9891/888，生产9890未发布同等打印能力；Dev已有017，Test/Prod未记录安装。
 
-三类库存业务的TraceBack同步不能泛化为所有九类单据。盘点的现有通用新增映射不是原单回填接口，原单、汇总、差异事件尚待实现；拟接口明确列在[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)，本文件不将其标为已开放。
+三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.0源码新增盘点原单只读/核验，尚未部署；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)。
+
+## 盘点只读采集接口（0.12.0源码，未部署）
+
+- GET /api/v1/inventory-counts/capabilities：盘点权限内返回来源账套/库、collectionEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000。
+- GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=：固定代理Gateway未审核列表，最多100条，hasMore时缩小查询范围。
+- GET /api/v1/inventory-counts/{id}：核对Gateway账套/数据库与当前配置一致、完整行数及稳定行ID，返回原单明细和完整源数据指纹fingerprint。账面bookQuantity取U8原单，不取标签Code数量。
+- POST /api/v1/inventory-counts/{id}/validate：accountId、databaseName、sourceFingerprint、observations[{code,quantity}]。quantity为非负十进制字符串或null，最多12位整数/6位小数；最多1000个唯一完整Code，重复（含大小写/首尾空白）拒绝。拆为最多100码快照查询，查询前后均复核原单指纹；不写镜像、操作、U8或旧三表。
+
+逐码结果status为MATCHED、LABEL_INVALID、OUTSIDE_SOURCE、AMBIGUOUS_SOURCE、IDENTITY_NOT_SUPPORTED、UNIT_MISMATCH、QUANTITY_REQUIRED或NOT_FOUND。MATCHED仅表示当前资料匹配，不证明原单范围已盘完整或期间没有移动；所有结果canSubmit=false。原单变更返回409 COUNT_SOURCE_CHANGED，账套不符返回COUNT_ACCOUNT_MISMATCH；本机应保留采集，不覆盖原基线。
+
+以上接口由服务器固定校验inventory-count功能权限，不依赖客户端X-Function-Code；不提供匿名任务或离线写令牌。对应客户端使用独立IndexedDB，采集未上传服务端，不将“已保存本机”显示为“已同步”。本轮无数据库迁移。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
@@ -155,7 +166,7 @@ H5 统一携带 `X-Request-ID`、`X-H5-Version` 和 `X-Bridge-Version`。CORS �
 | POST | `/operations/groups/{groupId}/heartbeat` | 续期业务锁 |
 | POST | `/operations/groups/{groupId}/cancel` | 取消未写 U8 的待处理组 |
 
-`autoApprove=true` 对九类单据统一生效。服务端先确认新增、回写 ERP 单号并提交本地库存事务，再以新增返回的版本审核；审核明确失败时业务组停在 `PENDING_APPROVAL`，可继续审核但不得重新新增，审核结果未知时进入 `NEEDS_RECONCILIATION`。首次审核沿用固定 `:auto-audit` 幂等后缀；明确失败后的继续审核按失败事件数追加递增序号，既不重放新增，也不会被上一次审核的幂等结果覆盖。
+`autoApprove=true` 对已开放新增的单据生效；新盘点采集不进入此链。服务端确认新增、保存ERP及库存/同步结果后继续审核；明确失败进入PENDING_APPROVAL，只继续原审核，不重复新增；未知进入NEEDS_RECONCILIATION。首次/继续审核使用稳定且可区分重试的幂等编号。
 
 红字材料出库可在通用或生产订单专用提交接口的 `lines` 中使用 `objectType=UNLABELED_MATERIAL`，并提供 `materialCode`、`unitCode`、`requestedQty`、`batchNo`、`warehouseCode`、`locationCode`；参照生产订单时还必须携带完整需求行分配。该类型只允许 `material-outbound + RED`，不要求退料原因。有原单时正常数量不得超过需求行当前已领数量，`overQty` 必须为零。提交成功返回的业务组包含 `issuedLabels`；新标签初始为 `PENDING_PRINT`，其中 `id` 为内部标签 ID，实际打印前 `code=null`。业务提交不读取编码规则或分配流水；未来由打印平台按内部 ID 开始打印并生成 Code。
 
@@ -169,7 +180,7 @@ H5 只调用 `submit`，用户点击一次“上传 ERP”后由 Business API �
 
 九类单据执行前均重新读取不可变操作归档并校验 SHA-256，按当前用户 ERP 制单人生成每个拆组请求；材料出库另重新读取 U8 生产订单领料需求。执行状态从 `PENDING` 进入 `WRITING_ERP`；只有 Gateway 返回已回查确认的 U8 单据后，才在一个本地事务中保存 ERP 单号和行号、完成对应库存动作并释放组锁。取号、字段校验或 COM 参数绑定等确认发生在写入调用前的失败，把同组未执行拆组一并结束为失败并释放锁，允许修正后安全重试；超时、连接中断、保存后回查未确认或本地提交不明确记为 `NEEDS_RECONCILIATION` 并保留锁，同时停止本组后续拆组，禁止直接重试。当前不支持材料/销售数量单据的托盘上传和自动审核。
 
-所有 `submit` 入口通过会话、功能权限、ERP 制单人和类别门禁后，会在建档和锁定前检查 Business API 的 `U8WritesEnabled`。当前 development 为 `true`；Gateway 仅允许 `test` 环境、`UFDATA_888_2021` 数据库和 888 账套，九类 `create` 已开放。单独的 `execute`、`heartbeat` 和 `cancel` 仅保留给旧组恢复和运维核对，不再作为 H5 正常业务步骤。
+所有submit入口保持会话、功能权限、ERP映射、类别及两端写入门禁；已部署生产008和开发888各自独立配置。0.12.0源码的盘点建档/执行直接拒绝，配套Gateway 0.11.0盘点create=false；不能将旧“九类已开放”当作当前源码能力。execute/heartbeat/cancel只供旧组恢复，盘点旧组执行也被拦截。
 
 ## 标签 Code 规则
 

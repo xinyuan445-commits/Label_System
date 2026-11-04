@@ -75,12 +75,12 @@ namespace U8Gateway.CodecSmokeTest
                     "暂缓的委外到货不应开放查询。");
                 Require(
                     definitions.GetAll().All(x =>
-                        x.Capabilities.Create &&
+                        (x.DocumentType == "inventory-count" ? !x.Capabilities.Create : x.Capabilities.Create) &&
                         x.Capabilities.Verify &&
                         x.Capabilities.Unverify &&
                         !x.Capabilities.Update &&
                         !x.Capabilities.Delete),
-                    "九类单据应只开放新增、审核和弃审。");
+                    "盘点新增应保持关闭，其他单据只开放新增、审核和弃审。");
 
                 DocumentDefinition material = definitions.Get("material-outbound");
                 Require(

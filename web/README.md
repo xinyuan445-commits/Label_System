@@ -1,10 +1,14 @@
 # 标签管理系统 H5
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../docs/PROJECT_STATUS.md)。H5源码0.2.0-dev.81、APK0.5.4/110；默认端口5175，根目录启动器为“启动标签管理系统.cmd”。当前runtime-config虽标development，实际apiBaseUrl为159:9890；该服务器的已记录目标为production/008，不能按客户端环境名判断测试账套。
+当前状态核对：2026-11-04。源码H5为0.2.0-dev.82，已安装APK基线0.5.4/110；盘点新页面及桥补丁尚未发布。默认5175，当前runtime-config虽标development，实际apiBaseUrl仍为159:9890，不能按客户端环境名推断888。部署及验收见[当前状态](../docs/PROJECT_STATUS.md)。
 
-九类制单和审核页面已接API，但盘点没有源单入口、未完成TraceBack差异闭环，暂不作为可上传的完整盘点流程；建议见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。电脑打印独立运行在本机18003，不恢复H5嵌入入口。
+盘点改用独立InventoryCountView：选择未审核原盘点单，写本机IndexedDB，采集/明确填写实盘，再联网只读核验；新页面没有上传ERP按钮。其他制单/审核页面保持原入口，电脑打印仍独立本机18003。新盘点需要配套Business API 0.12.0、Gateway 0.11.0，不能只更H5便认定可用。
 
-离线现状：完成后的草稿有IndexedDB持久化，编辑中跨页状态使用sessionStorage；每次新扫码仍调用库存API，没有盘点任务标签包。远程H5、APK断网遮罩和冷启动也需配套适配；不能把已有草稿或offlineSessionHours字段表述为离线扫码已实现。拟议的任务下载、逐次采集、冷启动和联网复核见[盘点方案第9节](../docs/INVENTORY_COUNT_PLAN.md#offline-counting)。
+新盘点每次扫码/保存数量均事务落盘，不读Code打印数量，不靠sessionStorage保数据；同任务重扫拒绝并触发失败反馈，改数从明细进入。离线只收Code/实盘；联网核验读取当前三表，按最多100码拆批，结果不完整或采集修订改变时拒绝旧核验。
+
+新桥按可信消息暂停已加载盘点页的远程探测遮罩，并回确认；旧APK未确认则显示需更新。桥源码已编译但未安装，且无网冷启动仍未实现。原单完整范围、回填和改账也未开放。详见[离线采集边界](../docs/INVENTORY_COUNT_PLAN.md#offline-counting)及[复核/后置记录](../docs/INVENTORY_COUNT_REVIEW.md)。
+
+验证：npm run test:inventory-count（13项）；npm run typecheck；npm run build。测试使用fake-indexeddb隔离数据，包含并发重扫、重开恢复、保存失败回滚、账套隔离、核验乱序及历史上传前拦截，不读取真实浏览器草稿。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

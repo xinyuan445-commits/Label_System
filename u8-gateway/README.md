@@ -1,6 +1,6 @@
 # U8 Gateway
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../docs/PROJECT_STATUS.md)。源码API版本0.10.0；生产9880已支持受控008写入，开发9881服务888打印兼容。独立生产门禁、账套/数据库白名单、操作能力和Business API开关继续共同约束写入；修改和删除仍关闭。
+当前状态核对：2026-11-04。源码API版本0.11.0，新增盘点原单只读控制器，盘点create能力关闭，尚未部署。生产9880和开发9881仍保持各自008/888配置；独立生产门禁、精确白名单及Business API开关继续有效，修改/删除仍关闭。见[项目当前状态](../docs/PROJECT_STATUS.md)。
 
 只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。三类库存来源事件及首打初始三表登记使用不同接口；打印登记已有888/PDF验收，生产008打印尚未发布。盘点原单实盘回填/Update和追溯差异事件尚未实现，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
 
@@ -80,6 +80,8 @@ u8-gateway/
 ```
 
 ## 当前单据范围
+
+0.11.0源码中的盘点不允许create，专用GET /api/v1/inventory-counts和/{id}仅提供原单读取；原有verify/unverify不代表盘点标签差异已接入。Gateway构建、CodecSmokeTest及InventoryCountSmokeTest已通过，未读取真实888/008数据。盘点后续见[方案](../docs/INVENTORY_COUNT_PLAN.md)。
 
 | 编码 | 单据 |
 | --- | --- |

@@ -79,6 +79,7 @@ public sealed class DocumentPrepareService(
         string requestId,
         CancellationToken cancellationToken)
     {
+        InventoryCountRules.RejectLegacyWrite(documentType);
         if (!Definitions.TryGetValue(documentType, out var definition))
             throw new ApiException(StatusCodes.Status400BadRequest,
                 "DOCUMENT_TYPE_NOT_READY", "当前单据尚未开放预提交。");

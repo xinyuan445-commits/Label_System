@@ -1,0 +1,31 @@
+using System;
+using System.Collections.Generic;
+using U8Gateway.Contracts.Approvals;
+
+namespace U8Gateway.Contracts.Sources
+{
+    // Read-only collection contract. Saving counts is deliberately a separate operation.
+    public sealed class InventoryCountSource
+    {
+        public string AccountId { get; set; }
+        public string DatabaseName { get; set; }
+        public ApprovalDocumentSummary Document { get; set; }
+        public IList<InventoryCountSourceLine> Lines { get; set; } = new List<InventoryCountSourceLine>();
+    }
+
+    public sealed class InventoryCountSourceLine
+    {
+        public long Id { get; set; }
+        public int LineNo { get; set; }
+        public string MaterialCode { get; set; }
+        public string MaterialName { get; set; }
+        public string BatchNo { get; set; }
+        public string WarehouseCode { get; set; }
+        public string LocationCode { get; set; }
+        public string UnitCode { get; set; }
+        public decimal BookQuantity { get; set; }
+        public decimal? ActualQuantity { get; set; }
+        public string[] FreeItems { get; set; } = new string[10];
+        public bool RequiresAuxiliaryUnit { get; set; }
+    }
+}
