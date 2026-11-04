@@ -9,6 +9,7 @@ import {
 import {
   returnToParentDocument,
   useDocumentSystemBack,
+  useDocumentOfflineSupport,
 } from '@/services/document-subpage-navigation'
 import {
   clearOutboundDocumentWorkingState,
@@ -223,6 +224,7 @@ function toggleSelectAll(): void {
 }
 
 function canUpload(document: StoredOutboundDocument): boolean {
+  if (document.documentType === 'inventory-count') return false
   if (!document.payload || typeof document.payload !== 'object') return false
   const payload = document.payload as { lines?: unknown[] }
   return Array.isArray(payload.lines) && payload.lines.length > 0
@@ -263,8 +265,13 @@ async function returnToDocument(): Promise<void> {
 }
 
 useDocumentSystemBack(returnToDocument)
+useDocumentOfflineSupport(() => documentType.value)
 
 async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
+  if (document.documentType === 'inventory-count') {
+    message.value = '盘点上传ERP暂未开放'
+    return
+  }
   if (!canUpload(document)) {
     message.value = '请先扫码'
     return
@@ -510,7 +517,7 @@ onBeforeRouteLeave((to) => {
               :disabled="uploadingId === document.id || !canUpload(document)"
               @click.stop="uploadDocument(document)"
             >
-              {{ uploadingId === document.id ? '上传中' : isRetryableFailure(document) ? '重新上传' : '上传 ERP' }}
+              {{ document.documentType === 'inventory-count' ? '上传暂未开放' : uploadingId === document.id ? '上传中' : isRetryableFailure(document) ? '重新上传' : '上传 ERP' }}
             </button>
           </div>
           <div v-else-if="!selectionMode && activeStatus === 'pending'" class="card-actions">

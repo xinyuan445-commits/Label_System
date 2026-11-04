@@ -57,6 +57,25 @@ export async function writeDraftDocument(document: StoredOutboundDocument): Prom
   await transactionDone(transaction)
 }
 
+export async function mutateDraftDocument(id: string,
+  update: (current: StoredOutboundDocument) => StoredOutboundDocument | null): Promise<void> {
+  const database = await openDatabase()
+  const transaction = database.transaction(storeName, 'readwrite')
+  const completion = transactionDone(transaction)
+  void completion.catch(() => undefined)
+  try {
+    const store = transaction.objectStore(storeName)
+    const current = await requestResult(store.get(id)) as StoredOutboundDocument | undefined
+    const next = current ? update(current) : null
+    if (next) store.put(next)
+    await completion
+  } catch (error) {
+    try { transaction.abort() } catch { /* already completed */ }
+    await completion.catch(() => undefined)
+    throw error
+  }
+}
+
 export async function writeDraftDocuments(documents: StoredOutboundDocument[]): Promise<void> {
   if (!documents.length) return
   const database = await openDatabase()

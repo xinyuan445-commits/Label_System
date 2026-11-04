@@ -63,7 +63,7 @@ test('历史盘点上传和执行在本机草稿或网络操作之前拒绝', as
     .replace("from '@/services/outbound-document-drafts'", `from '${drafts}'`)
     .replace("from '@/services/inventory-count-model'", `from '${modelUrl}'`)))
   for (const action of [uploadOutboundDocument, executeOutboundDocument]) {
-    await assert.rejects(action({ documentType: 'inventory-count', id: 'legacy' }, false), /上传ERP尚未开放/)
+    await assert.rejects(action({ documentType: 'inventory-count', id: 'legacy' }, false), /上传ERP暂未开放/)
   }
   assert.doesNotThrow(() => model.rejectLegacyCountUpload('material-outbound'))
 })

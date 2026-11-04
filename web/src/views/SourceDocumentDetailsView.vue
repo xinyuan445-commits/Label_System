@@ -10,6 +10,7 @@ import type { SourceQuantityAllocation } from '@/services/material-outbound-allo
 import {
   returnToParentDocument,
   useDocumentSystemBack,
+  useDocumentOfflineSupport,
 } from '@/services/document-subpage-navigation'
 import { readOutboundDocumentWorkingState } from '@/services/outbound-document-drafts'
 import type {
@@ -120,6 +121,7 @@ async function returnToDocument(): Promise<void> {
 }
 
 useDocumentSystemBack(returnToDocument)
+useDocumentOfflineSupport(() => documentType.value)
 
 async function selectReturnRequirement(line: MaterialRequirementLine): Promise<void> {
   if (returnableQuantity(line) <= 0.000001) return
@@ -196,9 +198,10 @@ onBeforeRouteLeave((to) => {
         <article v-for="line in sourceLines" :key="line.sourceLineId" class="detail-card">
           <div class="detail-heading">
             <div><strong>{{ line.productCode }}</strong><span>{{ line.productName }}</span></div>
-            <b>{{ line.orderQuantity }}</b>
+            <b>{{ documentType === 'inventory-count' ? '账面 ' : '' }}{{ line.orderQuantity }}</b>
           </div>
           <p>{{ line.sourceDocumentNo }} · 行{{ line.sourceLineNo ?? '-' }}</p>
+          <p v-if="documentType === 'inventory-count'">{{ line.batchNo || '无批号' }} · {{ line.warehouseCode }} · {{ line.locationCode || '无货位' }}</p>
         </article>
       </section>
 

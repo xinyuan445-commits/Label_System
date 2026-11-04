@@ -1,6 +1,8 @@
 import type { BusinessDocumentType } from '@/services/business-document-config'
 import { apiRequest } from '@/api/client'
 import { getRuntimeConfig } from '@/services/runtime-config'
+import { searchInventoryCounts } from '@/services/inventory-count-api'
+import type { CountSource } from '@/services/inventory-count-model'
 
 export type OutboundDocumentType = BusinessDocumentType
 
@@ -16,6 +18,9 @@ export interface SourceDocumentLine {
   orderQuantity: number
   departmentCode: string
   materialCount: number
+  batchNo?: string
+  warehouseCode?: string
+  locationCode?: string
 }
 
 export interface MaterialRequirementLine {
@@ -45,6 +50,7 @@ export interface SourceDocumentSelection {
   documentDate: string
   selectedLines: SourceDocumentLine[]
   requirements: MaterialRequirementLine[]
+  inventoryCountSource?: CountSource
 }
 
 export interface ReturnRequirementSelection {
@@ -156,6 +162,14 @@ function normalizeSourceLine(line: SourceDocumentLine): SourceDocumentLine {
 export async function searchSourceDocuments(
   query: SourceDocumentQuery,
 ): Promise<SourceDocumentLine[]> {
+  if (query.documentType === 'inventory-count') {
+    const result = await searchInventoryCounts(query.keyword, query.startDate, query.endDate)
+    if (result.hasMore) throw new Error('结果超过100条，请缩小查询范围')
+    return result.items.map(item => ({ sourceType: 'inventory-count', sourceDocumentId: item.id,
+      sourceDocumentNo: item.documentNo, sourceLineId: item.id, sourceLineNo: null,
+      documentDate: item.documentDate?.slice(0, 10) ?? '', productCode: item.warehouseCode,
+      productName: '', orderQuantity: 0, departmentCode: '', materialCount: item.lineCount }))
+  }
   if (shouldUseMockData()) {
     const keyword = query.keyword.trim().toLocaleLowerCase()
     return mockSourceLines.filter((line) => {

@@ -4,6 +4,7 @@ import { computed, ref } from 'vue'
 const props = defineProps<{
   modelValue: string
   ariaLabel?: string
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +50,7 @@ function formatDate(value: Date): string {
 }
 
 function showPicker(): void {
+  if (props.disabled) return
   const selected = parseDate(props.modelValue)
   const today = new Date()
   visibleMonth.value = selected
@@ -84,6 +86,7 @@ defineExpose({ close: () => { const wasOpen = open.value; open.value = false; re
     type="button"
     :aria-label="ariaLabel"
     :aria-expanded="open"
+    :disabled="disabled"
     @click="showPicker"
   >
     <span>{{ modelValue || '请选择' }}</span>

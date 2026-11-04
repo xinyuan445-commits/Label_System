@@ -3,9 +3,12 @@ import { computed, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import DateField from '@/components/DateField.vue'
+import { downloadInventoryCount } from '@/services/inventory-count-api'
+import { countSourceLines } from '@/services/inventory-count-documents'
 import {
   returnToParentDocument,
   useDocumentSystemBack,
+  useDocumentOfflineSupport,
 } from '@/services/document-subpage-navigation'
 import {
   getBusinessDocumentConfig,
@@ -34,6 +37,8 @@ const outboundDocumentType = computed<OutboundDocumentType>(() => {
 const sourceTypes = computed(() =>
   getBusinessDocumentConfig(outboundDocumentType.value).sourceTypes,
 )
+const isInventoryCount = computed(() => outboundDocumentType.value === 'inventory-count')
+useDocumentOfflineSupport(() => outboundDocumentType.value)
 
 const sourceType = ref(sourceTypes.value[0]?.value ?? '')
 const displayMode = ref<'merged' | 'detail'>('merged')
@@ -155,6 +160,7 @@ async function search(): Promise<void> {
 }
 
 function changeDisplayMode(mode: 'merged' | 'detail'): void {
+  if (isInventoryCount.value) return
   if (displayMode.value === mode) return
   displayMode.value = mode
   selectedLineIds.value = []
@@ -185,7 +191,8 @@ async function confirmSelection(): Promise<void> {
   loading.value = true
   errorMessage.value = ''
   try {
-    const lines = displayMode.value === 'merged'
+    const countSource = isInventoryCount.value ? await downloadInventoryCount(selectedDocumentId.value!) : undefined
+    const lines = countSource ? countSourceLines(countSource) : displayMode.value === 'merged'
       ? await loadSourceDocumentLines(
           outboundDocumentType.value, sourceType.value, [selectedDocumentId.value!],
         )
@@ -221,6 +228,7 @@ async function confirmSelection(): Promise<void> {
       documentDate: lines[0]?.documentDate ?? endDate.value,
       selectedLines: lines,
       requirements,
+      inventoryCountSource: countSource,
     })
     await returnToDocument()
   } catch (error) {
@@ -270,7 +278,7 @@ onBeforeRouteLeave((to) => {
           @click="queryOpen = !queryOpen"
         >
           <span>
-            <strong>{{ sourceTypeLabel }} · {{ displayModeLabel }}</strong>
+            <strong>{{ sourceTypeLabel }}<template v-if="!isInventoryCount"> · {{ displayModeLabel }}</template></strong>
             <small>{{ querySummary }}</small>
           </span>
           <svg :class="{ expanded: queryOpen }" viewBox="0 0 24 24" aria-hidden="true">
@@ -279,7 +287,7 @@ onBeforeRouteLeave((to) => {
         </button>
 
         <div v-if="queryOpen" class="query-fields">
-          <div class="source-options-row">
+          <div v-if="!isInventoryCount" class="source-options-row">
             <label class="field">
               <span><i>*</i>选单类型</span>
               <select v-model="sourceType" @change="results = []; selectedLineIds = []; selectedDocumentId = null">
@@ -288,7 +296,7 @@ onBeforeRouteLeave((to) => {
                 </option>
               </select>
             </label>
-            <div class="display-switch" role="group" aria-label="显示方式">
+            <div v-if="!isInventoryCount" class="display-switch" role="group" aria-label="显示方式">
               <button
                 type="button"
                 :class="{ active: displayMode === 'merged' }"
@@ -310,9 +318,9 @@ onBeforeRouteLeave((to) => {
             <label class="field"><span>结束日期</span><DateField v-model="endDate" aria-label="结束日期" /></label>
           </div>
           <label class="field full-width">
-            <span>单号或产品</span>
+            <span>{{ isInventoryCount ? '盘点单号' : '单号或产品' }}</span>
             <div class="search-row">
-              <input v-model="keyword" autocomplete="off" placeholder="输入关键字" @keyup.enter="search" />
+              <input v-model="keyword" autocomplete="off" :placeholder="isInventoryCount ? '输入盘点单号' : '输入关键字'" @keyup.enter="search" />
               <button type="button" :disabled="loading" @click="search">查询</button>
             </div>
           </label>
@@ -327,7 +335,18 @@ onBeforeRouteLeave((to) => {
           <span>{{ displayMode === 'merged' ? mergedResults.length : results.length }}项</span>
         </div>
 
-        <template v-if="displayMode === 'merged'">
+        <template v-if="isInventoryCount">
+          <button v-for="result in results" :key="result.sourceDocumentId" class="result-card"
+            :class="{ selected: selectedDocumentId === result.sourceDocumentId }" type="button"
+            :disabled="loading" @click="toggleDocument(result.sourceDocumentId)">
+            <span class="check" aria-hidden="true">{{ selectedDocumentId === result.sourceDocumentId ? '✓' : '' }}</span>
+            <span class="result-main"><strong>{{ result.sourceDocumentNo }}</strong>
+              <span>仓库 {{ result.warehouseCode || result.productCode }} · {{ result.materialCount }}条明细</span>
+              <small>{{ result.documentDate }}</small></span>
+            <span class="material-count">{{ result.materialCount }}</span>
+          </button>
+        </template>
+        <template v-else-if="displayMode === 'merged'">
           <button
             v-for="result in mergedResults"
             :key="result.sourceDocumentId"

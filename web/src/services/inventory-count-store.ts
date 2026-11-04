@@ -107,7 +107,7 @@ export class InventoryCountStore {
     await this.mutate(async tx => {
       const task = await this.task(tx, scope, taskId), rows = tx.objectStore('observations')
       if (await result(rows.get([taskId, codeKey]))) throw new CountStoreError('DUPLICATE_SCAN', '标签已扫描')
-      if (task.observationCount >= 1000) throw new Error('本次最多采集1000张标签')
+      if (task.observationCount >= 1000) throw new Error('本单最多1000张标签')
       this.touch(tx, task)
       const observation: CountObservation = { taskId, codeKey, code: raw.trim(), quantity: null,
         revision: 1, sequence: task.revision, check: null }
@@ -152,7 +152,7 @@ export class InventoryCountStore {
     await this.mutate(async tx => {
       const task = await this.task(tx, scope, draft.task.id)
       if (task.revision !== draft.task.revision || task.validationToken !== token) {
-        throw new CountStoreError('REVISION_CHANGED', '采集记录有变化，请重新核验')
+        throw new CountStoreError('REVISION_CHANGED', '单据有变化，请重试')
       }
       const checks = new Map(items.map(item => [countCodeKey(item.code), item]))
       if (checks.size !== items.length || checks.size !== draft.observations.length) throw new Error('核验结果不完整')

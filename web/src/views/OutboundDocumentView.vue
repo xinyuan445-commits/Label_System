@@ -17,7 +17,7 @@ import {
   getBusinessDocumentFields,
   type DocumentFieldDefinition,
 } from '@/services/business-document-fields'
-import { markDocumentSubpage } from '@/services/document-subpage-navigation'
+import { markDocumentSubpage, useDocumentOfflineSupport } from '@/services/document-subpage-navigation'
 import { lookupInventoryObject } from '@/services/inventory-object-lookup'
 import {
   fetchDepartments,
@@ -61,6 +61,10 @@ import {
 import { createUniqueId } from '@/utils/unique-id'
 import { readSession } from '@/services/auth'
 import { playScanFeedback } from '@/services/shell-config'
+import { applyCountChecks, countFormLine, countSourceLines, preserveLegacyCountDocuments, requireCountForm } from '@/services/inventory-count-documents'
+import { countCodeKey, type CountSource } from '@/services/inventory-count-model'
+import { validateInventoryCountItems } from '@/services/inventory-count-api'
+import { getRuntimeConfig } from '@/services/runtime-config'
 
 type LineObjectType = 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
 const materialOutboundSourceCategoryCode = '202'
@@ -92,6 +96,8 @@ interface OutboundLine {
   requiresBatch?: boolean
   returnRequirementId?: number
   returnByLabel?: boolean
+  countQuantityConfirmed?: boolean
+  countPendingIdentity?: boolean
 }
 
 interface MaterialOutboundSubmissionLine {
@@ -123,6 +129,7 @@ interface MaterialOutboundSubmissionGroup {
 }
 
 interface OutboundDraft {
+  inventoryCountSource?: CountSource
   documentDate: string
   documentDirection: 'BLUE' | 'RED'
   sourceDocumentType: string
@@ -146,6 +153,7 @@ interface OutboundDraft {
 }
 
 const props = defineProps<Props>()
+useDocumentOfflineSupport(() => props.documentType)
 const route = useRoute()
 const router = useRouter()
 const bridge = getPdaBridge()
@@ -157,6 +165,9 @@ const documentDirection = ref<'BLUE' | 'RED'>('BLUE')
 const sourceDocumentType = ref('')
 const sourceDocumentTypeLabel = ref('')
 const sourceDocumentNo = ref('')
+const inventoryCountSource = ref<CountSource | null>(null)
+const countSaving = ref(false), countLookupBusy = ref(false)
+const countVisibleLines = ref(30)
 const customerCode = ref('')
 const warehouseCode = ref('')
 const targetWarehouseCode = ref('')
@@ -262,6 +273,7 @@ const editingRedProductReturn = computed(() =>
   editingLine.value?.returnByLabel === true,
 )
 const editableBodyFields = computed(() => documentFields.value.filter((field) => {
+  if (props.documentType === 'inventory-count') return field.key === 'body.quantity'
   if (field.area !== 'body') return false
   const editableReturnPosition = editingRedProductReturn.value &&
     returnPositionFieldKeys.has(field.key)
@@ -342,6 +354,8 @@ const overIssueChoices = computed(() => {
 const totalQty = computed(() =>
   lines.value.reduce((total, line) => total + normalizeQty(line.requestedQty), 0),
 )
+const displayedLines = computed(() => props.documentType === 'inventory-count'
+  ? lines.value.slice(-countVisibleLines.value).reverse() : lines.value)
 const showHeaderForm = computed(() => currentStep.value === 1)
 const showScanContent = computed(() => currentStep.value === 2)
 const isUnreferencedManualReturn = computed(() =>
@@ -464,6 +478,10 @@ function formatQty(value: number | null): string {
 }
 
 function fieldVisible(key: string): boolean {
+  if (props.documentType === 'inventory-count') {
+    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.remark'].includes(key)
+    if (key === 'body.quantity') return true
+  }
   if (props.documentType === 'transfer-order' &&
       ['header.departmentCode', 'header.targetDepartmentCode'].includes(key)) {
     return true
@@ -485,6 +503,10 @@ function fieldVisible(key: string): boolean {
 }
 
 function fieldRequired(key: string): boolean {
+  if (props.documentType === 'inventory-count') {
+    if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode'].includes(key)
+    if (key === 'body.quantity') return true
+  }
   if (props.documentType === 'transfer-order' && key === 'body.targetWarehouseCode') return true
   if (props.documentType === 'location-adjustment' &&
       ['body.locationCode', 'body.targetLocationCode'].includes(key)) return true
@@ -609,6 +631,7 @@ function bodyArchiveValues(line: OutboundLine): Record<string, string | number> 
 }
 
 function editorFieldValue(line: OutboundLine, key: string): string | number {
+  if (props.documentType === 'inventory-count' && key === 'body.quantity' && line.countQuantityConfirmed === false) return ''
   const value = bodyValue(line, key)
   return isBlank(value) ? '' : value as string | number
 }
@@ -623,7 +646,10 @@ function updateEditorField(key: string, value: string | number): void {
     case 'body.unitCode': line.unitCode = String(value); break
     case 'body.warehouseCode': line.warehouseCode = String(value); break
     case 'body.locationCode': line.locationCode = String(value); break
-    case 'body.quantity': line.requestedQty = Number(value); break
+    case 'body.quantity':
+      line.requestedQty = Number(value)
+      if (props.documentType === 'inventory-count') line.countQuantityConfirmed = value !== '' && Number.isFinite(Number(value))
+      break
     default: line.fieldValues[key] = value
   }
 }
@@ -709,6 +735,10 @@ function missingRequiredBodyField(line: OutboundLine): DocumentFieldDefinition |
 }
 
 function lineEditError(line: OutboundLine): string {
+  if (props.documentType === 'inventory-count') {
+    try { requireCountForm(inventoryCountSource.value, [line]); return '' }
+    catch (error) { return error instanceof Error ? error.message : '盘点明细无效' }
+  }
   const missing = missingRequiredBodyField(line)
   if (missing) return `请填写${missing.label}`
   const quantity = Number(line.requestedQty)
@@ -788,9 +818,10 @@ function openExistingLineEditor(line: OutboundLine): void {
   }
 }
 
-function confirmEditingLine(): void {
+async function confirmEditingLine(): Promise<void> {
   const current = editingLine.value
   if (!current) return
+  if (countSaving.value || finishing.value) return
   const error = lineEditError(current)
   if (error) {
     notify(error, 'error')
@@ -807,6 +838,21 @@ function confirmEditingLine(): void {
     locationCode: current.locationCode.trim(),
     fieldValues: { ...current.fieldValues },
     requiresOverIssueQuantity: undefined,
+  }
+  if (props.documentType === 'inventory-count') {
+    const existing = editingExistingLineId.value
+    const next = existing ? lines.value.map(line => line.id === existing ? normalizedLine : line)
+      : [...lines.value, normalizedLine]
+    try {
+      await persistCountLines(next)
+      cancelLineConfirmation()
+      notify(existing ? '已保存' : '已添加', 'success')
+      if (!existing) playScanFeedback('success')
+    } catch (failure) {
+      notify(failure instanceof Error ? failure.message : '保存失败', 'error')
+      if (!existing) playScanFeedback('error')
+    }
+    return
   }
   if (editingExistingLineId.value) {
     lines.value = lines.value.map((line) =>
@@ -838,6 +884,7 @@ function confirmEditingLine(): void {
 }
 
 function cancelLineConfirmation(): void {
+  if (countSaving.value) return
   editingLine.value = null
   editingExistingLineId.value = null
   confirmedScanLines.value = []
@@ -986,6 +1033,7 @@ function remainingDemandByMaterial(): Map<string, number> {
 }
 
 async function addBarcode(rawCode: string): Promise<void> {
+  if (props.documentType === 'inventory-count') { await addCountBarcode(rawCode); return }
   const barcode = rawCode.trim()
   if (!barcode) return
   if (
@@ -1152,8 +1200,49 @@ async function addBarcode(rawCode: string): Promise<void> {
   }
 }
 
+async function addCountBarcode(rawCode: string): Promise<void> {
+  if (currentStep.value !== 2 || editingLine.value || countSaving.value || finishing.value) return
+  let key = '', ownsLookup = false
+  try {
+    key = countCodeKey(rawCode)
+    if (resolvingBarcodes.has(key) || lines.value.some(line => countCodeKey(line.labelCode) === key)) {
+      throw new Error('标签已添加')
+    }
+    if (countLookupBusy.value) throw new Error('正在查询，请稍候')
+    if (lines.value.length >= 1000) throw new Error('本单最多1000张标签')
+    if (!inventoryCountSource.value) throw new Error('请选择源单')
+    countLookupBusy.value = true; resolvingBarcodes.add(key); ownsLookup = true
+    let label
+    if (navigator.onLine) {
+      const lookup = await lookupInventoryObject(rawCode.trim(), 'inventory-count')
+      if (lookup.pallet || lookup.lines.length !== 1) throw new Error('请扫描产品标签')
+      label = lookup.lines[0]
+    }
+    openLineConfirmation([countFormLine(inventoryCountSource.value, rawCode, createLineId(), label)])
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '标签查询失败', 'error'); playScanFeedback('error')
+  } finally {
+    if (ownsLookup) {
+      resolvingBarcodes.delete(key); countLookupBusy.value = false
+    }
+    scanCode.value = ''
+  }
+}
+
+async function persistCountLines(next: OutboundLine[]): Promise<void> {
+  if (countSaving.value || finishing.value) throw new Error('正在处理，请稍候')
+  countSaving.value = true
+  try {
+    const payload = { ...createDraft(), lines: next }
+    const stored = await saveOutboundDocument({ id: draftId.value || undefined,
+      documentType: 'inventory-count', summary: createSummary(payload), payload })
+    draftId.value = stored.id; lines.value = next
+  } finally { countSaving.value = false }
+}
+
 function handleScan(event: PdaScanEvent): void {
-  if (currentStep.value !== 2 || editingLine.value || showMaterialPicker.value || showManualReturn.value) return
+  if (currentStep.value !== 2 || editingLine.value || showMaterialPicker.value || showManualReturn.value ||
+      finishing.value || countSaving.value || showLeaveConfirm.value) return
   void addBarcode(event.barcode)
 }
 
@@ -1205,6 +1294,7 @@ function openExistingManualReturn(line: OutboundLine): void {
 }
 
 function openLineEditor(line: OutboundLine): void {
+  if (finishing.value || countSaving.value || countLookupBusy.value) return
   if (line.objectType === 'UNLABELED_MATERIAL') {
     openExistingManualReturn(line)
     return
@@ -1321,7 +1411,13 @@ function simulateOrAdd(): void {
   void addBarcode(scanCode.value)
 }
 
-function removeLine(id: string): void {
+async function removeLine(id: string): Promise<void> {
+  if (props.documentType === 'inventory-count') {
+    if (countSaving.value || finishing.value) return
+    try { await persistCountLines(lines.value.filter(line => line.id !== id)) }
+    catch (error) { notify(error instanceof Error ? error.message : '保存失败', 'error') }
+    return
+  }
   const selected = lines.value.find((line) => line.id === id)
   if (
     selected &&
@@ -1348,6 +1444,7 @@ function removeLine(id: string): void {
 }
 
 async function openSourceDocumentSelection(): Promise<void> {
+  if (countSaving.value || countLookupBusy.value || finishing.value) return
   saveWorkingState()
   allowNavigation = true
   await router.push({
@@ -1358,6 +1455,8 @@ async function openSourceDocumentSelection(): Promise<void> {
 }
 
 function clearSourceDocument(): void {
+  if (props.documentType === 'inventory-count' && lines.value.length) { notify('请先重置当前单据', 'error'); return }
+  inventoryCountSource.value = null
   sourceDocumentType.value = ''
   sourceDocumentTypeLabel.value = ''
   sourceDocumentNo.value = ''
@@ -1426,6 +1525,7 @@ function createDraft(): OutboundDraft {
     unallocatedQty: allocationByLine.value[line.id]?.unallocatedQty ?? 0,
   }))
   return {
+    inventoryCountSource: props.documentType === 'inventory-count' ? inventoryCountSource.value ?? undefined : undefined,
     documentDate: documentDate.value,
     documentDirection: documentDirection.value,
     sourceDocumentType: sourceDocumentType.value,
@@ -1458,6 +1558,8 @@ function hasUnsavedChanges(): boolean {
 }
 
 function applyDraft(draft: Partial<OutboundDraft>): void {
+  countVisibleLines.value = 30
+  inventoryCountSource.value = draft.inventoryCountSource ?? null
   currentStep.value = 1
   documentDate.value = draft.documentDate || beijingDate()
   documentDirection.value = draft.documentDirection === 'RED' ? 'RED' : 'BLUE'
@@ -1555,6 +1657,15 @@ async function saveCompletedDocument(): Promise<StoredOutboundDocument | null> {
     return null
   }
 
+  if (props.documentType === 'inventory-count' && navigator.onLine) {
+    const before = snapshotDraft()
+    const source = inventoryCountSource.value!
+    const checked = await validateInventoryCountItems(source, lines.value.map(line => ({
+      code: line.labelCode, quantity: String(line.requestedQty),
+    })))
+    if (snapshotDraft() !== before) throw new Error('单据有变化，请重试')
+    lines.value = applyCountChecks(source, lines.value, checked.items)
+  }
   const payload = createDraft()
   const stored = await saveOutboundDocument({
     id: draftId.value || undefined,
@@ -1587,6 +1698,7 @@ function hasDraftContent(): boolean {
 }
 
 async function openDocumentManager(): Promise<void> {
+  if (countSaving.value || countLookupBusy.value || finishing.value) return
   saveWorkingState()
   allowNavigation = true
   await router.push({
@@ -1597,6 +1709,7 @@ async function openDocumentManager(): Promise<void> {
 }
 
 async function openSwitchSettings(): Promise<void> {
+  if (countSaving.value || countLookupBusy.value || finishing.value) return
   saveWorkingState()
   allowNavigation = true
   await router.push({
@@ -1607,6 +1720,7 @@ async function openSwitchSettings(): Promise<void> {
 }
 
 async function openDocumentFieldSettings(): Promise<void> {
+  if (countSaving.value || countLookupBusy.value || finishing.value) return
   saveWorkingState()
   allowNavigation = true
   await router.push({
@@ -1617,6 +1731,7 @@ async function openDocumentFieldSettings(): Promise<void> {
 }
 
 async function openSourceDetails(): Promise<void> {
+  if (countSaving.value || countLookupBusy.value || finishing.value) return
   saveWorkingState()
   allowNavigation = true
   await router.push({
@@ -1635,6 +1750,12 @@ async function openScanDetailAction(): Promise<void> {
 }
 
 function validateHeader(): string {
+  if (props.documentType === 'inventory-count') {
+    const source = inventoryCountSource.value
+    if (!source || sourceDocumentNo.value !== source.document.documentNo) return '请选择源单'
+    if (warehouseCode.value !== source.document.warehouseCode ||
+        documentDate.value !== source.document.documentDate?.slice(0, 10)) return '原单表头不一致，请重新选单'
+  }
   const missing = documentFields.value.find(
     (field) => field.area === 'header' && fieldRequired(field.key) && isBlank(headerValue(field.key)),
   )
@@ -1646,6 +1767,10 @@ function validate(): string {
   const headerError = validateHeader()
   if (headerError) return headerError
   if (!lines.value.length) return '请添加明细'
+  if (props.documentType === 'inventory-count') {
+    try { requireCountForm(inventoryCountSource.value, lines.value); return '' }
+    catch (error) { return error instanceof Error ? error.message : '盘点明细无效' }
+  }
   if (lines.value.some((line) => line.objectType === 'UNLABELED_MATERIAL') &&
       (props.documentType !== 'material-outbound' || documentDirection.value !== 'RED')) {
     return '无标签明细只用于红字材料出库单'
@@ -1753,6 +1878,7 @@ function returnToHeaderStep(): void {
 }
 
 function resetDocument(): void {
+  if (countSaving.value || countLookupBusy.value || finishing.value) return
   if (!window.confirm('清空当前内容？')) return
   draftId.value = null
   applyDraft({})
@@ -1761,7 +1887,7 @@ function resetDocument(): void {
 }
 
 async function finishDocument(): Promise<void> {
-  if (finishing.value) return
+  if (finishing.value || countSaving.value || countLookupBusy.value) return
   if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
   completionError.value = ''
   const validationError = validate()
@@ -1780,7 +1906,7 @@ async function finishDocument(): Promise<void> {
       completionError.value = '单据校验未通过'
       return
     }
-    if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
+    if (props.documentType !== 'inventory-count' && documentPolicy.value.autoUploadOnComplete && lines.value.length) {
       try {
         await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
       } catch (error) {
@@ -1808,7 +1934,7 @@ async function finishAndLeave(): Promise<void> {
     showLeaveConfirm.value = false
     return
   }
-  if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
+  if (props.documentType !== 'inventory-count' && documentPolicy.value.autoUploadOnComplete && lines.value.length) {
     try {
       await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
     } catch (error) {
@@ -1828,6 +1954,7 @@ async function discardAndLeave(): Promise<void> {
 }
 
 async function leaveDocument(): Promise<void> {
+  if (countSaving.value || countLookupBusy.value || finishing.value) { notify('正在处理，请稍候', 'info'); return }
   if (showLeaveConfirm.value) {
     showLeaveConfirm.value = false
     return
@@ -1879,13 +2006,28 @@ onMounted(async () => {
     void leaveDocument()
   })
   baselineSnapshot = snapshotDraft()
+  if (props.documentType === 'inventory-count') {
+    try {
+      const user = readSession()?.user
+      if (user) await preserveLegacyCountDocuments({ apiBaseUrl: getRuntimeConfig().apiBaseUrl,
+        environment: getRuntimeConfig().environment, userId: user.id })
+    } catch (error) { notify(error instanceof Error ? error.message : '旧草稿恢复失败', 'error') }
+  }
   await loadRequestedDraft()
   const sourceSelection = consumeSourceDocumentSelection(props.documentType)
-  if (sourceSelection) {
+  const differentCountSource = props.documentType === 'inventory-count' && lines.value.length > 0 && !!inventoryCountSource.value &&
+    inventoryCountSource.value?.document.id !== sourceSelection?.inventoryCountSource?.document.id
+  if (sourceSelection && !differentCountSource) {
+    if (props.documentType === 'inventory-count' && sourceSelection.inventoryCountSource) {
+      inventoryCountSource.value = sourceSelection.inventoryCountSource
+      warehouseCode.value = inventoryCountSource.value.document.warehouseCode
+      documentDate.value = inventoryCountSource.value.document.documentDate?.slice(0, 10) ?? ''
+    }
     sourceDocumentType.value = sourceSelection.sourceType
     sourceDocumentTypeLabel.value = sourceSelection.sourceTypeLabel
     sourceDocumentNo.value = sourceSelection.documentNo
-    selectedSourceLines.value = sourceSelection.selectedLines
+    selectedSourceLines.value = props.documentType === 'inventory-count' && inventoryCountSource.value
+      ? countSourceLines(inventoryCountSource.value) : sourceSelection.selectedLines
     materialRequirements.value = sourceSelection.requirements
     overIssueTargets.value = {}
     if (props.documentType === 'material-outbound') {
@@ -1897,6 +2039,8 @@ onMounted(async () => {
     if (!departmentCode.value && departments.length === 1) {
       departmentCode.value = departments[0] ?? ''
     }
+  } else if (sourceSelection && differentCountSource) {
+    notify('请先重置当前单据再更换源单', 'error')
   }
   const returnRequirement = consumeReturnRequirementSelection(props.documentType)
   if (
@@ -1917,6 +2061,7 @@ onBeforeUnmount(() => {
 })
 
 onBeforeRouteLeave((to) => {
+  if (countSaving.value || countLookupBusy.value || finishing.value && !allowNavigation) return false
   if (allowNavigation) {
     allowNavigation = false
     return true
@@ -1999,7 +2144,7 @@ onBeforeRouteLeave((to) => {
 
           <label v-if="fieldVisible('header.documentDate')" class="field">
             <span><i v-if="fieldRequired('header.documentDate')">*</i>日期</span>
-            <DateField v-model="documentDate" aria-label="单据日期" />
+            <DateField v-model="documentDate" aria-label="单据日期" :disabled="documentType === 'inventory-count'" />
           </label>
 
           <label v-if="pageConfig.partnerLabel && fieldVisible('header.partnerCode')" class="field">
@@ -2013,7 +2158,7 @@ onBeforeRouteLeave((to) => {
               v-model="warehouseCode"
               :options="warehouseSelectOptions"
               label-only
-              :disabled="referenceDataLoading"
+              :disabled="referenceDataLoading || documentType === 'inventory-count'"
               placeholder="编号或名称"
               @update:model-value="handleWarehouseChange"
             />
@@ -2161,7 +2306,7 @@ onBeforeRouteLeave((to) => {
             v-model="scanCode"
             autocomplete="off"
             enterkeyhint="done"
-            placeholder="标签码或托盘码"
+            :placeholder="documentType === 'inventory-count' ? '标签码' : '标签码或托盘码'"
             @keyup.enter="simulateOrAdd"
           />
           <button type="button" @click="simulateOrAdd">添加</button>
@@ -2176,7 +2321,7 @@ onBeforeRouteLeave((to) => {
 
         <div v-if="lines.length" class="line-list">
           <article
-            v-for="line in lines"
+            v-for="line in displayedLines"
             :key="line.id"
             class="line-card"
             role="button"
@@ -2186,10 +2331,10 @@ onBeforeRouteLeave((to) => {
           >
             <div class="line-heading">
               <div class="code-wrap">
-                <strong>{{ line.materialCode }}</strong>
-                <span>{{ materialNameFor(line) || '暂无描述' }}</span>
+                <strong>{{ line.materialCode || line.labelCode }}</strong>
+                <span>{{ line.countPendingIdentity ? '待联网校验' : materialNameFor(line) || '暂无描述' }}</span>
               </div>
-              <button type="button" aria-label="删除" @click.stop="removeLine(line.id)">
+              <button type="button" aria-label="删除" :disabled="countSaving || finishing" @click.stop="removeLine(line.id)">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M7 7l1 14h8l1-14" />
                 </svg>
@@ -2202,7 +2347,7 @@ onBeforeRouteLeave((to) => {
               <div v-if="line.locationCode"><dt>货位</dt><dd>{{ locationNameFor(line.warehouseCode, line.locationCode, line.locationName) }}</dd></div>
               <div v-if="line.unitCode"><dt>单位</dt><dd>{{ line.unitName || line.unitCode }}</dd></div>
               <div v-if="line.objectType !== 'UNLABELED_MATERIAL'"><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
-              <div class="line-used-qty"><dt>{{ line.objectType === 'UNLABELED_MATERIAL' ? '退料数量' : '本标签使用' }}</dt><dd>{{ formatQty(line.requestedQty) }}</dd></div>
+              <div class="line-used-qty"><dt>{{ documentType === 'inventory-count' ? '盘点数量' : line.objectType === 'UNLABELED_MATERIAL' ? '退料数量' : '本标签使用' }}</dt><dd>{{ line.countQuantityConfirmed === false ? '待填' : formatQty(line.requestedQty) }}</dd></div>
               <template v-if="documentDirection === 'BLUE' && selectedSourceLines.length && materialProgressFor(line)">
                 <div><dt>需拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.remainingQty ?? 0) }}</dd></div>
                 <div class="picked-qty"><dt>已拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.scannedQty ?? 0) }}</dd></div>
@@ -2224,6 +2369,8 @@ onBeforeRouteLeave((to) => {
         </div>
 
         <div v-else class="empty-lines">暂无明细</div>
+        <button v-if="documentType === 'inventory-count' && lines.length > countVisibleLines"
+          class="source-footer-action" type="button" @click="countVisibleLines += 30">显示更多</button>
       </section>
 
       <div v-if="completionError" class="completion-error" role="alert">
@@ -2275,7 +2422,7 @@ onBeforeRouteLeave((to) => {
       <button
         class="primary-action"
         type="button"
-        :disabled="finishing"
+        :disabled="finishing || countSaving || countLookupBusy"
         @click="currentStep === 1 ? goToScanStep() : finishDocument()"
       >
         {{ currentStep === 1 ? '下一步' : finishing ? '处理中' : '完成做单' }}
@@ -2364,6 +2511,7 @@ onBeforeRouteLeave((to) => {
             <input
               v-else
               :value="editorFieldValue(editingLine, field.key)"
+              :disabled="countSaving || finishing"
               :type="fieldInputType(field)"
               :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
               :readonly="field.key === 'body.quantity' &&
@@ -2378,8 +2526,8 @@ onBeforeRouteLeave((to) => {
       </div>
 
       <footer class="line-editor-actions">
-        <button type="button" @click="cancelLineConfirmation">取消</button>
-        <button class="confirm" type="button" @click="confirmEditingLine">
+        <button type="button" :disabled="countSaving" @click="cancelLineConfirmation">取消</button>
+        <button class="confirm" type="button" :disabled="countSaving" @click="confirmEditingLine">
           {{ editingExistingLineId ? '保存' : pendingScanLines.length ? '确认并继续' : '确认添加' }}
         </button>
       </footer>

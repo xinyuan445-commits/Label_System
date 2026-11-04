@@ -7,8 +7,14 @@ import type {
 import { onBeforeUnmount, onMounted } from 'vue'
 
 import { getPdaBridge } from '@/bridge/pda-bridge'
+import { setOfflineDocumentMode } from '@/services/shell-config'
 
 const documentReturnMarker = 'documentReturn'
+
+export function useDocumentOfflineSupport(documentType: () => string): void {
+  onMounted(() => { if (documentType() === 'inventory-count') setOfflineDocumentMode(true) })
+  onBeforeUnmount(() => { if (documentType() === 'inventory-count') setOfflineDocumentMode(false) })
+}
 
 export function useDocumentSystemBack(handler: () => void | Promise<void>): void {
   let stopListening: (() => void) | null = null

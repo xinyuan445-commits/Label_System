@@ -63,7 +63,7 @@ export interface CountDraft { task: CountTask; observations: CountObservation[] 
 
 export function rejectLegacyCountUpload(documentType: string): void {
   if (documentType.trim().toLowerCase() === 'inventory-count') {
-    throw new Error('盘点可采集，上传ERP尚未开放')
+    throw new Error('盘点上传ERP暂未开放')
   }
 }
 

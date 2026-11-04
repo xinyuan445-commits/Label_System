@@ -5,7 +5,6 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import ApprovalDocumentView from '@/views/ApprovalDocumentView.vue'
 import LabelQueryView from '@/views/LabelQueryView.vue'
 import OutboundDocumentView from '@/views/OutboundDocumentView.vue'
-import InventoryCountView from '@/views/InventoryCountView.vue'
 import {
   isBusinessDocumentType,
   type BusinessDocumentType,
@@ -46,10 +45,8 @@ onBeforeRouteLeave((to) => {
 </script>
 
 <template>
-  <InventoryCountView v-if="businessDocumentType === 'inventory-count'" />
-
   <OutboundDocumentView
-    v-else-if="businessDocumentType"
+    v-if="businessDocumentType"
     :key="businessDocumentType"
     :document-type="businessDocumentType"
   />

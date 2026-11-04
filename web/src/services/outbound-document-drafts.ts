@@ -7,6 +7,7 @@ import {
   removeDraftDocuments,
   writeDraftDocument,
   writeDraftDocuments,
+  mutateDraftDocument,
 } from '@/services/draft-database'
 import { getDeviceId, getDeviceName } from '@/services/device-identity'
 import { createUniqueId } from '@/utils/unique-id'
@@ -316,6 +317,7 @@ export async function saveOutboundDocument(input: {
   const existing = input.id ? await readDraftDocument(input.id) : null
   if (existing) {
     if (existing.ownerUserId !== owner.id) throw new Error('不能修改其他用户的草稿')
+    if (existing.documentType !== input.documentType) throw new Error('单据类型不一致')
     const updated: StoredOutboundDocument = {
       ...existing, updatedAt: now, uploadStatus: 'pending', uploadedAt: null,
       uploadRequestId: '', lastUploadError: '', serverOperationId: '',
@@ -330,7 +332,7 @@ export async function saveOutboundDocument(input: {
   }
 
   const created: StoredOutboundDocument = {
-    id: createUniqueId('draft'), documentType: input.documentType,
+    id: input.id || createUniqueId('draft'), documentType: input.documentType,
     uploadStatus: 'pending', createdAt: now, updatedAt: now, uploadedAt: null,
     uploadAttempts: 0, uploadRequestId: '', lastUploadError: '', serverOperationId: '',
     summary: safeSummary, payload: safePayload,
@@ -407,23 +409,19 @@ export async function markOutboundDocumentUploadFailed(
 }
 
 export async function markDraftSyncing(id: string, revision: number): Promise<void> {
-  const existing = await readDraftDocument(id)
-  if (!existing || existing.clientRevision !== revision || existing.syncStatus === 'deleted-pending') return
-  await writeDraftDocument({ ...existing, syncStatus: 'syncing', syncError: '' })
+  await mutateDraftDocument(id, existing => existing.clientRevision !== revision || existing.syncStatus === 'deleted-pending'
+    ? null : { ...existing, syncStatus: 'syncing', syncError: '' })
 }
 
 export async function markDraftSynced(id: string, revision: number, syncedAt: string): Promise<void> {
-  const existing = await readDraftDocument(id)
-  if (!existing || existing.clientRevision !== revision) return
-  await writeDraftDocument({ ...existing, syncStatus: 'synced', lastSyncedAt: syncedAt,
-    syncError: '', remoteOnly: false })
+  await mutateDraftDocument(id, existing => existing.clientRevision !== revision ? null :
+    { ...existing, syncStatus: 'synced', lastSyncedAt: syncedAt, syncError: '', remoteOnly: false })
   notifyChanged()
 }
 
 export async function markDraftSyncFailed(id: string, revision: number, error: string): Promise<void> {
-  const existing = await readDraftDocument(id)
-  if (!existing || existing.clientRevision !== revision || existing.syncStatus === 'deleted-pending') return
-  await writeDraftDocument({ ...existing, syncStatus: 'failed', syncError: error })
+  await mutateDraftDocument(id, existing => existing.clientRevision !== revision || existing.syncStatus === 'deleted-pending'
+    ? null : { ...existing, syncStatus: 'failed', syncError: error })
   notifyChanged()
 }
 

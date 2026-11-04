@@ -167,10 +167,10 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
   'inventory-count': {
     title: '盘点单',
     draftKey: 'label-system:draft:inventory-count',
-    sourceTypes: [],
+    sourceTypes: [{ value: 'inventory-count', label: '盘点单' }],
     warehouseLabel: '仓库',
     warehouseRequired: true,
-    departmentRequired: true,
+    departmentRequired: false,
     productionBatch: false,
     detailTitle: '盘点明细',
     quantityLabel: '盘点数量',

@@ -24,10 +24,15 @@ export async function downloadInventoryCount(id: number): Promise<CountSource> {
 }
 
 export async function validateInventoryCount(draft: CountDraft): Promise<{ items: CountCheck[]; canSubmit: false }> {
-  return apiRequest(`/api/v1/inventory-counts/${draft.task.source.document.id}/validate`, {
+  return validateInventoryCountItems(draft.task.source, draft.observations)
+}
+
+export async function validateInventoryCountItems(source: CountSource,
+  observations: Array<{ code: string; quantity: string | null }>): Promise<{ items: CountCheck[]; canSubmit: false }> {
+  return apiRequest(`/api/v1/inventory-counts/${source.document.id}/validate`, {
     method: 'POST', timeoutMs: 120000,
-    body: JSON.stringify({ accountId: draft.task.source.accountId, databaseName: draft.task.source.databaseName,
-      sourceFingerprint: draft.task.source.fingerprint,
-      observations: draft.observations.map(row => ({ code: row.code, quantity: row.quantity })) }),
+    body: JSON.stringify({ accountId: source.accountId, databaseName: source.databaseName,
+      sourceFingerprint: source.fingerprint,
+      observations: observations.map(row => ({ code: row.code, quantity: row.quantity })) }),
   })
 }

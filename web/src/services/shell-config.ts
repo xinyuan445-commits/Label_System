@@ -286,3 +286,11 @@ export async function testScanSound(mode: ScanSoundMode): Promise<void> {
 export function createDefaultShellConfig(): ShellConfig {
   return { ...defaultConfig }
 }
+
+export function setOfflineDocumentMode(enabled: boolean): void {
+  if (!isNativeShell()) return
+  // Preserve the installed APK protocol while keeping this an internal detail
+  // of the ordinary document workflow.
+  window.parent.postMessage({ source: 'label-system-h5', type: 'offline-collection',
+    payload: { enabled } }, nativeBridgeOrigin)
+}
