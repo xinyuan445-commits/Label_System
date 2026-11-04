@@ -73,6 +73,9 @@ function selectDate(value: string): void {
 function selectToday(): void {
   selectDate(formatDate(new Date()))
 }
+
+// Parent pages can consume a PDA back action before leaving the date picker.
+defineExpose({ close: () => { const wasOpen = open.value; open.value = false; return wasOpen } })
 </script>
 
 <template>
