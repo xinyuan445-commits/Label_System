@@ -1,5 +1,7 @@
 # U8 Gateway
 
+按功能查看支持能力、限制与验收证据，进入[功能档案](../docs/features/README.md)；Gateway字段及异常合同继续在本目录维护。
+
 当前状态核对：2026-11-04。0.11.2已部署9880/008及9881/888，盘点原单只读验证成功，盘点create能力关闭。两套来源配置保留；独立生产门禁、精确白名单及Business API开关继续有效，修改/删除仍关闭。共享互斥锁权限修复及安装证据见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)和[项目当前状态](../docs/PROJECT_STATUS.md)。
 
 只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。三类库存来源事件及首打初始三表登记使用不同接口；打印登记已有888/PDF验收，生产008打印尚未发布。盘点原单实盘回填/Update和追溯差异事件尚未实现，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。

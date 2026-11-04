@@ -1,5 +1,7 @@
 # Label System Business API
 
+功能当前能做什么、使用限制及验收范围见[功能档案](../docs/features/README.md)；本目录继续维护API实现和接口合同。
+
 当前状态核对：2026-11-04。源码/已安装程序集为0.12.3，盘点只读/核验及旧写入口拦截已部署。生产9890/008健康版本0.12.3，开发9891/888配置版本0.12.3-count-dev；原配置与写入门禁保留。详见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)及[项目状态](../docs/PROJECT_STATUS.md)。
 
 既有三类库存业务已接TraceBack实时复核和同步；打印正式发码、首打/补打、回执与初始登记已有888/PDF验收。盘点原单回填与旧表差异链尚未实现，不能按九类接口已建立就认定可用。见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。

@@ -1,5 +1,7 @@
 # 标签管理系统 H5
 
+按功能查看已支持能力、限制、未完成项和验证证据，进入[功能档案](../docs/features/README.md)；页面规范和技术说明仍分别维护。
+
 当前源码0.2.0-dev.87；盘点直接使用材料出库等业务的同一个OutboundDocumentView、选单/源单明细和单据管理组件，删除独立盘点页面。发布状态见[页面设计记录](../docs/PAGE_DESIGN_RECORD.md)和[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。仍使用172.16.10.45:5175，连接159:9890正式008，不能根据客户端development档位推断888。API0.12.3/Gateway0.11.2及APK0.5.5/111保持现有部署。
 
 开发前阅读[UI_DESIGN.md](../UI_DESIGN.md)及[页面记录](../docs/PAGE_DESIGN_RECORD.md)。直接复用已有控件/容器；业务内容按需显示，不能把材料出库的合并模式或来源类型机械复制给盘点。调整后同步实际结构、差异、待办、版本及验收状态。
