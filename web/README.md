@@ -4,6 +4,8 @@
 
 九类制单和审核页面已接API，但盘点没有源单入口、未完成TraceBack差异闭环，暂不作为可上传的完整盘点流程；建议见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。电脑打印独立运行在本机18003，不恢复H5嵌入入口。
 
+离线现状：完成后的草稿有IndexedDB持久化，编辑中跨页状态使用sessionStorage；每次新扫码仍调用库存API，没有盘点任务标签包。远程H5、APK断网遮罩和冷启动也需配套适配；不能把已有草稿或offlineSessionHours字段表述为离线扫码已实现。拟议的任务下载、逐次采集、冷启动和联网复核见[盘点方案第9节](../docs/INVENTORY_COUNT_PLAN.md#offline-counting)。
+
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
 
