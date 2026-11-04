@@ -50,6 +50,8 @@
 
 盘点当前存在具体风险：扫码可能建立带TraceBack游标的镜像，但提交前复核白名单没有盘点；ERP新增后同步规划器不支持 `inventory-count`，可能在U8已生成后进入待核对。已有的本地盘点流水不能替代缺失的旧表同步。参见[盘点单实施方案](INVENTORY_COUNT_PLAN.md)。
 
+盘点方案已按用户确认改为：同一任务重复扫码拒绝并警示，不新增/累计/覆盖，不自动打开原明细；改数从已有明细进入。在线、离线和重启恢复均执行同一规则，目前仅完成方案修订，未开发发布。
+
 打印首打在实际开始打印时生成Code；业务制单只生成无Code的 `PENDING_PRINT`。首打/补打本地PRINT/REPRINT流水变化为0；旧表初始+Q由首打唯一PRINT_TARGET登记，补打不再增加数量。用户888/PDF验收见[正常打印与数据清理](../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)，10月20日改进见[打印变更记录](../New_Label_Print_System/CHANGELOG.md)。
 
 ## 4. 后续顺序
