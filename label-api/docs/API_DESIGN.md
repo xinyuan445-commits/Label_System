@@ -1,10 +1,10 @@
 # Label System API
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.1共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
+当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.2共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
 
-三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.1盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.2盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
 
-## 盘点原单及自动校验接口（0.12.1已部署）
+## 盘点原单及自动校验接口（0.12.2已部署）
 
 - GET /api/v1/inventory-counts/capabilities：盘点权限内返回来源账套/库、collectionEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000。
 - GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=：固定代理Gateway未审核列表，最多100条，hasMore时缩小查询范围。
@@ -16,7 +16,10 @@
 以上接口由服务器固定校验inventory-count功能权限，不依赖客户端X-Function-Code；不提供匿名任务或离线写令牌。H5复用普通IndexedDB草稿与009服务端同步，已保存本机/已同步/已上传ERP分别显示；只读盘点接口自身不保存草稿。本轮无数据库迁移。
 
 
-0.12.1原单document新增inCategoryCode、inCategoryName、outCategoryCode、outCategoryName，原样承接Gateway的盘盈/盘亏类别并纳入完整fingerprint。类别变化导致旧指纹失效；保留旧草稿，重新选同一原单更新基线。H5显示原单类别并只读，不能用客户端类别默认值覆盖。
+0.12.1起原单document新增inCategoryCode、inCategoryName、outCategoryCode、outCategoryName，原样承接Gateway的盘盈/盘亏类别并纳入完整fingerprint。类别变化导致旧指纹失效；保留旧草稿，重新选同一原单更新基线。H5自动带入原单类别且允许用户改选，原单源快照保留原值；本轮只保存草稿，不据此修改U8表头。
+
+
+0.12.2新增POST /api/v1/inventory-counts/validate-direct，使用同一盘点功能权限。请求accountId、databaseName、warehouseCode及observations[{code,quantity}]；服务器按当前账套校验，最多1000个唯一完整Code，分最多100码一批调用旧三表快照。返回items[{code,status,message,label,latestFlowId}]和canSubmit=false；label为当前产品标签身份/余额，空rowVersion不构成写入授权。状态包括MATCHED、OUTSIDE_WAREHOUSE、LABEL_INVALID、QUANTITY_REQUIRED、NOT_FOUND；负余额、旧表异常、缺失物料/单位拒绝。接口不创建原单、标签镜像或差异流水，缺失仓库/跨账套/重复码拒绝；capabilities新增directDraftEnabled=true，ERP写门禁不变。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

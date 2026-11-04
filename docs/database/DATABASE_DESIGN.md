@@ -780,3 +780,5 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 详见 [实现合同](../PRINT_PHASE1_SPEC.md)、[开发记录](../PRINT_PHASE1_IMPLEMENTATION.md)。
 
 同日dev.85补齐原单盈亏类别：只读CheckVouch.cIRdCode/cORdCode及Rd_Style.cRdName，编码/名称随原单源快照和普通草稿JSON保存；无新增数据库列、迁移或U8/三表写入。
+
+同日dev.86/API0.12.2支持有/无原单草稿：原单选择确认立即保存完整快照到现有IndexedDB，普通草稿JSON增加inventoryCountContext账套绑定；用户类别覆盖值与原单源快照分开保留。无原单validate-direct仅批量读取旧三表，不新增SQL表/列、迁移、盘点锁或数量流水。

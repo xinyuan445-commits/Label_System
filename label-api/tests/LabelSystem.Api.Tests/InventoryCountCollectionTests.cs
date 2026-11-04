@@ -141,6 +141,44 @@ public sealed class InventoryCountCollectionTests
         Assert.Equal("COUNT_SOURCE_CHANGED", failure.Code);
     }
 
+    [Fact]
+    public void DirectCountChecksWarehouseRealBalanceAndAnomalies()
+    {
+        var good = InventoryCountRules.MatchDirect("W1", Observation("0"), Label() with { Balance = 0m, Status = "USED_UP" });
+        Assert.Equal("MATCHED", good.Status);
+        Assert.Equal(0m, good.Label!.AvailableQty);
+        Assert.Equal("USED", good.Label.Status);
+        Assert.Equal("OUTSIDE_WAREHOUSE", InventoryCountRules.MatchDirect("W2", Observation(), Label()).Status);
+        Assert.Equal("LABEL_INVALID", InventoryCountRules.MatchDirect("W1", Observation(), Label() with { Balance = -1m }).Status);
+        Assert.Equal("LABEL_INVALID", InventoryCountRules.MatchDirect("W1", Observation(), Label() with { UnitCode = "" }).Status);
+        Assert.Equal("LABEL_INVALID", InventoryCountRules.MatchDirect("W1", Observation(), Label() with {
+            Anomalies = [new("INVALID", "invalid")] }).Status);
+        Assert.Equal("QUANTITY_REQUIRED", InventoryCountRules.MatchDirect("W1", Observation(null), Label()).Status);
+    }
+
+    [Fact]
+    public async Task DirectCountUsesBatchesWithoutRequiringOrCreatingNativeSource()
+    {
+        var fake = new ReadOnlyHandler();
+        var observations = Enumerable.Range(0, 101).Select(n => new InventoryCountObservation("TAG" + n, "1")).ToArray();
+        var result = await Service(fake).ValidateDirectAsync(new("888", "UFDATA_888_2021", "W1", observations), default);
+        Assert.Equal(2, fake.SnapshotCalls);
+        Assert.Equal(101, result.Items.Count);
+        Assert.All(result.Items, row => { Assert.Equal("MATCHED", row.Status); Assert.Equal(10m, row.Label!.AvailableQty); });
+        Assert.False(result.CanSubmit);
+    }
+
+    [Fact]
+    public async Task DirectCountRejectsWrongAccountAndDuplicateCodesBeforeQueries()
+    {
+        var fake = new ReadOnlyHandler(); var service = Service(fake);
+        Assert.Equal("COUNT_ACCOUNT_MISMATCH", (await Assert.ThrowsAsync<ApiException>(() => service.ValidateDirectAsync(
+            new("008", "UFDATA_008_2021", "W1", [Observation()]), default))).Code);
+        Assert.Equal("COUNT_OBSERVATIONS_INVALID", (await Assert.ThrowsAsync<ApiException>(() => service.ValidateDirectAsync(
+            new("888", "UFDATA_888_2021", "W1", [Observation(), Observation()]), default))).Code);
+        Assert.Equal(0, fake.SnapshotCalls);
+    }
+
     private static InventoryCountCollectionService Service(ReadOnlyHandler handler) => new(
         new U8GatewayClient(new Factory(handler), new Monitor<U8GatewayOptions>(new() { BaseUrl = "http://gateway.test", ApiKey = "test-only" })),
         new Monitor<LabelSystemOptions>(new() { ErpAccountId = "888", ErpDatabaseName = "UFDATA_888_2021", U8WritesEnabled = false }));

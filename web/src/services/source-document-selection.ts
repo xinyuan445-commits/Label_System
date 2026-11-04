@@ -51,6 +51,7 @@ export interface SourceDocumentSelection {
   selectedLines: SourceDocumentLine[]
   requirements: MaterialRequirementLine[]
   inventoryCountSource?: CountSource
+  localDraftId?: string
 }
 
 export interface ReturnRequirementSelection {

@@ -1,5 +1,17 @@
 import { apiRequest } from '@/api/client'
 import type { CountCheck, CountDraft, CountSource } from './inventory-count-model'
+import type { InventoryObjectLine } from './inventory-object-lookup'
+
+export interface CountContext { accountId: string; databaseName: string }
+export interface DirectCountCheck { code: string; status: string; message: string; label?: InventoryObjectLine | null }
+export async function getCountContext(): Promise<CountContext> {
+  return apiRequest('/api/v1/inventory-counts/capabilities')
+}
+export async function validateDirectCount(context: CountContext, warehouseCode: string,
+  observations: Array<{ code: string; quantity: string }>): Promise<{ items: DirectCountCheck[]; canSubmit: false }> {
+  return apiRequest('/api/v1/inventory-counts/validate-direct', { method: 'POST', timeoutMs: 120000,
+    body: JSON.stringify({ ...context, warehouseCode, observations }) })
+}
 
 export interface CountSummary {
   id: number

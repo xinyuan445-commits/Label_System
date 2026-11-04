@@ -4,7 +4,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import DateField from '@/components/DateField.vue'
 import { downloadInventoryCount } from '@/services/inventory-count-api'
-import { countSourceLines } from '@/services/inventory-count-documents'
+import { countSourceLines, saveCountSourceDraft } from '@/services/inventory-count-documents'
 import {
   returnToParentDocument,
   useDocumentSystemBack,
@@ -220,6 +220,7 @@ async function confirmSelection(): Promise<void> {
     const option = sourceTypes.value.find((item) => item.value === sourceType.value)
     if (!option) return
     const documentNumbers = [...new Set(lines.map((line) => line.sourceDocumentNo))]
+    const localDraft = countSource ? await saveCountSourceDraft(countSource, workingState) : null
     saveSourceDocumentSelection({
       outboundDocumentType: outboundDocumentType.value,
       sourceType: sourceType.value,
@@ -229,6 +230,7 @@ async function confirmSelection(): Promise<void> {
       selectedLines: lines,
       requirements,
       inventoryCountSource: countSource,
+      localDraftId: localDraft?.id,
     })
     await returnToDocument()
   } catch (error) {

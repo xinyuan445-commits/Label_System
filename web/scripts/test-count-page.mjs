@@ -37,11 +37,19 @@ function fixture(t, type = 'inventory-count') {
     URL, URLSearchParams, Error, Event, console, setTimeout: () => 1, clearTimeout() {} }
   const route = { params: { code: type }, query: {}, name: 'work-function' }
   let nativeScan, nativeBack, identity = 0
-  const api = { lookups: 0, validations: 0,
+  const api = { lookups: 0, validations: 0, directValidations: 0,
     lookup: async () => ({ pallet: null, lines: [label()] }),
     validate: async (src, rows) => ({ canSubmit: false, items: rows.map(row => ({
       code: row.code, status: 'MATCHED', message: '', sourceLineId: 41, materialName: '物料', balance: 10,
-    })) }) }
+    })) }),
+    directValidate: async (context, warehouse, rows) => ({ canSubmit: false,
+      items: rows.map(row => ({ code: row.code, status: 'MATCHED', message: '', label: label() })) }) }
+  const reference = { styles: [
+    { code: '107', name: '盘盈入库', direction: 'IN', isTerminal: true, isActive: true },
+    { code: '207', name: '盘亏出库', direction: 'OUT', isTerminal: true, isActive: true },
+    { code: '108', name: '其他入库', direction: 'IN', isTerminal: true, isActive: true },
+    { code: '208', name: '其他出库', direction: 'OUT', isTerminal: true, isActive: true },
+  ] }
   const overrides = {
     vue: { ...Vue, onMounted: fn => mounted.push(fn), onBeforeUnmount: fn => unmounted.push(fn) },
     'vue/server-renderer': SSR,
@@ -62,9 +70,13 @@ function fixture(t, type = 'inventory-count') {
       downloadInventoryCount: async () => source(),
       searchInventoryCounts: async () => ({ items: [{ ...source().document }], hasMore: false }),
       validateInventoryCountItems: async (...args) => { api.validations++; return api.validate(...args) },
+      getCountContext: async () => ({ accountId: '888', databaseName: 'UFDATA_888_2021' }),
+      validateDirectCount: async (...args) => { api.directValidations++; return api.directValidate(...args) },
     },
     '@/services/reference-data': Object.fromEntries(['fetchRdStyles','fetchWarehousePositions','fetchDepartments',
-      'fetchCurrencies','fetchPurchaseTypes','fetchSalesTypes','searchMaterials'].map(name => [name, async () => []])),
+      'fetchCurrencies','fetchPurchaseTypes','fetchSalesTypes','searchMaterials'].map(name => [name, async () => []]).concat([
+        ['fetchRdStyles', async () => reference.styles],
+      ])),
     '@/api/client': { ApiError: Error, apiRequest: async () => [] },
     '@/components/DateField.vue': { default: { props: ['modelValue','disabled'], render() { return Vue.h('button', { disabled: this.disabled }, this.modelValue) } } },
     '@/components/SearchSelect.vue': { default: { props: ['modelValue','disabled'], render() { return Vue.h('button', { disabled: this.disabled }, this.modelValue) } } },
@@ -119,7 +131,7 @@ function fixture(t, type = 'inventory-count') {
     for (const hook of unmounted) hook()
     await load('@/services/inventory-count-store').inventoryCountStore.close()
   })
-  return { load, mount, select, api, globals, feedback, routes, route,
+  return { load, mount, select, api, reference, globals, feedback, routes, route,
     nativeScan: value => nativeScan?.({ barcode: value }), nativeBack: () => nativeBack?.(),
     docs: () => load('@/services/outbound-document-drafts').listAllLocalDocuments() }
 }
@@ -153,6 +165,22 @@ test('盘点和材料出库共用同一制单组件；盘点选单渲染没有�
   assert.match(countHtml, /单据管理/); assert.match(countHtml, /下一步/)
   assert.match(countHtml, /盘盈类别/); assert.match(countHtml, /盘亏类别/)
   assert.doesNotMatch(countHtml, /采集记录|联网核验|采集模式/)
+  for (const hasSource of [false, true]) {
+    const preparedForm = { ...form, setup(props, context) {
+      const state=form.setup(props, context)
+      state.inventoryCountSource.value=hasSource ? source() : null
+      state.warehouseCode.value='W1'
+      state.headerFieldValues.value={ 'header.inCategoryCode':'107', 'header.outCategoryCode':'207' }
+      return state
+    } }
+    const rendered=await SSR.renderToString(Vue.createSSRApp(preparedForm,{documentType:'inventory-count'}))
+    const controls=new Map([...rendered.matchAll(/<button([^>]*)>(107|207|W1)<\/button>/g)].map(match=>[match[2],match[1]]))
+    for (const category of ['107','207']) {
+      assert.equal(controls.has(category),true)
+      assert.doesNotMatch(controls.get(category), /(?:^|\s)disabled(?:\s|$)/)
+    }
+    assert.equal(/(?:^|\s)disabled(?:\s|$)/.test(controls.get('W1')),hasSource)
+  }
 })
 
 test('标准选单整单确认，带回完整原单；明细仍用共用选单路径', async t => {
@@ -165,15 +193,27 @@ test('标准选单整单确认，带回完整原单；明细仍用共用选单�
   picker.changeDisplayMode('detail')
   assert.equal(picker.displayMode.value, 'merged')
   await picker.confirmSelection()
+  const [downloaded] = await f.docs()
+  assert.equal(downloaded.payload.inventoryCountSource.lines.length, 1)
+  assert.equal(downloaded.payload.inventoryCountSource.fingerprint, source().fingerprint)
+  assert.equal(downloaded.summary.lineCount, 0)
   const v = await f.mount()
+  assert.equal(v.draftId.value, downloaded.id)
   assert.equal(v.inventoryCountSource.value.document.id, 12)
   assert.equal(v.selectedSourceLines.value[0].sourceLineId, 41)
   assert.equal(v.documentDate.value, '2026-11-04'); assert.equal(v.warehouseCode.value, 'W1')
+  v.warehouseCode.value='W2'; v.handleWarehouseChange()
+  assert.equal(v.warehouseCode.value,'W1')
+  f.load('@/services/outbound-document-drafts').requestOutboundDocumentEdit({ documentType:'inventory-count', documentId:downloaded.id })
+  const restored=await f.mount()
+  assert.equal(restored.inventoryCountSource.value.document.id,12)
+  assert.equal(restored.lines.value.length,0)
+  assert.equal(restored.inventoryCountSource.value.lines[0].id,41)
   await v.openSourceDetails()
   assert.equal(f.routes.at(-1).name, 'source-document-details')
 })
 
-test('盘盈盘亏类别来自原单，档案未加载时显示原名称；保存恢复及清除不串值', async t => {
+test('盘盈盘亏带原单值且允许改选；保存恢复保持用户选择，清除后恢复默认', async t => {
   const f = fixture(t), v = await f.select()
   assert.equal(v.fieldVisible('header.inCategoryCode'), true)
   assert.equal(v.fieldVisible('header.outCategoryCode'), true)
@@ -181,20 +221,19 @@ test('盘盈盘亏类别来自原单，档案未加载时显示原名称；保�
   assert.equal(v.headerFieldValues.value['header.outCategoryCode'], '207')
   assert.equal(v.inRdStyleSelectOptions.value[0].label, '盘盈入库')
   assert.equal(v.outRdStyleSelectOptions.value[0].label, '盘亏出库')
-  v.setHeaderField('header.inCategoryCode', 'OTHER')
-  assert.equal(v.headerFieldValues.value['header.inCategoryCode'], '107')
+  v.setHeaderField('header.inCategoryCode', '108')
+  assert.equal(v.headerFieldValues.value['header.inCategoryCode'], '108')
   await scanAndConfirm(f, v, '1')
   const [doc] = await f.docs()
   assert.equal(doc.payload.headerFieldValues['header.outCategoryCode'], '207')
   f.load('@/services/outbound-document-drafts').requestOutboundDocumentEdit({ documentType: 'inventory-count', documentId: doc.id })
   const restored = await f.mount()
-  assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '107')
+  assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '108')
   assert.equal(restored.outRdStyleSelectOptions.value[0].label, '盘亏出库')
   await restored.removeLine(restored.lines.value[0].id)
   restored.clearSourceDocument()
-  assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '')
-  assert.equal(restored.headerFieldValues.value['header.outCategoryCode'], '')
-  assert.equal(restored.inRdStyleSelectOptions.value.length, 0)
+  assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '107')
+  assert.equal(restored.headerFieldValues.value['header.outCategoryCode'], '207')
 })
 
 test('扫码一次实时查标签，确认数量0后才入明细和标准IndexedDB；没有独立采集流程', async t => {
@@ -209,6 +248,62 @@ test('扫码一次实时查标签，确认数量0后才入明细和标准Indexed
   await v.finishDocument()
   assert.equal(f.api.validations, 1); assert.equal(f.routes.at(-1).name, 'outbound-document-manager')
   assert.equal((await f.docs()).length, 1)
+})
+
+test('无原单可选择仓库直接制单，默认类别正确，完成前重新批量复核并保存', async t => {
+  const f = fixture(t), v = await f.mount()
+  await v.loadReferenceData()
+  assert.equal(v.inventoryCountSource.value, null)
+  assert.equal(v.headerFieldValues.value['header.inCategoryCode'], '107')
+  assert.equal(v.headerFieldValues.value['header.outCategoryCode'], '207')
+  v.warehouseCode.value = 'W1'; v.handleWarehouseChange()
+  v.setHeaderField('header.outCategoryCode', '208')
+  await scanAndConfirm(f, v, '2')
+  assert.equal(f.api.lookups, 1)
+  await v.finishDocument()
+  assert.equal(f.api.directValidations, 1); assert.equal(f.api.validations, 0)
+  const [doc] = await f.docs()
+  assert.equal(doc.payload.inventoryCountSource, undefined)
+  assert.equal(doc.payload.inventoryCountContext.accountId, '888')
+  assert.equal(doc.payload.headerFieldValues['header.outCategoryCode'], '208')
+  assert.equal(doc.payload.lines[0].requestedQty, 2)
+  assert.equal(f.routes.at(-1).name, 'outbound-document-manager')
+})
+
+test('无原单离线可保存，联网校验失败保留输入；仓库锁定直到重置', async t => {
+  const f = fixture(t), v = await f.mount(); await v.loadReferenceData()
+  v.warehouseCode.value = 'W1'; f.globals.navigator.onLine = false
+  await scanAndConfirm(f, v, '0')
+  v.warehouseCode.value = 'W2'; v.handleWarehouseChange()
+  assert.equal(v.warehouseCode.value, 'W1')
+  await v.finishDocument(); assert.equal(f.api.directValidations, 0)
+  const [doc] = await f.docs()
+  f.load('@/services/outbound-document-drafts').requestOutboundDocumentEdit({ documentType: 'inventory-count', documentId: doc.id })
+  f.globals.navigator.onLine = true
+  const restored = await f.mount(); await restored.loadReferenceData()
+  f.api.directValidate = async () => ({ canSubmit: false, items: [{code, status: 'OUTSIDE_WAREHOUSE', message: '标签不属于所选仓库'}] })
+  const routeCount=f.routes.length
+  await restored.finishDocument()
+  assert.equal(f.routes.length, routeCount); assert.equal(restored.lines.value[0].requestedQty, 0)
+  assert.equal(restored.completionError.value, '标签不属于所选仓库')
+  restored.resetDocument()
+  restored.warehouseCode.value = 'W2'; restored.handleWarehouseChange()
+  assert.equal(restored.warehouseCode.value, 'W2'); assert.equal(restored.lines.value.length, 0)
+  assert.equal(restored.headerFieldValues.value['header.inCategoryCode'], '107')
+})
+
+test('原单确认保存失败不得返回，已有明细不得被另一原单覆盖', async t => {
+  const f=fixture(t), picker=f.load('@/views/SourceDocumentSelectView.vue').default.setup({}, {expose(){}})
+  await picker.search(); picker.toggleDocument(12)
+  const repo=f.load('@/services/outbound-document-drafts'), save=repo.saveOutboundDocument
+  repo.saveOutboundDocument=async()=>{throw new Error('本机保存失败')}
+  await picker.confirmSelection()
+  assert.equal(f.routes.length,0); assert.equal(picker.errorMessage.value,'本机保存失败')
+  repo.saveOutboundDocument=save
+  const helper=f.load('@/services/inventory-count-documents')
+  await assert.rejects(helper.saveCountSourceDraft(source(), {documentType:'inventory-count',documentId:null,currentStep:1,
+    payload:{lines:[{labelCode:code,requestedQty:1}]} }), /重置/)
+  assert.equal((await f.docs()).length,0)
 })
 
 test('重复码及查询并发不误删首个查询锁，失败不误报成功', async t => {

@@ -4,6 +4,8 @@ import { assertCountSource, countCodeKey, countQuantity, type CountDraft, type C
 import type { InventoryObjectLine } from './inventory-object-lookup'
 import type { SourceDocumentLine } from './source-document-selection'
 import type { CountCheck } from './inventory-count-model'
+import type { OutboundDocumentWorkingState } from './outbound-document-drafts'
+import type { DirectCountCheck } from './inventory-count-api'
 
 export interface CountFormLine {
   id: string
@@ -39,11 +41,13 @@ export function countSourceLines(source: CountSource): SourceDocumentLine[] {
   }))
 }
 
-export function countFormLine(source: CountSource, code: string, id: string, label?: InventoryObjectLine): CountFormLine {
+export function countFormLine(source: CountSource | null, code: string, id: string, label?: InventoryObjectLine,
+  warehouse = source?.document.warehouseCode ?? ''): CountFormLine {
   countCodeKey(code)
-  assertCountSource(source)
+  if (source) assertCountSource(source)
+  if (!warehouse.trim()) throw new Error('请选择仓库')
   const result: CountFormLine = { id, labelCode: code.trim(), objectType: 'PRODUCT_LABEL',
-    materialCode: '', materialName: '', batchNo: '', unitCode: '', warehouseCode: source.document.warehouseCode,
+    materialCode: '', materialName: '', batchNo: '', unitCode: '', warehouseCode: warehouse,
     locationCode: '', availableQty: null, requestedQty: 0, fieldValues: {},
     countQuantityConfirmed: false, countPendingIdentity: true }
   if (!label) return result
@@ -51,26 +55,28 @@ export function countFormLine(source: CountSource, code: string, id: string, lab
       !['ACTIVE', 'USED'].includes(label.status) || !Number.isFinite(label.availableQty) || label.availableQty < 0) {
     throw new Error('标签当前不可用')
   }
-  const candidates = source.lines.filter(line => same(line.materialCode, label.materialCode) &&
+  if (!same(warehouse, label.warehouseCode)) throw new Error('标签不属于所选仓库')
+  if (!label.materialCode || !label.unitCode) throw new Error('标签资料需核对')
+  const candidates = source?.lines.filter(line => same(line.materialCode, label.materialCode) &&
     same(line.batchNo, label.batchNo) && same(line.warehouseCode, label.warehouseCode) &&
     same(line.locationCode, label.locationCode))
-  if (candidates.length !== 1) throw new Error(candidates.length ? '原单明细重复，请核对' : '标签不属于所选源单')
-  const line = candidates[0]!
-  if (line.requiresAuxiliaryUnit || !Array.isArray(line.freeItems) ||
-      line.freeItems.some(value => typeof value !== 'string' || value.trim())) {
+  if (candidates && candidates.length !== 1) throw new Error(candidates.length ? '原单明细重复，请核对' : '标签不属于所选源单')
+  const line = candidates?.[0]
+  if (line && (line.requiresAuxiliaryUnit || !Array.isArray(line.freeItems) ||
+      line.freeItems.some(value => typeof value !== 'string' || value.trim()))) {
     throw new Error('此明细的单位或自由项需核对')
   }
-  if (!line.unitCode || !same(line.unitCode, label.unitCode)) throw new Error('计量单位不一致')
-  return { ...result, materialCode: label.materialCode, materialName: label.materialName || line.materialName,
+  if (line && (!line.unitCode || !same(line.unitCode, label.unitCode))) throw new Error('计量单位不一致')
+  return { ...result, materialCode: label.materialCode, materialName: label.materialName || line?.materialName || '',
     batchNo: label.batchNo, unitCode: label.unitCode, warehouseCode: label.warehouseCode,
     locationCode: label.locationCode, unitName: label.unitName, warehouseName: label.warehouseName,
     locationName: label.locationName, availableQty: label.availableQty, countPendingIdentity: false }
 }
 
 export function requireCountForm(source: CountSource | null | undefined,
-  lines: Array<{ labelCode: string; requestedQty: number; countQuantityConfirmed?: boolean }>): void {
-  if (!source) throw new Error('请选择源单')
-  assertCountSource(source)
+  lines: Array<{ labelCode: string; requestedQty: number; countQuantityConfirmed?: boolean }>, warehouse = source?.document.warehouseCode ?? ''): void {
+  if (source) assertCountSource(source)
+  if (!warehouse.trim()) throw new Error('请选择仓库')
   if (!lines.length) throw new Error('请添加明细')
   if (lines.length > 1000 || new Set(lines.map(row => countCodeKey(row.labelCode))).size !== lines.length) {
     throw new Error('标签重复或明细过多')
@@ -94,6 +100,39 @@ export function applyCountChecks<T extends { labelCode: string; requestedQty: nu
       batchNo: line.batchNo, warehouseCode: line.warehouseCode, locationCode: line.locationCode,
       unitCode: line.unitCode, availableQty: check.balance ?? null, countPendingIdentity: false }
   })
+}
+
+export function applyDirectCountChecks<T extends { id: string; labelCode: string; requestedQty: number; countQuantityConfirmed?: boolean }>(
+  warehouse: string, lines: T[], checks: DirectCountCheck[]): Array<T & CountFormLine> {
+  const map = new Map(checks.map(row => [countCodeKey(row.code), row]))
+  if (checks.length !== lines.length || map.size !== lines.length) throw new Error('标签校验结果不完整')
+  return lines.map(row => {
+    const check = map.get(countCodeKey(row.labelCode))
+    if (!check || check.status !== 'MATCHED' || !check.label) throw new Error(check?.message || '标签资料需核对')
+    return { ...row, ...countFormLine(null, row.labelCode, row.id, check.label, warehouse),
+      requestedQty: row.requestedQty, countQuantityConfirmed: row.countQuantityConfirmed !== false }
+  })
+}
+
+export async function saveCountSourceDraft(source: CountSource, working: OutboundDocumentWorkingState | null) {
+  assertCountSource(source)
+  const previous = (working?.payload && typeof working.payload === 'object' ? working.payload : {}) as Record<string, unknown>
+  const previousLines = Array.isArray(previous.lines) ? previous.lines : []
+  const previousSource = previous.inventoryCountSource as CountSource | undefined
+  if (previousLines.length && previousSource?.document.id !== source.document.id) throw new Error('请先重置当前单据再更换源单')
+  const fields = (previous.headerFieldValues && typeof previous.headerFieldValues === 'object'
+    ? previous.headerFieldValues : {}) as Record<string, unknown>
+  const payload = { ...previous, inventoryCountSource: source,
+    inventoryCountContext: { accountId: source.accountId, databaseName: source.databaseName },
+    documentDate: source.document.documentDate?.slice(0, 10) ?? '',
+    warehouseCode: source.document.warehouseCode, documentDirection: 'BLUE',
+    sourceDocumentType: 'inventory-count', sourceDocumentTypeLabel: '盘点单', sourceDocumentNo: source.document.documentNo,
+    selectedSourceLines: countSourceLines(source), materialRequirements: [], overIssueTargets: {}, lines: previousLines,
+    headerFieldValues: { ...fields, 'header.inCategoryCode': source.document.inCategoryCode ?? '',
+      'header.outCategoryCode': source.document.outCategoryCode ?? '' } }
+  return saveOutboundDocument({ id: working?.documentId ?? undefined, documentType: 'inventory-count', payload,
+    summary: { documentDate: payload.documentDate, sourceTypeLabel: '盘点单', sourceDocumentNo: payload.sourceDocumentNo,
+      lineCount: previousLines.length, totalQty: previousLines.reduce((total, row) => total + (Number(row.requestedQty) || 0), 0) } })
 }
 
 export function legacyCountPayload(draft: CountDraft) {
