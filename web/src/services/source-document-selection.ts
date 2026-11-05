@@ -3,6 +3,7 @@ import { apiRequest } from '@/api/client'
 import { getRuntimeConfig } from '@/services/runtime-config'
 import { searchInventoryCounts } from '@/services/inventory-count-api'
 import type { CountSource } from '@/services/inventory-count-model'
+import { scopedStorageKey } from './storage-scope'
 
 export type OutboundDocumentType = BusinessDocumentType
 
@@ -235,15 +236,15 @@ export async function loadSourceDocumentLines(
 }
 
 export function saveSourceDocumentSelection(selection: SourceDocumentSelection): void {
-  sessionStorage.setItem(selectionKey, JSON.stringify(selection))
+  sessionStorage.setItem(scopedStorageKey(selectionKey), JSON.stringify(selection))
 }
 
 export function consumeSourceDocumentSelection(
   outboundDocumentType: OutboundDocumentType,
 ): SourceDocumentSelection | null {
-  const raw = sessionStorage.getItem(selectionKey)
+  const raw = sessionStorage.getItem(scopedStorageKey(selectionKey))
   if (!raw) return null
-  sessionStorage.removeItem(selectionKey)
+  sessionStorage.removeItem(scopedStorageKey(selectionKey))
 
   try {
     const selection = JSON.parse(raw) as Partial<SourceDocumentSelection>
@@ -259,15 +260,15 @@ export function consumeSourceDocumentSelection(
 }
 
 export function saveReturnRequirementSelection(selection: ReturnRequirementSelection): void {
-  sessionStorage.setItem(returnRequirementSelectionKey, JSON.stringify(selection))
+  sessionStorage.setItem(scopedStorageKey(returnRequirementSelectionKey), JSON.stringify(selection))
 }
 
 export function consumeReturnRequirementSelection(
   outboundDocumentType: OutboundDocumentType,
 ): MaterialRequirementLine | null {
-  const raw = sessionStorage.getItem(returnRequirementSelectionKey)
+  const raw = sessionStorage.getItem(scopedStorageKey(returnRequirementSelectionKey))
   if (!raw) return null
-  sessionStorage.removeItem(returnRequirementSelectionKey)
+  sessionStorage.removeItem(scopedStorageKey(returnRequirementSelectionKey))
 
   try {
     const selection = JSON.parse(raw) as Partial<ReturnRequirementSelection>

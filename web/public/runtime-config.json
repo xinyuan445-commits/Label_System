@@ -1,8 +1,8 @@
 {
   "environment": "development",
-  "apiBaseUrl": "http://172.16.1.159:9890",
-  "sourceDocumentApiBaseUrl": "http://172.16.1.159:9890",
-  "h5Version": "0.2.0-dev.88",
+  "apiBaseUrl": "http://172.16.1.159:9891",
+  "sourceDocumentApiBaseUrl": "http://172.16.1.159:9891",
+  "h5Version": "0.2.0-dev.89",
   "bridgeProtocol": "pda-bridge-v1",
   "enableMockLogin": false,
   "enableMockBusinessUploads": false,

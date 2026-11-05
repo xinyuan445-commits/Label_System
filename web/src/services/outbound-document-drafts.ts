@@ -11,6 +11,7 @@ import {
 } from '@/services/draft-database'
 import { getDeviceId, getDeviceName } from '@/services/device-identity'
 import { createUniqueId } from '@/utils/unique-id'
+import { scopedStorageKey } from './storage-scope'
 
 export type OutboundDocumentUploadStatus =
   | 'pending'
@@ -137,7 +138,7 @@ const editRequestKey = 'label-system:outbound-document-edit'
 const workingStateKey = 'label-system:outbound-document-working'
 const changeEventName = 'label-system:draft-changed'
 const hiddenDocumentRecordsKey = 'label-system:hidden-document-records:v1'
-let migrationPromise: Promise<void> | null = null
+const migrationPromises = new Map<string, Promise<void>>()
 
 function notifyChanged(): void {
   window.dispatchEvent(new Event(changeEventName))
@@ -145,7 +146,7 @@ function notifyChanged(): void {
 
 function readHiddenDocumentRecordIds(): Set<string> {
   try {
-    const value = JSON.parse(localStorage.getItem(hiddenDocumentRecordsKey) ?? '[]') as unknown
+    const value = JSON.parse(localStorage.getItem(scopedStorageKey(hiddenDocumentRecordsKey)) ?? '[]') as unknown
     return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [])
   } catch {
     return new Set()
@@ -153,7 +154,7 @@ function readHiddenDocumentRecordIds(): Set<string> {
 }
 
 function writeHiddenDocumentRecordIds(ids: Set<string>): void {
-  localStorage.setItem(hiddenDocumentRecordsKey, JSON.stringify([...ids].slice(-1000)))
+  localStorage.setItem(scopedStorageKey(hiddenDocumentRecordsKey), JSON.stringify([...ids].slice(-1000)))
 }
 
 function documentRecordIds(document: Pick<StoredOutboundDocument, 'id' | 'serverOperationId'>): string[] {
@@ -228,10 +229,12 @@ function normalizedDocument(document: Partial<StoredOutboundDocument>): StoredOu
 }
 
 async function ensureMigration(): Promise<void> {
-  if (migrationPromise) return migrationPromise
-  migrationPromise = (async () => {
-    if (localStorage.getItem(migrationMarkerKey)) return
-    const raw = localStorage.getItem(legacyStorageKey)
+  const scope = scopedStorageKey(migrationMarkerKey)
+  const existing = migrationPromises.get(scope)
+  if (existing) return existing
+  const migrationPromise = (async () => {
+    if (localStorage.getItem(scopedStorageKey(migrationMarkerKey))) return
+    const raw = localStorage.getItem(scopedStorageKey(legacyStorageKey))
     if (raw) {
       try {
         const parsed = JSON.parse(raw) as Array<Partial<StoredOutboundDocument>>
@@ -239,13 +242,14 @@ async function ensureMigration(): Promise<void> {
           ? parsed.map(normalizedDocument).filter((item): item is StoredOutboundDocument => item !== null)
           : []
         await writeDraftDocuments(documents)
-        localStorage.removeItem(legacyStorageKey)
+        localStorage.removeItem(scopedStorageKey(legacyStorageKey))
       } catch {
         return
       }
     }
-    localStorage.setItem(migrationMarkerKey, beijingTimestamp())
+    localStorage.setItem(scopedStorageKey(migrationMarkerKey), beijingTimestamp())
   })()
+  migrationPromises.set(scope, migrationPromise)
   return migrationPromise
 }
 
@@ -460,15 +464,15 @@ export async function importRemoteDocument(document: StoredOutboundDocument): Pr
 }
 
 export function requestOutboundDocumentEdit(request: OutboundDocumentEditRequest): void {
-  sessionStorage.setItem(editRequestKey, JSON.stringify(request))
+  sessionStorage.setItem(scopedStorageKey(editRequestKey), JSON.stringify(request))
 }
 
 export function clearOutboundDocumentEditRequest(): void {
-  sessionStorage.removeItem(editRequestKey)
+  sessionStorage.removeItem(scopedStorageKey(editRequestKey))
 }
 
 export function saveOutboundDocumentWorkingState(state: OutboundDocumentWorkingState): void {
-  sessionStorage.setItem(workingStateKey, JSON.stringify(state))
+  sessionStorage.setItem(scopedStorageKey(workingStateKey), JSON.stringify(state))
 }
 
 export function consumeOutboundDocumentWorkingState(
@@ -476,14 +480,14 @@ export function consumeOutboundDocumentWorkingState(
 ): OutboundDocumentWorkingState | null {
   const state = readOutboundDocumentWorkingState(documentType)
   if (!state) return null
-  sessionStorage.removeItem(workingStateKey)
+  sessionStorage.removeItem(scopedStorageKey(workingStateKey))
   return state
 }
 
 export function readOutboundDocumentWorkingState(
   documentType: OutboundDocumentType,
 ): OutboundDocumentWorkingState | null {
-  const raw = sessionStorage.getItem(workingStateKey)
+  const raw = sessionStorage.getItem(scopedStorageKey(workingStateKey))
   if (!raw) return null
   try {
     const state = JSON.parse(raw) as Partial<OutboundDocumentWorkingState>
@@ -515,15 +519,15 @@ export async function findPendingSourceLineConflicts(
 }
 
 export function clearOutboundDocumentWorkingState(): void {
-  sessionStorage.removeItem(workingStateKey)
+  sessionStorage.removeItem(scopedStorageKey(workingStateKey))
 }
 
 export function consumeOutboundDocumentEditRequest(
   documentType: OutboundDocumentType,
 ): OutboundDocumentEditRequest | null {
-  const raw = sessionStorage.getItem(editRequestKey)
+  const raw = sessionStorage.getItem(scopedStorageKey(editRequestKey))
   if (!raw) return null
-  sessionStorage.removeItem(editRequestKey)
+  sessionStorage.removeItem(scopedStorageKey(editRequestKey))
   try {
     const request = JSON.parse(raw) as Partial<OutboundDocumentEditRequest>
     if (request.documentType !== documentType || !request.documentId) return null
@@ -537,12 +541,12 @@ export async function migrateLegacyOutboundDraft(
   createSummary: (payload: unknown) => OutboundDocumentSummary,
 ): Promise<void> {
   await ensureMigration()
-  const raw = localStorage.getItem(legacyKey)
+  const raw = localStorage.getItem(scopedStorageKey(legacyKey))
   if (!raw) return
   try {
     const payload = JSON.parse(raw) as unknown
     await saveOutboundDocument({ documentType, summary: createSummary(payload), payload })
-    localStorage.removeItem(legacyKey)
+    localStorage.removeItem(scopedStorageKey(legacyKey))
   } catch {
     // 旧草稿保留在原位置，下次进入时继续尝试。
   }

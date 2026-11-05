@@ -78,12 +78,16 @@ if (-not $ready) {
 $apiStatus = '不可用'
 $gatewayStatus = '不可用'
 try {
-    $health = Invoke-RestMethod -Uri 'http://172.16.1.159:9890/api/v1/health' -TimeoutSec 3
+    $health = Invoke-RestMethod -Uri ($runtime.apiBaseUrl.TrimEnd('/') + '/api/v1/health') -TimeoutSec 3
     if ($health.data.status) { $apiStatus = [string]$health.data.status }
 } catch { }
 try {
-    $gateway = Invoke-RestMethod -Uri 'http://172.16.1.159:9880/api/v1/health' -TimeoutSec 3
-    if ($gateway.data.status) { $gatewayStatus = [string]$gateway.data.status }
+    if (([uri]$runtime.apiBaseUrl).Port -eq 9891) {
+        $gatewayStatus = '开发链9881（仅服务器本机）'
+    } else {
+        $gateway = Invoke-RestMethod -Uri 'http://172.16.1.159:9880/api/v1/health' -TimeoutSec 3
+        if ($gateway.data.status) { $gatewayStatus = [string]$gateway.data.status }
+    }
 } catch { }
 
 Write-Output "标签管理系统已启动：$url"

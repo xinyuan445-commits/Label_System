@@ -1,9 +1,11 @@
 import { getRuntimeConfig } from '@/services/runtime-config'
+import { scopedStorageKey } from './storage-scope'
 
 const SESSION_KEY_PREFIX = 'label-system.session'
 const LAST_LOGIN_KEY_PREFIX = 'label-system.last-login'
 let volatileSession: AuthSession | null = null
 let volatileLastLogin = ''
+let volatileScope = ''
 
 export interface AuthUser {
   id: string
@@ -19,14 +21,23 @@ export interface AuthSession {
 }
 
 function getSessionKey(): string {
-  return `${SESSION_KEY_PREFIX}.${getRuntimeConfig().environment}`
+  return scopedStorageKey(`${SESSION_KEY_PREFIX}.${getRuntimeConfig().environment}`)
 }
 
 function getLastLoginKey(): string {
-  return `${LAST_LOGIN_KEY_PREFIX}.${getRuntimeConfig().environment}`
+  return scopedStorageKey(`${LAST_LOGIN_KEY_PREFIX}.${getRuntimeConfig().environment}`)
+}
+
+function alignVolatileScope(): void {
+  const scope = getSessionKey()
+  if (scope === volatileScope) return
+  volatileScope = scope
+  volatileSession = null
+  volatileLastLogin = ''
 }
 
 export function readLastLoginUsername(): string {
+  alignVolatileScope()
   try {
     return window.localStorage.getItem(getLastLoginKey())?.trim() || volatileLastLogin
   } catch {
@@ -35,6 +46,7 @@ export function readLastLoginUsername(): string {
 }
 
 export function writeLastLoginUsername(username: string): void {
+  alignVolatileScope()
   const normalized = username.trim()
   if (!normalized) return
   volatileLastLogin = normalized
@@ -58,6 +70,7 @@ export function isAuthUser(value: unknown): value is AuthUser {
 }
 
 export function readStoredAuthSession(): AuthSession | null {
+  alignVolatileScope()
   let raw: string | null = null
   try {
     raw = window.localStorage.getItem(getSessionKey())
@@ -88,6 +101,7 @@ export function readStoredAuthSession(): AuthSession | null {
 }
 
 export function writeStoredAuthSession(session: AuthSession): void {
+  alignVolatileScope()
   volatileSession = session
   try {
     window.localStorage.setItem(getSessionKey(), JSON.stringify(session))
@@ -97,6 +111,7 @@ export function writeStoredAuthSession(session: AuthSession): void {
 }
 
 export function clearStoredAuthSession(): void {
+  alignVolatileScope()
   volatileSession = null
   try {
     window.localStorage.removeItem(getSessionKey())

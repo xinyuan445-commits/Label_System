@@ -31,10 +31,12 @@ function fixture(t, type = 'inventory-count') {
   const window = { addEventListener() {}, removeEventListener() {}, dispatchEvent() {}, scrollTo() {},
     confirm: () => true, setTimeout: () => 1, clearTimeout() {}, parent: null }
   window.parent = window
+  const runtime = { ...scope }
   const globals = { window, navigator: { onLine: true, userAgent: 'test-pda' },
     document: { activeElement: null, visibilityState: 'visible' }, HTMLElement: class {},
     localStorage: storage(), sessionStorage: storage(), indexedDB: new IDBFactory(),
     URL, URLSearchParams, Error, Event, console, setTimeout: () => 1, clearTimeout() {} }
+  window.localStorage=globals.localStorage
   const route = { params: { code: type }, query: {}, name: 'work-function' }
   let nativeScan, nativeBack, identity = 0
   const api = { lookups: 0, validations: 0, directValidations: 0, searches: 0, lastSearch: null,
@@ -61,7 +63,7 @@ function fixture(t, type = 'inventory-count') {
     }), onBeforeRouteLeave: fn => guards.push(fn) },
     '@/services/auth': { readSession: () => ({ user: { id: 'counter', name: '盘点员', roles: ['user'] } }) },
     '@/services/auth-session': { readStoredAuthSession: () => { throw new Error('Unexpected upload auth') } },
-    '@/services/runtime-config': { getRuntimeConfig: () => ({ ...scope, enableMockSourceDocuments: false }) },
+    '@/services/runtime-config': { getRuntimeConfig: () => ({ ...runtime, enableMockSourceDocuments: false }) },
     '@/services/shell-config': { playScanFeedback: value => feedback.push(value), setOfflineDocumentMode() {} },
     '@/utils/unique-id': { createUniqueId: prefix => prefix + '-test-' + (++identity) },
     '@/bridge/pda-bridge': { isMockPdaBridge: () => false, getPdaBridge: () => ({
@@ -142,7 +144,8 @@ function fixture(t, type = 'inventory-count') {
     for (const hook of unmounted) hook()
     await load('@/services/inventory-count-store').inventoryCountStore.close()
   })
-  return { load, mount, mountPicker, select, api, reference, globals, feedback, routes, route,
+  return { load, mount, mountPicker, select, api, reference, globals, feedback, routes, route, runtime,
+    realAuthSession: () => evaluate(readFileSync(path.join(root,'services/auth-session.ts'),'utf8'),path.join(root,'services/auth-session.ts')),
     nativeScan: value => nativeScan?.({ barcode: value }), nativeBack: () => nativeBack?.(),
     docs: () => load('@/services/outbound-document-drafts').listAllLocalDocuments() }
 }
@@ -155,6 +158,37 @@ async function scanAndConfirm(f, v, quantity = '0') {
   v.updateEditorField('body.quantity', quantity)
   await v.confirmEditingLine()
 }
+
+test('同一环境名切换008/888接口时，会话、草稿和选单隔离且旧数据保留', async t => {
+  const f=fixture(t), repo=f.load('@/services/outbound-document-drafts'), selections=f.load('@/services/source-document-selection')
+  const auth=f.realAuthSession()
+  f.runtime.apiBaseUrl='http://172.16.1.159:9890'
+  const session={token:'test-prod-token',user:{id:'counter',name:'测试',roles:[]},signedInAt:Date.now(),expiresAt:Date.now()+60000}
+  auth.writeStoredAuthSession(session)
+  const production=await repo.saveOutboundDocument({documentType:'inventory-count',summary:{documentDate:'2026-11-05',sourceTypeLabel:'盘点单',sourceDocumentNo:'PROD',lineCount:0,totalQty:0},payload:{remark:'008'}})
+  repo.saveOutboundDocumentWorkingState({documentType:'inventory-count',documentId:production.id,currentStep:1,payload:{remark:'008'}})
+  repo.requestOutboundDocumentEdit({documentType:'inventory-count',documentId:production.id})
+  selections.saveSourceDocumentSelection({outboundDocumentType:'inventory-count',sourceType:'inventory-count',sourceTypeLabel:'盘点单',documentNo:'PROD',documentDate:'2026-11-05',selectedLines:[],requirements:[]})
+  f.globals.localStorage.setItem('label-system:draft:inventory-count','{"remark":"old 008"}')
+  f.runtime.apiBaseUrl='http://172.16.1.159:9891'
+  assert.equal(auth.readStoredAuthSession(),null)
+  assert.equal((await f.docs()).length,0)
+  assert.equal(repo.readOutboundDocumentWorkingState('inventory-count'),null)
+  assert.equal(repo.consumeOutboundDocumentEditRequest('inventory-count'),null)
+  assert.equal(selections.consumeSourceDocumentSelection('inventory-count'),null)
+  await repo.migrateLegacyOutboundDraft('inventory-count','label-system:draft:inventory-count',()=>({documentDate:'',sourceTypeLabel:'',sourceDocumentNo:'',lineCount:0,totalQty:0}))
+  assert.equal((await f.docs()).length,0)
+  auth.writeStoredAuthSession({...session,token:'test-dev-token'})
+  await repo.saveOutboundDocument({id:production.id,documentType:'inventory-count',summary:production.summary,payload:{remark:'888'}})
+  assert.equal((await f.docs())[0].payload.remark,'888')
+  f.runtime.apiBaseUrl='http://172.16.1.159:9890'
+  assert.equal(auth.readStoredAuthSession().token,'test-prod-token')
+  assert.equal((await f.docs())[0].payload.remark,'008')
+  assert.equal(repo.readOutboundDocumentWorkingState('inventory-count').payload.remark,'008')
+  assert.equal(repo.consumeOutboundDocumentEditRequest('inventory-count').documentId,production.id)
+  assert.equal(selections.consumeSourceDocumentSelection('inventory-count').documentNo,'PROD')
+  assert.equal(f.globals.localStorage.getItem('label-system:draft:inventory-count'),'{"remark":"old 008"}')
+})
 
 test('盘点和材料出库共用同一制单组件；盘点选单渲染没有合并/明细或选单类型', async t => {
   const f = fixture(t)

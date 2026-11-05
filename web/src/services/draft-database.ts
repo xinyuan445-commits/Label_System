@@ -1,8 +1,9 @@
 import { getRuntimeConfig } from '@/services/runtime-config'
+import { scopedStorageKey } from './storage-scope'
 import type { StoredOutboundDocument } from '@/services/outbound-document-drafts'
 
 const storeName = 'documents'
-let databasePromise: Promise<IDBDatabase> | null = null
+const databases = new Map<string, Promise<IDBDatabase>>()
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -20,9 +21,11 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 }
 
 function openDatabase(): Promise<IDBDatabase> {
-  if (databasePromise) return databasePromise
-  databasePromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(`label-system-drafts-${getRuntimeConfig().environment}`, 1)
+  const name = scopedStorageKey(`label-system-drafts-${getRuntimeConfig().environment}`)
+  const existing = databases.get(name)
+  if (existing) return existing
+  const databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(name, 1)
     request.onupgradeneeded = () => {
       const database = request.result
       if (!database.objectStoreNames.contains(storeName)) {
@@ -35,6 +38,7 @@ function openDatabase(): Promise<IDBDatabase> {
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('本地草稿库打开失败'))
   })
+  databases.set(name, databasePromise)
   return databasePromise
 }
 
