@@ -87,6 +87,11 @@ function fixture(t, type = 'inventory-count') {
     '@/services/reference-data': Object.fromEntries(['fetchRdStyles','fetchWarehousePositions','fetchDepartments',
       'fetchCurrencies','fetchPurchaseTypes','fetchSalesTypes','searchMaterials'].map(name => [name, async () => []]).concat([
         ['fetchRdStyles', async () => reference.styles],
+        ['fetchWarehousePositions', async () => [
+          {warehouseCode:'W1',warehouseName:'仓一',positionCode:'L1',positionName:'货位一'},
+          {warehouseCode:'W1',warehouseName:'仓一',positionCode:'L3',positionName:'货位三'},
+          {warehouseCode:'W2',warehouseName:'仓二',positionCode:'L2',positionName:'货位二'},
+        ]],
       ])),
     '@/api/client': { ApiError: Error, apiRequest: async (path, options) => {
       if (options?.method === 'PUT' && path.startsWith('/api/v1/admin/settings/')) {
@@ -169,6 +174,7 @@ async function scanAndConfirm(f, v, quantity = '0') {
   assert.notEqual(v.editingLine.value, null)
   assert.equal(v.editorFieldValue(v.editingLine.value, 'body.quantity'), f.globals.navigator.onLine ? 10 : '')
   v.updateEditorField('body.quantity', quantity)
+  if (v.countManagesLocations.value && !v.editingLine.value.locationCode) v.updateEditorField('body.locationCode', 'L1')
   await v.confirmEditingLine()
 }
 
@@ -179,7 +185,8 @@ test('盘点完成自动上传遵循开关，只提交一次且不自动审核',
   v.documentPolicy.value.autoApproveAfterUpload = true
   const pending = deferred(); f.api.upload = async () => pending.promise
   const first = v.finishDocument()
-  while (f.api.uploads.length === 0) await new Promise(resolve => setImmediate(resolve))
+  for(let i=0;i<1000 && f.api.uploads.length===0;i++) await new Promise(resolve => setImmediate(resolve))
+  assert.equal(f.api.uploads.length, 1)
   await v.finishDocument()
   assert.equal(f.api.uploads.length, 1)
   assert.equal(f.api.uploads[0].autoApprove, false)
@@ -459,11 +466,11 @@ test('无原单离线可保存，联网校验失败保留输入；仓库锁定�
   f.load('@/services/outbound-document-drafts').requestOutboundDocumentEdit({ documentType: 'inventory-count', documentId: doc.id })
   f.globals.navigator.onLine = true
   const restored = await f.mount(); await restored.loadReferenceData()
-  f.api.directValidate = async () => ({ canSubmit: false, items: [{code, status: 'OUTSIDE_WAREHOUSE', message: '标签不属于所选仓库'}] })
+  f.api.directValidate = async () => ({ canSubmit: false, items: [{code, status: 'LABEL_CHANGED', message: '标签数据已变化'}] })
   const routeCount=f.routes.length
   await restored.finishDocument()
   assert.equal(f.routes.length, routeCount); assert.equal(restored.lines.value[0].requestedQty, 0)
-  assert.equal(restored.completionError.value, '标签不属于所选仓库')
+  assert.equal(restored.completionError.value, '标签数据已变化')
   restored.resetDocument()
   restored.warehouseCode.value = 'W2'; await restored.handleWarehouseChange()
   assert.equal(restored.warehouseCode.value, 'W2'); assert.equal(restored.lines.value.length, 0)
@@ -472,6 +479,7 @@ test('无原单离线可保存，联网校验失败保留输入；仓库锁定�
 
 test('仓库货位标志独立于货位列表；原单是否盘货位不照抄仓库标志', async t => {
   const f=fixture(t),v=await f.mount();await v.loadReferenceData()
+  v.warehousePositionOptions.value=[]
   assert.equal(v.warehousePositionOptions.value.length,0)
   v.warehouseCode.value='W1';await v.handleWarehouseChange()
   assert.equal(v.countByLocation.value,true);assert.equal(v.headerValue('header.countByLocation'),'1')
@@ -497,11 +505,12 @@ test('快速切仓只接受最后响应，查询失败及未知状态不伪装�
   assert.equal(v.countByLocation.value,null);v.goToScanStep();assert.equal(v.currentStep.value,1)
 })
 
-test('盘货位时缺货位拒绝；不盘货位和离线恢复保留明确的否', async t => {
+test('盘点原标签缺货位时选择目标货位；不盘货位和离线恢复保留明确的否', async t => {
   const f=fixture(t),v=await f.mount();await v.loadReferenceData()
   v.warehouseCode.value='W1';await v.handleWarehouseChange();v.goToScanStep()
   f.api.lookup=async()=>({pallet:null,lines:[{...label(),locationCode:''}]})
-  await v.addBarcode(code);assert.equal(v.editingLine.value,null);assert.equal(f.feedback.at(-1),'error')
+  await v.addBarcode(code);assert.notEqual(v.editingLine.value,null)
+  assert.equal(v.lineEditError(v.editingLine.value),'请选择盘点货位');v.cancelLineConfirmation()
   v.returnToHeaderStep();v.warehouseCode.value='W2';await v.handleWarehouseChange()
   f.api.lookup=async()=>({pallet:null,lines:[{...label(),warehouseCode:'W2',locationCode:''}]})
   await scanAndConfirm(f,v,'1')
@@ -605,9 +614,11 @@ test('材料出库原有选项、数量校验和表单编辑不受盘点影响',
   assert.equal(v.fieldRequired('header.departmentCode'), true)
 })
 
-test('盘点身份检查不接受跨仓、重复行或辅单位，当前余额可作盘点默认值', async t => {
+test('盘点跨仓标签可选择盘点位置，重复原单行和辅单位仍需核对', async t => {
   const f = fixture(t), helper = f.load('@/services/inventory-count-documents')
-  assert.throws(() => helper.countFormLine(source(), code, 'x', { ...label(), warehouseCode: 'W2' }))
+  const cross = helper.countFormLine(source(), code, 'x', { ...label(), warehouseCode: 'W2', locationCode: 'L2' })
+  assert.equal(cross.warehouseCode,'W1'); assert.equal(cross.locationCode,'')
+  assert.equal(cross.countOriginalWarehouseCode,'W2'); assert.equal(cross.countOriginalLocationCode,'L2')
   const duplicate = source(); duplicate.lines.push({ ...duplicate.lines[0], id: 42 }); duplicate.document.lineCount = 2
   assert.throws(() => helper.countFormLine(duplicate, code, 'x', label()))
   const aux = source(); aux.lines[0].requiresAuxiliaryUnit = true
@@ -616,6 +627,27 @@ test('盘点身份检查不接受跨仓、重复行或辅单位，当前余额�
   assert.equal(row.requestedQty, 10); helper.requireCountForm(source(), [row])
   row.countQuantityConfirmed = false
   assert.throws(() => helper.requireCountForm(source(), [row]))
+})
+
+test('跨仓扫码不拒绝，有原单和无原单均由用户选择本单货位并保留原位置', async t => {
+  const f = fixture(t), v = await f.select()
+  f.api.lookup = async () => ({pallet:null,lines:[{...label(),warehouseCode:'W2',locationCode:'L2'}]})
+  v.goToScanStep(); await v.addBarcode(code)
+  assert.notEqual(v.editingLine.value,null)
+  assert.equal(v.editingLine.value.warehouseCode,'W1')
+  assert.equal(v.editingLine.value.locationCode,'')
+  assert.equal(v.lineEditError(v.editingLine.value),'请选择盘点货位')
+  assert.deepEqual(Array.from(v.editorLocationSelectOptions.value,x=>x.value),['L1'])
+  v.updateEditorField('body.locationCode','L1'); v.updateEditorField('body.quantity','8')
+  await v.confirmEditingLine()
+  const row=(await f.docs())[0].payload.lines[0]
+  assert.equal(row.countOriginalWarehouseCode,'W2'); assert.equal(row.countOriginalLocationCode,'L2')
+  assert.equal(row.warehouseCode,'W1'); assert.equal(row.locationCode,'L1'); assert.equal(row.requestedQty,8)
+  const direct=f.load('@/services/inventory-count-documents').countFormLine(null,code,'d',
+    {...label(),warehouseCode:'W2',locationCode:'L2'},'W1',true,'L3')
+  assert.equal(direct.locationCode,'L3'); assert.equal(direct.countOriginalLocationCode,'L2')
+  const unlocated=f.load('@/services/inventory-count-documents').countFormLine(null,code,'u',label(),'W2',false)
+  assert.equal(unlocated.warehouseCode,'W2'); assert.equal(unlocated.locationCode,'')
 })
 
 test('盘点单位跟随原单物料，不比较旧标签的单位文字或编码', async t => {

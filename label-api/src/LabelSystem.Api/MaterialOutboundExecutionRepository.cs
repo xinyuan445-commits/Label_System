@@ -935,7 +935,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             throw new InvalidOperationException("托盘盘点数量无效。");
         var flowId = await InsertStateFlowAsync(
             connection, transaction, operation, line, before, after - before, after,
-            line.WarehouseCode, line.LocationCode, line.WarehouseCode, line.LocationCode,
+            line.WarehouseCode, line.LocationCode, InventoryCountUploadRules.TargetWarehouse(line), InventoryCountUploadRules.TargetLocation(line),
             previousFlowId, cancellationToken);
         var status = line.ObjectType == "PRODUCT_LABEL"
             ? (after == 0 ? "USED" : "ACTIVE")

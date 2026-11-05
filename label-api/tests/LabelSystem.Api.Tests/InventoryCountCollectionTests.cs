@@ -173,12 +173,25 @@ public sealed class InventoryCountCollectionTests
         Assert.Equal("MATCHED", good.Status);
         Assert.Equal(0m, good.Label!.AvailableQty);
         Assert.Equal("USED", good.Label.Status);
-        Assert.Equal("OUTSIDE_WAREHOUSE", InventoryCountRules.MatchDirect("W2", Observation(), Label()).Status);
+        Assert.Equal("MATCHED", InventoryCountRules.MatchDirect("W2", Observation(), Label()).Status);
         Assert.Equal("LABEL_INVALID", InventoryCountRules.MatchDirect("W1", Observation(), Label() with { Balance = -1m }).Status);
         Assert.Equal("LABEL_INVALID", InventoryCountRules.MatchDirect("W1", Observation(), Label() with { UnitCode = "" }).Status);
         Assert.Equal("LABEL_INVALID", InventoryCountRules.MatchDirect("W1", Observation(), Label() with {
             Anomalies = [new("INVALID", "invalid")] }).Status);
         Assert.Equal("QUANTITY_REQUIRED", InventoryCountRules.MatchDirect("W1", Observation(null), Label()).Status);
+    }
+
+    [Fact]
+    public void CountUsesSelectedPositionWithoutRequiringLabelsOldWarehouseOrLocation()
+    {
+        var old = Label() with { WarehouseCode = "OTHER", LocationCode = "OLD" };
+        Assert.Equal("LOCATION_REQUIRED", InventoryCountRules.Match(Source(), Observation(), old).Status);
+        var result = InventoryCountRules.Match(Source(), new(Observation().Code, "5", "L1"), old);
+        Assert.Equal("MATCHED", result.Status); Assert.Equal("L1", result.LocationCode);
+        Assert.Equal("OTHER", result.OriginalWarehouseCode); Assert.Equal("OLD", result.OriginalLocationCode);
+        Assert.Equal("MATCHED", InventoryCountRules.MatchDirect("W1", new(Observation().Code, "5", "NEW"), old, true).Status);
+        Assert.Equal("LOCATION_REQUIRED", InventoryCountRules.MatchDirect("W1", Observation(), old, true).Status);
+        Assert.Equal("MATCHED", InventoryCountRules.MatchDirect("W1", Observation(), old, false).Status);
     }
 
     [Fact]

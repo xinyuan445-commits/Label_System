@@ -19,12 +19,12 @@ public sealed record InventoryCountSourceLine(long Id, int LineNo, string Materi
     decimal? ActualQuantity, IReadOnlyList<string> FreeItems, bool RequiresAuxiliaryUnit, string? UnitName = null);
 public sealed record InventoryCountSource(string AccountId, string DatabaseName, InventoryCountHeader Document,
     IReadOnlyList<InventoryCountSourceLine> Lines, string Fingerprint = "");
-public sealed record InventoryCountObservation(string Code, string? Quantity);
+public sealed record InventoryCountObservation(string Code, string? Quantity, string? TargetLocationCode = null);
 public sealed record InventoryCountValidateRequest(string AccountId, string DatabaseName,
     string SourceFingerprint, IReadOnlyList<InventoryCountObservation> Observations);
 public sealed record InventoryCountObservationResult(string Code, string Status, string Message,
     long? SourceLineId = null, string? MaterialName = null, decimal? Balance = null, long? LatestFlowId = null,
-    string? LocationCode = null);
+    string? LocationCode = null, string? OriginalWarehouseCode = null, string? OriginalLocationCode = null);
 public sealed record InventoryCountValidationResult(string SourceFingerprint,
     IReadOnlyList<InventoryCountObservationResult> Items, bool CanSubmit = false);
 public sealed record InventoryCountDirectValidateRequest(string AccountId, string DatabaseName, string WarehouseCode,
@@ -84,11 +84,13 @@ public static partial class InventoryCountRules
             snapshot.Balance is null or < 0 || snapshot.LatestFlowId is null or <= 0 ||
             snapshot.Anomalies is null || snapshot.Anomalies.Count > 0)
             return new(code, "LABEL_INVALID", "标签待核对。");
+        var targetLocation = observation.TargetLocationCode ??
+            (Same(source.Document.WarehouseCode, snapshot.WarehouseCode) ? snapshot.LocationCode : null);
+        if (source.Document.WarehousePositionManaged == true && string.IsNullOrWhiteSpace(targetLocation))
+            return new(code, "LOCATION_REQUIRED", "请选择盘点货位。");
         var candidates = source.Lines.Where(line => Same(line.MaterialCode, snapshot.MaterialCode) &&
-            Same(line.BatchNo, snapshot.BatchNo) && Same(line.WarehouseCode, snapshot.WarehouseCode) &&
-            (source.Document.CountByLocation == false || Same(line.LocationCode, snapshot.LocationCode))).ToArray();
-        if (source.Document.CountByLocation == true && string.IsNullOrWhiteSpace(snapshot.LocationCode))
-            return new(code, "LOCATION_REQUIRED", "标签缺少货位，请核对。");
+            Same(line.BatchNo, snapshot.BatchNo) &&
+            (source.Document.CountByLocation == false || Same(line.LocationCode, targetLocation))).ToArray();
         if (candidates.Length == 0) return new(code, "OUTSIDE_SOURCE", "标签不属于此盘点单。");
         if (candidates.Length > 1) return new(code, "AMBIGUOUS_SOURCE", "原单有重复明细，请核对。");
         var match = candidates[0];
@@ -96,7 +98,8 @@ public static partial class InventoryCountRules
             return new(code, "IDENTITY_NOT_SUPPORTED", "此明细的单位或自由项需另行核对。");
         if (!TryQuantity(observation.Quantity, out _))
             return new(code, "QUANTITY_REQUIRED", "请输入有效实盘数量。", match.Id, match.MaterialName);
-        return new(code, "MATCHED", "", match.Id, match.MaterialName, snapshot.Balance, snapshot.LatestFlowId, snapshot.LocationCode);
+        return new(code, "MATCHED", "", match.Id, match.MaterialName, snapshot.Balance, snapshot.LatestFlowId,
+            source.Document.WarehousePositionManaged == true ? targetLocation : "", snapshot.WarehouseCode, snapshot.LocationCode);
     }
 
     public static InventoryCountDirectCheck MatchDirect(string warehouse, InventoryCountObservation observation,
@@ -108,8 +111,8 @@ public static partial class InventoryCountRules
             snapshot.Anomalies is null || snapshot.Anomalies.Count > 0 ||
             string.IsNullOrWhiteSpace(snapshot.MaterialCode) || string.IsNullOrWhiteSpace(snapshot.UnitCode))
             return new(code, "LABEL_INVALID", "标签待核对。");
-        if (!Same(warehouse, snapshot.WarehouseCode)) return new(code, "OUTSIDE_WAREHOUSE", "标签不属于所选仓库。");
-        if (countByLocation && string.IsNullOrWhiteSpace(snapshot.LocationCode)) return new(code, "LOCATION_REQUIRED", "标签缺少货位，请核对。");
+        var targetLocation = observation.TargetLocationCode ?? (Same(warehouse, snapshot.WarehouseCode) ? snapshot.LocationCode : null);
+        if (countByLocation && string.IsNullOrWhiteSpace(targetLocation)) return new(code, "LOCATION_REQUIRED", "请选择盘点货位。");
         if (!TryQuantity(observation.Quantity, out _)) return new(code, "QUANTITY_REQUIRED", "请输入有效实盘数量。");
         return new(code, "MATCHED", "", new(snapshot.Code, "PRODUCT_LABEL", snapshot.MaterialCode,
             snapshot.MaterialName ?? snapshot.MaterialCode, snapshot.BatchNo ?? "", snapshot.UnitCode,

@@ -98,6 +98,8 @@ interface OutboundLine {
   returnByLabel?: boolean
   countQuantityConfirmed?: boolean
   countPendingIdentity?: boolean
+  countOriginalWarehouseCode?: string
+  countOriginalLocationCode?: string
 }
 
 interface MaterialOutboundSubmissionLine {
@@ -180,6 +182,7 @@ const countByLocation = computed<boolean | null>(() => {
     typeof warehouse.positionManaged === 'boolean' ? warehouse.positionManaged : null
 })
 const countSaving = ref(false), countLookupBusy = ref(false)
+const countManagesLocations = computed(() => inventoryCountSource.value?.document.warehousePositionManaged ?? countByLocation.value === true)
 const countVisibleLines = ref(30)
 const customerCode = ref('')
 const warehouseCode = ref('')
@@ -286,7 +289,8 @@ const editingRedProductReturn = computed(() =>
   editingLine.value?.returnByLabel === true,
 )
 const editableBodyFields = computed(() => documentFields.value.filter((field) => {
-  if (props.documentType === 'inventory-count') return field.key === 'body.quantity'
+  if (props.documentType === 'inventory-count') return field.key === 'body.quantity' ||
+    (field.key === 'body.locationCode' && countManagesLocations.value)
   if (field.area !== 'body') return false
   const editableReturnPosition = editingRedProductReturn.value &&
     returnPositionFieldKeys.has(field.key)
@@ -299,6 +303,7 @@ const quantityVisibleInEditor = computed(() =>
 const readonlyEditorFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'body' && fieldVisible(field.key) &&
     inventoryIdentityFieldKeys.has(field.key) &&
+    !(props.documentType === 'inventory-count' && field.key === 'body.locationCode' && countManagesLocations.value) &&
     !(editingRedProductReturn.value && returnPositionFieldKeys.has(field.key)),
 ))
 const returnRequirementTargets = computed(() => Object.fromEntries(
@@ -420,12 +425,18 @@ const sourceLocationSelectOptions = computed<SearchSelectOption[]>(() =>
 const targetLocationSelectOptions = computed<SearchSelectOption[]>(() =>
   targetLocationOptions.value.map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
 )
-const editorLocationSelectOptions = computed<SearchSelectOption[]>(() =>
-  warehousePositionOptions.value.filter((item) =>
-    item.positionCode && (!editingLine.value?.warehouseCode ||
-      item.warehouseCode === editingLine.value.warehouseCode),
-  ).map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' })),
-)
+const editorLocationSelectOptions = computed<SearchSelectOption[]>(() => {
+  if (props.documentType === 'inventory-count' && inventoryCountSource.value && countByLocation.value === true) {
+    const candidates = inventoryCountSource.value.lines.filter(line => !editingLine.value?.materialCode ||
+      (line.materialCode === editingLine.value.materialCode && line.batchNo === editingLine.value.batchNo))
+    return [...new Set(candidates.map(line => line.locationCode).filter(Boolean))].map(code => ({ value: code,
+      label: warehousePositionOptions.value.find(item => item.warehouseCode === warehouseCode.value && item.positionCode === code)?.positionName || code }))
+  }
+  return warehousePositionOptions.value.filter((item) =>
+    item.positionCode && (props.documentType === 'inventory-count' ? item.warehouseCode === warehouseCode.value :
+      (!editingLine.value?.warehouseCode || item.warehouseCode === editingLine.value.warehouseCode)),
+  ).map((item) => ({ value: item.positionCode!, label: item.positionName ?? '' }))
+})
 const editorTargetLocationSelectOptions = computed<SearchSelectOption[]>(() => {
   const selectedWarehouse = String(
     editingLine.value?.fieldValues['body.targetWarehouseCode'] ||
@@ -781,7 +792,12 @@ function missingRequiredBodyField(line: OutboundLine): DocumentFieldDefinition |
 
 function lineEditError(line: OutboundLine): string {
   if (props.documentType === 'inventory-count') {
-    try { requireCountForm(inventoryCountSource.value, [line], warehouseCode.value); return '' }
+    try {
+      requireCountForm(inventoryCountSource.value, [line], warehouseCode.value)
+      if (countManagesLocations.value && (!line.locationCode ||
+          !editorLocationSelectOptions.value.some(item => item.value === line.locationCode))) return '请选择盘点货位'
+      return ''
+    }
     catch (error) { return error instanceof Error ? error.message : '盘点明细无效' }
   }
   const missing = missingRequiredBodyField(line)
@@ -1688,6 +1704,15 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
           : {},
       }))
     : []
+  if (props.documentType === 'inventory-count') {
+    lines.value = lines.value.map(line => ({ ...line,
+      countOriginalWarehouseCode: line.countOriginalWarehouseCode ?? line.warehouseCode,
+      countOriginalLocationCode: line.countOriginalLocationCode ?? line.locationCode,
+      warehouseCode: warehouseCode.value,
+      locationCode: countManagesLocations.value
+        ? (line.countOriginalWarehouseCode === undefined && line.warehouseCode !== warehouseCode.value ? '' : line.locationCode) : '',
+    }))
+  }
   if (props.documentType === 'material-outbound' && selectedSourceLines.value.length > 0) {
     outboundCategoryCode.value = materialOutboundSourceCategoryCode
   }
@@ -1752,7 +1777,7 @@ async function saveCompletedDocument(): Promise<StoredOutboundDocument | null> {
   if (props.documentType === 'inventory-count' && navigator.onLine) {
     const before = snapshotDraft()
     const source = inventoryCountSource.value
-    const observations = lines.value.map(line => ({ code: line.labelCode, quantity: String(line.requestedQty) }))
+    const observations = lines.value.map(line => ({ code: line.labelCode, quantity: String(line.requestedQty), targetLocationCode: line.locationCode }))
     if (source) {
       const checked = await validateInventoryCountItems(source, observations)
       if (snapshotDraft() !== before) throw new Error('单据有变化，请重试')
@@ -2369,7 +2394,7 @@ onBeforeRouteLeave((to) => {
           </label>
 
           <label v-for="field in headerExtraFields" :key="field.key" class="field">
-            <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
+            <span><i v-if="fieldRequired(field.key)">*</i>{{ documentType === 'inventory-count' && field.key === 'body.locationCode' ? '盘点货位' : field.label }}</span>
             <SearchSelect
               v-if="field.key === 'header.countByLocation'"
               :model-value="String(headerValue(field.key))"
@@ -2608,7 +2633,7 @@ onBeforeRouteLeave((to) => {
             />
           </label>
           <label v-for="field in editableBodyFields" :key="field.key" class="field">
-            <span><i v-if="fieldRequired(field.key)">*</i>{{ field.label }}</span>
+            <span><i v-if="fieldRequired(field.key)">*</i>{{ documentType === 'inventory-count' && field.key === 'body.locationCode' ? '盘点货位' : field.label }}</span>
             <SearchSelect
               v-if="field.key === 'body.warehouseCode'"
               :model-value="editingLine.warehouseCode"

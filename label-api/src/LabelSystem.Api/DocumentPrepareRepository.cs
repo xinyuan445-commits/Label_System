@@ -322,6 +322,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             (string.IsNullOrWhiteSpace(actualWarehouse) ||
              !string.Equals(actualWarehouse, request.Header.WarehouseCode?.Trim(), StringComparison.OrdinalIgnoreCase)))
             throw new ApiException(StatusCodes.Status409Conflict, "WAREHOUSE_CHANGED", $"当前仓库不一致：{code}");
+        if (definition.DocumentType == "inventory-count") return;
         if (!string.IsNullOrWhiteSpace(request.Header.SourceLocationCode) &&
             !string.Equals(actualLocation, request.Header.SourceLocationCode.Trim(), StringComparison.OrdinalIgnoreCase))
             throw new ApiException(StatusCodes.Status409Conflict, "LOCATION_CHANGED", $"当前货位不一致：{code}");
@@ -695,7 +696,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         var value = line.TargetWarehouseCode ??
                     AdditionalText(line.AdditionalFields, "targetWarehouseCode") ??
                     request.Header.TargetWarehouseCode;
-        if (definition.DocumentType == "location-adjustment")
+        if (definition.DocumentType == "inventory-count")
+            value = request.Header.WarehouseCode;
+        else if (definition.DocumentType == "location-adjustment")
             value ??= currentWarehouse;
         else if (definition.DocumentType == "purchase-inbound")
             value ??= request.Header.WarehouseCode;

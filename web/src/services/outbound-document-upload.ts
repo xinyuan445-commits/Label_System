@@ -49,6 +49,8 @@ interface MaterialOutboundPayload {
 }
 
 interface InventoryDocumentLine {
+  countOriginalWarehouseCode?: string
+  countOriginalLocationCode?: string
   labelCode: string
   objectType: 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
   sourcePalletCode?: string
@@ -155,10 +157,10 @@ function createInventoryPrepareLines(payload: InventoryDocumentPayload, count = 
     additionalFields: line.fieldValues ?? {},
     materialName: line.materialName || null,
     batchNo: line.batchNo || null,
-    warehouseCode: line.warehouseCode || null,
-    locationCode: line.locationCode || null,
-    targetWarehouseCode: line.fieldValues?.['body.targetWarehouseCode'] || null,
-    targetLocationCode: line.fieldValues?.['body.targetLocationCode'] || null,
+    warehouseCode: (count ? line.countOriginalWarehouseCode ?? line.warehouseCode : line.warehouseCode) || null,
+    locationCode: (count ? line.countOriginalLocationCode ?? line.locationCode : line.locationCode) || null,
+    targetWarehouseCode: count ? payload.warehouseCode : line.fieldValues?.['body.targetWarehouseCode'] || null,
+    targetLocationCode: count ? line.locationCode ?? '' : line.fieldValues?.['body.targetLocationCode'] || null,
     requiresBatch: line.requiresBatch === true,
   }))
   if (count) return baseLines

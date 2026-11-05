@@ -23,6 +23,8 @@ namespace U8Gateway.U8.Documents
         public string BatchNo { get; set; }
         public string WarehouseCode { get; set; }
         public string LocationCode { get; set; }
+        public string TargetWarehouseCode { get; set; }
+        public string TargetLocationCode { get; set; }
         public decimal Balance { get; set; }
         public long LatestFlowId { get; set; }
         public decimal ActualQuantity { get; set; }
@@ -129,6 +131,35 @@ namespace U8Gateway.U8.Documents
 
         private static bool SameCount(string a, string b) => string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 
+        private static string CountTargetWarehouse(CountSaveLabel label) => label.TargetWarehouseCode ?? label.WarehouseCode;
+        private static string CountTargetLocation(CountSaveLabel label) => label.TargetWarehouseCode == null ? label.LocationCode : label.TargetLocationCode;
+
+        private static void ValidateCountTargets(U8GatewayRuntimeOptions options, CountSaveLabel[] labels, string warehouse)
+        {
+            var target = CountReader(options).GetWarehouse(warehouse);
+            if (target == null) throw new InvalidOperationException("盘点仓库需核对。");
+            using (var db = new SqlConnection(ConnectionString(options)))
+            {
+                db.Open();
+                if (labels.Any(l => !SameCount(CountTargetWarehouse(l), warehouse))) throw new InvalidOperationException("盘点目标仓库不一致。");
+                var locations = labels.Select(l => CountTargetLocation(l) ?? "").Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                if (target.PositionManaged == true)
+                {
+                    if (locations.Any(string.IsNullOrWhiteSpace)) throw new InvalidOperationException("请选择盘点仓库的有效货位。");
+                    using (var check = new SqlCommand())
+                    {
+                        check.Connection = db;
+                        check.Parameters.AddWithValue("@wh", warehouse);
+                        for (int i = 0; i < locations.Length; i++) check.Parameters.AddWithValue("@p" + i, locations[i]);
+                        check.CommandText = "SELECT COUNT(DISTINCT cPosCode) FROM dbo.Position WHERE cWhCode=@wh AND cPosCode IN (" +
+                            string.Join(",", Enumerable.Range(0, locations.Length).Select(i => "@p" + i)) + ");";
+                        if (Convert.ToInt32(check.ExecuteScalar()) != locations.Length) throw new InvalidOperationException("请选择盘点仓库的有效货位。");
+                    }
+                }
+                else if (locations.Any(l => !string.IsNullOrWhiteSpace(l))) throw new InvalidOperationException("盘点仓库不管理货位。");
+            }
+        }
+
         private static CountSaveLabel[] PreviousCountLabels(DocumentOperationRequest request)
         {
             object raw;
@@ -156,15 +187,16 @@ namespace U8Gateway.U8.Documents
                 current = reader.Get(id);
                 InventoryCountSaveRules.CheckSource(source, current);
                 var labels = ValidateCountLabels(options, execution.Request);
+                ValidateCountTargets(options, labels, current.Document.WarehouseCode);
                 var previous = PreviousCountLabels(execution.Request);
                 var expectedPatches = labels.GroupBy(l => new { l.MaterialCode, l.BatchNo,
-                    Location = source.Document.CountByLocation == true ? l.LocationCode ?? "" : "" }).ToArray();
+                    Location = source.Document.CountByLocation == true ? CountTargetLocation(l) ?? "" : "" }).ToArray();
                 if (expectedPatches.Length != execution.Request.Lines.Count) throw new InvalidOperationException("盘点汇总不一致。");
                 foreach (var group in expectedPatches)
                 {
                     var matches = current.Lines.Where(l => SameCount(l.MaterialCode, group.Key.MaterialCode) && SameCount(l.BatchNo, group.Key.BatchNo) &&
                         (source.Document.CountByLocation != true || SameCount(l.LocationCode, group.Key.Location))).ToArray();
-                    if (matches.Length != 1 || group.Any(l => !SameCount(l.WarehouseCode, current.Document.WarehouseCode)))
+                    if (matches.Length != 1)
                         throw new InvalidOperationException("标签不属于原盘点单。");
                     var patch = execution.Request.Lines.SingleOrDefault(l => Convert.ToInt64(l["autoid"]) == matches[0].Id);
                     var prior = previous.Where(l => SameCount(l.MaterialCode, group.Key.MaterialCode) && SameCount(l.BatchNo, group.Key.BatchNo) &&
@@ -196,7 +228,7 @@ namespace U8Gateway.U8.Documents
                 head = ParseXml(merged.HeaderXml, "盘点表头"); body = ParseXml(merged.BodyXml, "盘点明细");
                 position = string.IsNullOrWhiteSpace(merged.PositionXml) ? new DOMDocument26Class() : ParseXml(merged.PositionXml, "盘点货位");
                 InventoryCountSaveRules.CheckSource(current, reader.Get(id));
-                ValidateCountLabels(options, execution.Request);
+                ValidateCountTargets(options, ValidateCountLabels(options, execution.Request), current.Document.WarehouseCode);
                 var result = UserpcoWriter.Update(voucher, "18", head, body, position);
                 var after = reader.Get(id);
                 if (InventoryCountSaveRules.Identity(expected, false) != InventoryCountSaveRules.Identity(after, false))
@@ -223,6 +255,7 @@ namespace U8Gateway.U8.Documents
                 (byLocation ? Convert.ToString(l["cposition"]) : "")).Distinct(StringComparer.OrdinalIgnoreCase).Count() != request.Lines.Count)
                 throw new InvalidOperationException("盘点汇总重复。");
             string warehouse = Convert.ToString(request.Header["cwhcode"]);
+            ValidateCountTargets(options, labels, warehouse);
             var info = CountReader(options).GetWarehouse(warehouse);
             if (info == null || info.PositionManaged != byLocation) throw new InvalidOperationException("仓库货位设置已变化。");
             using (var connection = new SqlConnection(ConnectionString(options)))
@@ -242,8 +275,8 @@ namespace U8Gateway.U8.Documents
                         }
                     }
                     var scoped = labels.Where(l => SameCount(l.MaterialCode, Convert.ToString(line["cinvcode"])) &&
-                        SameCount(l.BatchNo, Convert.ToString(line["ccvbatch"])) && SameCount(l.WarehouseCode, warehouse) &&
-                        (!byLocation || SameCount(l.LocationCode, Convert.ToString(line["cposition"])))).ToArray();
+                        SameCount(l.BatchNo, Convert.ToString(line["ccvbatch"])) &&
+                        (!byLocation || SameCount(CountTargetLocation(l), Convert.ToString(line["cposition"])))).ToArray();
                     decimal actual = InventoryCountSaveRules.AccumulatedActual(scoped, new CountSaveLabel[0]);
                     if (scoped.Length == 0 || Convert.ToDecimal(line["icvcquantity"]) != actual)
                         throw new InvalidOperationException("盘点汇总不一致。");

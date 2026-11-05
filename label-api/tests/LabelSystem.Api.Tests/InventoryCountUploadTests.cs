@@ -167,6 +167,29 @@ public sealed class InventoryCountUploadTests
     }
 
     [Fact]
+    public void CrossWarehouseCountGroupsAtChosenPositionAndKeepsOriginalSnapshotForRecheck()
+    {
+        var op = Operation(
+            Line(1, "TAG1", 49, 50, "OLD") with { WarehouseCode = "W2", TargetWarehouseCode = "W1", TargetLocationCode = "L1" },
+            Line(2, "TAG2", 10, 7, "OTHER") with { WarehouseCode = "W3", TargetWarehouseCode = "W1", TargetLocationCode = "L1" })
+            with { WarehouseCode = "W2" };
+        var request = InventoryCountUploadRules.Build(op, Request(), Operator(), [new("PRIOR", "M1", "B1", "W1", "L1", 14)]);
+        Assert.Single(request.Lines); Assert.Equal(71m, request.Lines[0]["icvcquantity"]);
+        var labels = JsonSerializer.SerializeToElement(request.Options["countLabels"]);
+        Assert.Equal("W2", labels[0].GetProperty("WarehouseCode").GetString());
+        Assert.Equal("OLD", labels[0].GetProperty("LocationCode").GetString());
+        Assert.Equal("W1", labels[0].GetProperty("TargetWarehouseCode").GetString());
+        Assert.Equal("L1", labels[0].GetProperty("TargetLocationCode").GetString());
+        var result = new GatewayDocumentResult(true, true, "OK", "", "12", "COUNT12", "v2",
+            JsonSerializer.SerializeToElement(new { lines = new[] { new { autoid = 41, cinvcode = "M1", ccvbatch = "B1", cposition = "L1" } } }));
+        var rows = InventoryCountUploadRules.ReadRows(op, result, request);
+        var tasks = TraceBackSyncPlanner.Build(op, result, false, rows, "User", "888", request);
+        var payload = JsonSerializer.Deserialize<TraceBackSyncEventRequest>(tasks[0].PayloadJson,new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Assert.Equal("W1", payload.TargetWarehouseCode); Assert.Equal("L1", payload.TargetLocationCode);
+        Assert.Equal("W1", payload.CountContext!.WarehouseCode); Assert.Equal(1m, payload.Quantity);
+    }
+
+    [Fact]
     public void CountWritesStableSignedTraceBackDifferencesIncludingZero()
     {
         var op = Operation(Line(1, "GAIN", 49, 50), Line(2, "LOSS", 8, 5), Line(3, "SAME", 14, 14), Line(4, "ZERO", 6, 0));
@@ -180,7 +203,7 @@ public sealed class InventoryCountUploadTests
             new JsonSerializerOptions(JsonSerializerDefaults.Web))!).ToArray();
         Assert.Equal(new decimal[] { 1, -3, 0, -6 }, payloads.Select(p => p.Quantity));
         Assert.Equal(new decimal[] { 50, 5, 14, 0 }, payloads.Select(p => p.ExpectedBalance + p.Quantity));
-        Assert.All(payloads, p => { Assert.Null(p.TargetWarehouseCode); Assert.Null(p.TargetLocationCode); });
+        Assert.All(payloads, p => { Assert.Equal("W1", p.TargetWarehouseCode); Assert.Equal("L1", p.TargetLocationCode); });
         Assert.All(payloads, p => {
             Assert.Equal("IC-1", p.PdaDocumentNo);
             Assert.Equal("2026-11-05", p.CountContext!.DocumentDate);

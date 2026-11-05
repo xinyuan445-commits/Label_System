@@ -158,6 +158,15 @@ internal static class Program
         Equal(null, goods["SourceOrder"]); Equal(null, goods["mergeDataJson"]);
         Equal(null, goods["inventory"]["onHandQuantity"]); Equal("L1", (string)goods["inventory"]["storageLocationCode"]);
         Equal(201L, (long)goods["pdaID"]); Equal("IC-159", (string)goods["pdaOrderNumber"]);
+        goods["locationCode"] = "OLD"; goods["positionCode"] = "OLD";
+        request.TargetWarehouseCode = "W1"; request.TargetLocationCode = "NEW";
+        U8Gateway.U8.TraceBack.TraceBackCountJson.Position(goods, request, "仓一", "新货位");
+        Equal("NEW", (string)goods["locationCode"]); Equal("NEW", (string)goods["storageLocationCode"]);
+        Equal("NEW", (string)goods["positionCode"]); Equal("NEW", (string)goods["inventory"]["storageLocationCode"]);
+        Equal("W1", (string)goods["warehouseCode"]); Equal(50m, (decimal)goods["quantity"]);
+        request.TargetLocationCode = "";
+        U8Gateway.U8.TraceBack.TraceBackCountJson.Position(goods, request, "仓一", "");
+        Equal("", (string)goods["locationCode"]); Equal("", (string)goods["inventory"]["storageLocationCode"]);
         var order = U8Gateway.U8.TraceBack.TraceBackCountJson.Order(request, "仓库一", "盘盈入库", "盘亏出库", null);
         Equal("IC-159", (string)order["documentNumber"]); Equal("W1", (string)order["CurrencyOrderData"]["U8"]["cWhCode"]);
         Equal("1", (string)order["CurrencyOrderData"]["U8"]["bPosCheck"]["name"]);

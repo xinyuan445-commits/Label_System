@@ -1,10 +1,10 @@
 # Label System API
 
-资料复核：2026-11-05；开发API0.12.9 / 019已部署，102项通过/1跳过。HTTP合同不变，基线改用通用操作事件；上传配置保持，生产未更新，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_GENERIC_UPLOAD_BASELINE.md)。
+资料复核：2026-11-05；开发API0.12.10 / 019已部署，104项通过/1跳过。盘点核验支持目标货位，上传同步本次目标位置；上传开启，生产未更新，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
 
 材料出库、调拨、货位调整及888盘点已接TraceBack；不能推广到其他单据。盘点标准草稿/核验不改余额，上传ERP确认后追加差异。审核/弃审及008盘点上传关闭。旧请求缺inventoryCount上下文在镜像/建操作前拒绝，核验canSubmit=false与上传uploadSaveEnabled分开。
 
-## 盘点现行只读合同（0.12.6）
+## 盘点现行只读合同（0.12.10）
 
 所有下列接口校验当前登录账号的inventory-count功能权限，响应private/no-store。不依赖客户端X-Function-Code授予权限，不接受客户端连接信息、SQL或表名；无匿名离线任务/写令牌。
 
@@ -30,7 +30,7 @@ observations为[{code,quantity}]，最多1000个唯一完整Code；首尾空白/
 
 有原单核验前后重新读取原单指纹；无原单核验前后重新读取仓库货位管理状态，客户端countByLocation缺失/不符或配置中途变化返回COUNT_POSITION_CHANGED，提示重置后重试。标签快照按最多100码一批读取旧三表，不创建盘点镜像、业务操作、数量流水或同步事件。
 
-按最新快照核对合法状态、非负余额、最新流水、异常、仓库及必要身份。有原单匹配料号/批号/仓库，单位跟随原单物料，不比较旧标签单位与原单单位；盘货位时还匹配货位且标签货位必需。不盘货位时按仓库维度匹配，仍保留最新标签位置。重复候选、自由项/辅计量不明不猜测匹配。
+按最新快照核对合法状态、非负余额、最新流水、异常及必要身份，原仓库/货位不作为盘点准入条件。有原单匹配料号/批号及按需目标货位，单位跟随原单物料，不比较旧标签单位与原单单位。目标仓库管理货位时必须确认有效盘点货位，不管理时目标货位为空。重复候选、自由项/辅计量不明不猜测匹配。
 
 | 逐码status | 含义 / 适用范围 |
 | --- | --- |
@@ -38,13 +38,12 @@ observations为[{code,quantity}]，最多1000个唯一完整Code；首尾空白/
 | LABEL_INVALID | 标签状态、余额、流水或旧表异常需核对 |
 | NOT_FOUND | 未找到对应标签 |
 | QUANTITY_REQUIRED | 未填写或数量格式不合格 |
-| LOCATION_REQUIRED | 盘货位但标签缺货位 |
+| LOCATION_REQUIRED | 目标仓库管理货位但未确认盘点货位 |
 | OUTSIDE_SOURCE | 不属于原单，有原单核验 |
 | AMBIGUOUS_SOURCE | 原单重复候选，有原单核验 |
 | IDENTITY_NOT_SUPPORTED | 自由项/辅计量不能明确匹配，有原单核验 |
-| OUTSIDE_WAREHOUSE | 不属于所选仓库，无原单核验 |
 
-有原单结果项包含code、status、message及可用的sourceLineId、materialName、balance、latestFlowId、locationCode。无原单结果项包含code、status、message、匹配时的label和latestFlowId；label为空rowVersion，只是读快照，不能用作后续写入授权。
+有原单结果项包含code、status、message及可用的sourceLineId、materialName、balance、latestFlowId、目标locationCode及originalWarehouseCode/originalLocationCode。无原单结果项包含code、status、message、匹配时的label和latestFlowId；label为空rowVersion，只是读快照，不能用作后续写入授权。
 
 主要全单错误：COUNT_ACCOUNT_MISMATCH（账套不一致）、COUNT_SOURCE_CHANGED（源指纹变化）、COUNT_SOURCE_INCOMPLETE（原单不完整）、COUNT_POSITION_INVALID（原单货位状态不明）、COUNT_POSITION_CHANGED（仓库设置变化）、COUNT_WAREHOUSE_INVALID（仓库资料不明）、COUNT_OBSERVATIONS_INVALID（码为空/重复/超限）、COUNT_SNAPSHOT_INVALID（快照返回重复）。Gateway的不存在/停用及查询错误按其实际状态处理，失败不伪装成空数据或否。
 
@@ -52,17 +51,17 @@ observations为[{code,quantity}]，最多1000个唯一完整Code；首尾空白/
 
 H5使用标准IndexedDB草稿及既有009服务端草稿同步，旧独立库仅作历史导入。原单确认立即保存完整快照，用户表头与源快照分开；离线只保存已加载页面的Code/数量，联网完成前重新核验。专用核验接口本身只读；标准扫码lookup仍可建立/刷新本地标签镜像，不能把两条链描述成全程不写本地库。
 
-保存本机、同步草稿和上传ERP分别显示；MATCHED及canSubmit=false不能解释为允许盘点落账。无迁移、无盘点ERP写入。11月5日36项H5、31项API、Gateway合同及构建通过，开发888实际返回unitName=张及真实标签只读核验MATCHED；实机/物理声音/断网验收仍待完成，见[盘点档案](../../docs/features/盘点单.md)和[本次部署](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。
+保存本机、同步草稿和上传ERP分别显示；MATCHED及canSubmit=false不直接授权写入；实际上传由独立能力、权限及准备流程控制。历史0.12.5验证未包含ERP写入：11月5日36项H5、31项API、Gateway合同及构建通过，开发888实际返回unitName=张及真实标签只读核验MATCHED；实机/物理声音/断网验收仍待完成，见[盘点档案](../../docs/features/盘点单.md)和[本次部署](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。
 
 版本沿革：0.12.0原单读取/核验，0.12.1类别合同，0.12.2无原单只读核验，0.12.3仓库货位状态及前后复核，0.12.4取消标签/原单单位比较，0.12.5透传原单单位名称（开发888已发布）。
 
-## 888盘点上传与累计（0.12.9）
+## 888盘点上传与累计（0.12.10）
 
 同步任务CountContext由可信归档、操作明细及确认的ERP结果生成并冻结，包含真实操作/明细ID、日期/仓库/盘货位、类别及可选来源、设备/操作人、备注/合计。PdaDocumentNo使用operation_no；非盘点不序列化此可选字段。已完成159任务载荷/哈希保留，JSON修复另记审计，见[合同](../../docs/TRACEBACK_COUNT_JSON_CONTRACT.md)。
 
 复用`POST /api/v1/operations/documents/inventory-count/submit`，沿用当前登录权限、ERP操作人、单据分类权限、clientRequestId、业务组、归档/锁与恢复。生产008拒绝；只允许development / 888 / UFDATA_888_2021，且U8WritesEnabled及InventoryCountUploadsEnabled均为true。开关默认false。请求新增inventoryCount：accountId、databaseName、countByLocation、可选完整source快照（含原指纹）；其余表头/行沿用DocumentPrepareRequest。旧请求和大小写路由变体均在镜像刷新/建操作前拦截。
 
-- 有原单校验源快照/指纹及未审核状态；按原生autoID匹配料号、批号、仓库、按需货位，实盘为该原单已上传唯一Code最近实盘的合计，不加账面；账面与未命中行保留。同码跨次修订替换旧贡献，同单重复扫码仍拒绝。
+- 有原单校验源快照/指纹及未审核状态；按原生autoID匹配料号、批号、本单仓库及按需目标货位，实盘为该原单已上传唯一Code最近实盘的合计，不加账面；账面与未命中行保留。同码跨次修订替换旧贡献，同单重复扫码仍拒绝。
 - 无原单汇总当前标签实盘新增；Gateway独立读取U8账面，不将账面加到实盘，自由项/辅计量不明确拒绝。
 - Gateway内部调用前再次实时复核旧三表版本、余额与位置；有原单保留原生XML和未改字段。修改类别仍做方向及权限检查，不恢复标签单位比较。
 - 019已将原018辅助表归并为通用business_operation_event的UPLOAD_BASELINE事件，保存documentType/sourceDocumentId/previousLabels，固定累计基线；来源字段使用business_operation。重试复用既有基线，不重新读取当前历史改写旧载荷。同原单未完成上传或无原单写入结果未知时保留必要保护，未开始写ERP的无原单准备记录不阻挡其他原单。ERP确认后的差异任务与恢复规则不变。
@@ -431,3 +430,11 @@ Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`�
 - `source-print/{kind}`转接请求带本机`deviceId`与`printer`，先校验再预约；首打、补打和恢复继续使用原017唯一事件。
 
 2026-11-05后续0.12.5：原单unitName透传及指纹、36项H5/31项API/Gateway合同与888实际只读验证见[本次发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。
+
+### 0.12.10盘点目标位置合同
+
+盘点不以标签原仓库/货位限制扫码。有原单以原单仓库为准，无原单以制单表头为准；目标仓库启用货位管理时在数量确认中选择有效“盘点货位”，原单盘货位时限匹配料号/批号的原单货位。跨仓不猜货位，未启用货位管理时清空目标货位。上传ERP确认后，新旧标签余额按实盘同步、当前位置按本次目标更新；扫码和草稿不改变标签。原位置留作实时复核和审计，未扫标签不变。
+
+两个validate接口的observations接受可选targetLocationCode；有原单结果返回目标locationCode及originalWarehouseCode/originalLocationCode，无原单label保持原快照。上传行warehouseCode/locationCode为原快照，targetWarehouseCode/targetLocationCode为本次位置；服务端强制目标仓库取盘点表头，Gateway实时核验目标档案。原单盘货位时按所选目标货位匹配原生行。历史实盘按目标仓库/按需货位累计，实时版本仍按原位置复核。同步后本地流水记录原→目标，COUNT_ADJUSTMENT数量规则不变。
+
+只保存当前U8盘点单，不生成原仓库ERP调拨/出库；该部分由用户处理。

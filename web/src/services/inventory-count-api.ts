@@ -12,7 +12,7 @@ export async function getCountContext(): Promise<CountContext> {
   return apiRequest('/api/v1/inventory-counts/capabilities')
 }
 export async function validateDirectCount(context: CountContext, warehouseCode: string,
-  observations: Array<{ code: string; quantity: string }>, countByLocation: boolean): Promise<{ items: DirectCountCheck[]; canSubmit: false }> {
+  observations: Array<{ code: string; quantity: string; targetLocationCode?: string }>, countByLocation: boolean): Promise<{ items: DirectCountCheck[]; canSubmit: false }> {
   return apiRequest('/api/v1/inventory-counts/validate-direct', { method: 'POST', timeoutMs: 120000,
     body: JSON.stringify({ ...context, warehouseCode, observations, countByLocation }) })
 }
@@ -46,11 +46,11 @@ export async function validateInventoryCount(draft: CountDraft): Promise<{ items
 }
 
 export async function validateInventoryCountItems(source: CountSource,
-  observations: Array<{ code: string; quantity: string | null }>): Promise<{ items: CountCheck[]; canSubmit: false }> {
+  observations: Array<{ code: string; quantity: string | null; targetLocationCode?: string }>): Promise<{ items: CountCheck[]; canSubmit: false }> {
   return apiRequest(`/api/v1/inventory-counts/${source.document.id}/validate`, {
     method: 'POST', timeoutMs: 120000,
     body: JSON.stringify({ accountId: source.accountId, databaseName: source.databaseName,
       sourceFingerprint: source.fingerprint,
-      observations: observations.map(row => ({ code: row.code, quantity: row.quantity })) }),
+      observations: observations.map(row => ({ code: row.code, quantity: row.quantity, targetLocationCode: row.targetLocationCode })) }),
   })
 }

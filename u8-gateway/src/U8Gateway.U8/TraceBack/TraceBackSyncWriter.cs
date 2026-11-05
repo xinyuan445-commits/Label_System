@@ -106,6 +106,8 @@ namespace U8Gateway.U8.TraceBack
                                 "TRACEBACK_SNAPSHOT_CHANGED", "标签数据已变化，请重新核对。");
 
                         SourceGoods source = ReadSourceGoods(connection, transaction, request.Code, latestId);
+                        if (request.EventRole == "COUNT_ADJUSTMENT" && request.TargetWarehouseCode != null)
+                            ValidateCountTarget(connection, transaction, request);
                         EnsureOrder(connection, transaction, request);
                         InsertGoods(connection, transaction, request, source);
                         long flowId = InsertFlow(connection, transaction, request, source.SerialNo);
@@ -180,8 +182,6 @@ namespace U8Gateway.U8.TraceBack
                     break;
                 case "COUNT_ADJUSTMENT":
                     if (request.ExpectedBalance + request.Quantity < 0) throw InvalidQuantity();
-                    if (request.TargetWarehouseCode != null || request.TargetLocationCode != null)
-                        throw new TraceBackSyncException("TRACEBACK_EVENT_INVALID", "盘点不能修改标签位置。");
                     break;
                 default:
                     throw new TraceBackSyncException("TRACEBACK_EVENT_ROLE_INVALID", "追溯同步类型无效。");
@@ -190,6 +190,25 @@ namespace U8Gateway.U8.TraceBack
 
         private static TraceBackSyncException InvalidQuantity() =>
             new TraceBackSyncException("TRACEBACK_EVENT_QUANTITY_INVALID", "追溯同步数量方向无效。");
+
+        private static void ValidateCountTarget(SqlConnection connection, SqlTransaction transaction, TraceBackSyncEventRequest request)
+        {
+            if (!Same(request.TargetWarehouseCode, request.CountContext.WarehouseCode))
+                throw new TraceBackSyncException("COUNT_TARGET_INVALID", "盘点目标仓库不一致。");
+            using (var command = new SqlCommand(@"
+SELECT bWhPos,(SELECT COUNT_BIG(*) FROM dbo.Position WHERE cWhCode=@wh AND cPosCode=@loc)
+FROM dbo.Warehouse WHERE cWhCode=@wh;", connection, transaction))
+            {
+                command.Parameters.AddWithValue("@wh", request.TargetWarehouseCode);
+                command.Parameters.AddWithValue("@loc", request.TargetLocationCode ?? "");
+                using (var row = command.ExecuteReader())
+                {
+                    if (!row.Read() || row.IsDBNull(0) ||
+                        (Convert.ToBoolean(row[0]) ? Convert.ToInt64(row[1]) != 1 : !string.IsNullOrWhiteSpace(request.TargetLocationCode)))
+                        throw new TraceBackSyncException("COUNT_TARGET_INVALID", "盘点目标仓库或货位需核对。");
+                }
+            }
+        }
 
         private static void AcquireLock(SqlConnection connection, SqlTransaction transaction, string resource)
         {
@@ -393,6 +412,8 @@ INSERT INTO dbo.TraceBackGoods
 VALUES(@json,@uuid,GETDATE(),@erp_no,@machine,@account,@detail,@box,@from_type);",
                 connection, transaction))
             {
+                if (request.EventRole == "COUNT_ADJUSTMENT")
+                    TraceBackCountJson.Position(json, request, target.WarehouseName, target.LocationName);
                 insert.Parameters.Add("@json", SqlDbType.NText).Value =
                     json.ToString(Newtonsoft.Json.Formatting.None);
                 AddVarchar(insert, "@uuid", request.GoodsUuid, 3500);

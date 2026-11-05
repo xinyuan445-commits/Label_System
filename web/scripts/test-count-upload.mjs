@@ -68,3 +68,13 @@ test('无原单上传保持真实仓库绑定，不伪造来源；008和旧草�
   assert.equal(body.inventoryCount.source, null)
   assert.equal(body.header.warehouseCode, 'W1')
 })
+
+test('盘点上传分开传原标签位置与本次盘点位置，跨仓不改成伪造的盘前快照', async t => {
+  const f=await fixture(); t.after(f.close)
+  const doc=document()
+  Object.assign(doc.payload.lines[0],{warehouseCode:'W1',locationCode:'L1',countOriginalWarehouseCode:'W2',countOriginalLocationCode:'OLD'})
+  await f.upload(doc,false)
+  const row=JSON.parse(f.state.requests[0].options.body).lines[0]
+  assert.equal(row.warehouseCode,'W2');assert.equal(row.locationCode,'OLD')
+  assert.equal(row.targetWarehouseCode,'W1');assert.equal(row.targetLocationCode,'L1')
+})

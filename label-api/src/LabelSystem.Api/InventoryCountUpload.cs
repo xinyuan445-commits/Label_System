@@ -48,7 +48,7 @@ public static class InventoryCountUploadRules
 
     public static InventoryCountObservation[] Observations(DocumentPrepareRequest request) =>
         request.Lines.Select(l => new InventoryCountObservation(l.LabelCode,
-            l.RequestedQty.ToString("0.######", CultureInfo.InvariantCulture))).ToArray();
+            l.RequestedQty.ToString("0.######", CultureInfo.InvariantCulture), l.TargetLocationCode ?? l.LocationCode)).ToArray();
 
     public static async Task ValidateAsync(DocumentPrepareRequest request,
         InventoryCountCollectionService counts, CancellationToken ct)
@@ -100,8 +100,11 @@ public static class InventoryCountUploadRules
         var codes = current.Select(l => l.LabelCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return previous.Where(p => !codes.Contains(p.Code) && current.Any(l =>
             Same(l.MaterialCode, p.MaterialCode) && Same(l.BatchNo, p.BatchNo) &&
-            Same(l.WarehouseCode, p.WarehouseCode) && (!byLocation || Same(l.LocationCode, p.LocationCode)))).ToArray();
+            Same(TargetWarehouse(l), p.WarehouseCode) && (!byLocation || Same(TargetLocation(l), p.LocationCode)))).ToArray();
     }
+
+    public static string TargetWarehouse(MaterialOutboundExecutionLine line) => string.IsNullOrEmpty(line.TargetWarehouseCode) ? line.WarehouseCode : line.TargetWarehouseCode;
+    public static string? TargetLocation(MaterialOutboundExecutionLine line) => string.IsNullOrEmpty(line.TargetWarehouseCode) ? line.LocationCode : line.TargetLocationCode;
 
     private static bool Same(string? a, string? b) => string.Equals(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
 
@@ -118,15 +121,17 @@ public static class InventoryCountUploadRules
         var options = new Dictionary<string, object?> { ["countPartialSave"] = true,
             ["countByLocation"] = context.CountByLocation, ["countSource"] = context.Source,
             ["countDocumentDate"] = request.Header.DocumentDate.ToString("yyyy-MM-dd"),
+            ["countWarehouseCode"] = request.Header.WarehouseCode,
             ["countDepartmentCode"] = request.Header.DepartmentCode };
         var prior = PreviousForUpload(previous ?? [], operation.Lines, context.CountByLocation);
         options["countPreviousLabels"] = prior;
         options["countLabels"] = operation.Lines.Select(l => new { Code = l.LabelCode,
             l.MaterialCode, l.BatchNo, l.WarehouseCode, l.LocationCode,
+            TargetWarehouseCode = request.Header.WarehouseCode, TargetLocationCode = TargetLocation(l),
             Balance = l.InventoryQtySnapshot, LatestFlowId = l.TraceBackLatestFlowId, ActualQuantity = l.RequestedQty }).ToArray();
         var lines = new List<IReadOnlyDictionary<string, object?>>();
         var groups = operation.Lines.GroupBy(l => new { l.MaterialCode, l.BatchNo,
-            Location = context.CountByLocation ? l.LocationCode ?? "" : "" });
+            Location = context.CountByLocation ? TargetLocation(l) ?? "" : "" });
         foreach (var group in groups)
         {
             var target = group.Sum(l => l.RequestedQty) + prior.Where(p => Same(p.MaterialCode, group.Key.MaterialCode) &&
@@ -180,7 +185,7 @@ public static class InventoryCountUploadRules
             string Text(JsonElement row, string key) => row.TryGetProperty(key, out var v) ? v.ToString().Trim() : "";
             var found = nativeLines.EnumerateArray().Where(r => Text(r, "cinvcode") == line.MaterialCode &&
                 Text(r, "ccvbatch") == (line.BatchNo ?? "") &&
-                (!byLocation || Text(r, "cposition") == (line.LocationCode ?? ""))).ToArray();
+                (!byLocation || Text(r, "cposition") == (TargetLocation(line) ?? ""))).ToArray();
             if (found.Length != 1 || string.IsNullOrEmpty(Text(found[0], "autoid")))
                 throw new InvalidOperationException("盘点明细回查不完整。");
             rows[line.LineNo] = (Text(found[0], "autoid"), null);

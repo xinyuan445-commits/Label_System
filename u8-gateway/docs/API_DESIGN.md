@@ -1,6 +1,6 @@
 # U8 Gateway API 设计
 
-资料复核：2026-11-05；开发9881/888为0.11.6（test），生产9880/008保留0.11.2。盘点JSON合同及既有数据修复通过，自动上传新单待用户测试，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
+资料复核：2026-11-05；开发9881/888为0.11.7（test），生产9880/008保留0.11.2。盘点支持原位置快照复核与目标位置保存，合同/构建通过，实写待用户测试，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
 
 ## 盘点现行只读合同（0.11.4）
 
@@ -29,13 +29,13 @@ document除原有单号、日期、仓库、状态、版本/行数外，包含�
 
 0.11.0为原单首批读取，0.11.1补类别，0.11.2补仓库接口和货位状态。11月4日真实888/008原单、启用及未启用货位管理的仓库已有只读GET证据，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；11月5日0.11.3已发布开发888并实际验证单位名称；无迁移或业务写入，详见上述本次发布记录。
 
-## 888盘点保存与差异（0.11.6）
+## 888盘点保存与差异（0.11.7）
 
 有原单使用`PATCH /api/v1/documents/inventory-count/{id}`，只允许header.cirdcode、cordcode、ccvmemo及line.autoid匹配的icvcquantity；不允许增删原单行或改料号。无原单使用现有Create路由。两者保留现有操作归档、请求哈希、幂等和恢复。
 
-内部options含countPartialSave=true、countByLocation、可选countSource完整原单基线、countLabels当前标签的流水/余额/位置/实盘，以及countPreviousLabels先前成功上传的贡献。由Business API构造并冻结于018，客户端不能提交历史累计。有原单在STA中复核原单、当前标签及按唯一Code累计的实盘，合并原Load XML后USERPCO.Update并回查；账面及未命中行保留。无原单读取U8库存账面，实盘独立取标签实盘汇总，Insert前再次核对库存及标签。自由项/辅计量歧义不放行。旧countDeltas合同已替代。
+内部options含countPartialSave=true、countByLocation、可选countSource完整原单基线、countLabels当前标签的流水/余额/位置/实盘，以及countPreviousLabels先前成功上传的贡献。由Business API构造并冻结于通用UPLOAD_BASELINE事件（019），客户端不能提交历史累计。有原单在STA中复核原单、当前标签及按唯一Code累计的实盘，合并原Load XML后USERPCO.Update并回查；账面及未命中行保留。无原单读取U8库存账面，实盘独立取标签实盘汇总，Insert前再次核对库存及标签。自由项/辅计量歧义不放行。旧countDeltas合同已替代。
 
-现有sync-events增加COUNT_ADJUSTMENT，仅test/888/UFDATA_888_2021允许；差异可正、负、0，盘后余额不能负，不接受目标位置。原Code追加差异，Goods.quantity为盘后余额，保留属性/位置，Order关联盘点/PDA/ERP号。稳定Goods UUID防重复事件；生产及非888在连接写库前拒绝。新规则实写由用户测试，见[发布记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
+现有sync-events增加COUNT_ADJUSTMENT，仅test/888/UFDATA_888_2021允许；差异可正、负、0，盘后余额不能负。原Code追加差异，Goods.quantity为盘后余额，保留物料属性，位置更新为本次确认目标，Order关联盘点/PDA/ERP号。稳定Goods UUID防重复事件；生产及非888在连接写库前拒绝。新规则实写由用户测试，见[发布记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
 
 U8仍未审核，标签差异在上传确认后同步。COUNT_ADJUSTMENT新增必填CountContext：操作/明细ID、日期、仓库及盘货位、盈亏类别、可选来源ID/单号、操作人与设备信息、备注及本次合计；缺失返回COUNT_TRACE_CONTEXT_REQUIRED。Goods同步实盘数量字段和盘前余额、清除旧移动信息，Order使用真实业务号及本次表头。其他事件角色和签名不变，详见[JSON合同](../../docs/TRACEBACK_COUNT_JSON_CONTRACT.md)。
 
@@ -285,3 +285,9 @@ Serializable 事务依次取得事件、完整 Code、Order 应用锁；按稳�
 TRACEBACK_INITIAL_INVALID、TRACEBACK_INITIAL_CONFLICT、TRACEBACK_EVENT_CONFLICT、
 TRACEBACK_INITIAL_MASTER_INVALID、TRACEBACK_INITIAL_CODE_INCOMPATIBLE 等阻止继续发送/登记。
 未知响应按原事件重试；补打不调用此接口。完整协议见 ../../docs/PRINT_PHASE1_SPEC.md。
+
+### 0.11.7盘点位置
+
+countLabels保留原warehouseCode/locationCode用于旧三表版本、余额及位置复核，增加targetWarehouseCode/targetLocationCode；未提供目标的历史请求沿用原位置。countWarehouseCode固定本次表头仓库，所有标签目标仓库必须一致；管理货位的仓库校验Position归属，不管理则必须空货位。原单/无原单保存前再次校验，汇总按目标位置。
+
+COUNT_ADJUSTMENT接受TargetWarehouseCode/TargetLocationCode，并在写事务内核验目标与CountContext/仓库档案一致。Goods根及inventory位置字段同步，已有locationCode/positionCode等别名一并更新，空目标货位清除旧值；余额差异及稳定事件键不变。系统不生成原仓库ERP出库/调拨。

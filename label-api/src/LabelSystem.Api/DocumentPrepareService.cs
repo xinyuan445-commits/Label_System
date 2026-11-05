@@ -53,7 +53,7 @@ public sealed class DocumentPrepareService(
                 false, false, false, false, false, true, false, false, true, false),
             ["inventory-count"] = new(
                 "inventory-count", "盘点单", "INVENTORY_COUNT", "inventory-count", "IC",
-                true, false, false, false, false, false, true, false, false, true),
+                true, false, false, false, false, false, true, false, false, false),
             ["purchase-arrival"] = new(
                 "purchase-arrival", "采购到货", "PURCHASE_ARRIVAL", "purchase-arrival", "PA",
                 false, false, false, true, false, false, false, true, false, false),

@@ -54,6 +54,30 @@ namespace U8Gateway.U8.TraceBack
         private static JObject Archive(string code, string name) =>
             string.IsNullOrWhiteSpace(code) ? null : new JObject { ["id"] = code, ["name"] = name ?? code, ["code"] = code };
 
+        public static void Position(JObject json, TraceBackSyncEventRequest request, string warehouseName, string locationName)
+        {
+            if (request.TargetWarehouseCode == null) return;
+            json["warehouseCode"] = request.TargetWarehouseCode; json["warehouseName"] = warehouseName;
+            foreach (string alias in new[] { "wareHouseCode", "cWhCode", "仓库编码" })
+                if (json[alias] != null) json[alias] = request.TargetWarehouseCode;
+            if (request.TargetLocationCode == null) return;
+            json["locationCode"] = request.TargetLocationCode; json["storageLocationCode"] = request.TargetLocationCode;
+            json["locationName"] = locationName;
+            foreach (string alias in new[] { "positionCode", "cPosCode", "货位编码" })
+                if (json[alias] != null) json[alias] = request.TargetLocationCode;
+            foreach (string alias in new[] { "positionName", "storageLocation", "cPosName", "货位名称" })
+                if (json[alias] != null) json[alias] = locationName;
+            var inventory = json["inventory"] as JObject;
+            if (inventory != null)
+            {
+                inventory["warehouseId"] = request.TargetWarehouseCode; inventory["warehouse"] = warehouseName;
+                inventory["storageLocationId"] = request.TargetLocationCode; inventory["storageLocationCode"] = request.TargetLocationCode;
+                inventory["storageLocation"] = locationName;
+                foreach (string alias in new[] { "locationCode", "positionCode", "cPosCode" })
+                    if (inventory[alias] != null) inventory[alias] = request.TargetLocationCode;
+            }
+        }
+
         public static JObject Order(TraceBackSyncEventRequest request, string warehouseName,
             string inCategoryName, string outCategoryName, string departmentName)
         {

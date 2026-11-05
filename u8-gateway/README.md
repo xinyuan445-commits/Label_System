@@ -2,9 +2,9 @@
 
 按功能查看支持能力、限制与验收证据，进入[功能档案](../docs/features/README.md)；Gateway字段及异常合同继续在本目录维护。
 
-资料复核：2026-11-05；开发9881/888为0.11.6，生产9880/008保留0.11.2。盘点专用Goods/Order JSON按[旧样本合同](../docs/TRACEBACK_COUNT_JSON_CONTRACT.md)重建；修复159现有JSON、未新增数量流水或改ERP。合同/构建及真实快照通过，新上传待用户验收，见[发布记录](../docs/DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
+资料复核：2026-11-05；开发9881/888为0.11.7，生产9880/008保留0.11.2。盘点保存校验本次目标仓库/货位，COUNT_ADJUSTMENT同步位置及JSON别名；合同/构建通过，跨仓实写待用户验收，见[发布记录](../docs/DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
 
-只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。库存来源事件与首打初始登记使用不同接口；盘点差异只允许test/888/UFDATA_888_2021，位置不变。打印已有888/PDF验收，008打印尚未发布，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
+只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。库存来源事件与首打初始登记使用不同接口；盘点差异只允许test/888/UFDATA_888_2021，按本次确认目标更新位置。打印已有888/PDF验收，008打印尚未发布，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
 
 
 2026-11-04补齐盘点原单盘盈/盘亏类别编码和名称；H5选原单后只读显示。008/888真实原单GET验证通过，未执行U8或旧三表写入；API盘点21项、Gateway合同测试及H5 24项测试通过。

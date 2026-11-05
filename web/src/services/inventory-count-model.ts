@@ -49,6 +49,8 @@ export interface CountTask {
   validationToken: string | null
 }
 export interface CountCheck {
+  originalWarehouseCode?: string | null
+  originalLocationCode?: string | null
   locationCode?: string | null
   code: string
   status: string

@@ -96,6 +96,8 @@ public static class TraceBackSyncPlanner
             {
                 role = "COUNT_ADJUSTMENT";
                 quantity = line.RequestedQty - line.InventoryQtySnapshot;
+                targetWarehouse = InventoryCountUploadRules.TargetWarehouse(line);
+                targetLocation = InventoryCountUploadRules.TargetLocation(line) ?? "";
             }
             else if (operation.ErpDocumentType == "material-outbound")
             {
@@ -130,7 +132,8 @@ public static class TraceBackSyncPlanner
                 var source = countRequest.Options["countSource"] as InventoryCountSource;
                 countRequest.Options.TryGetValue("countDepartmentCode", out var department);
                 countContext = new(operation.Id, line.Id, Convert.ToString(date)!,
-                    countRequest.Options["countByLocation"] is true, operation.WarehouseCode,
+                    countRequest.Options["countByLocation"] is true,
+                    Convert.ToString(countRequest.Options["countWarehouseCode"])!,
                     Convert.ToString(countRequest.Header["cirdcode"])!, Convert.ToString(countRequest.Header["cordcode"])!,
                     source?.Document.Id, source?.Document.DocumentNo, operation.DeviceId,
                     operation.OperatorId, Convert.ToString(department), operation.Reason, products.Sum(l => l.RequestedQty));

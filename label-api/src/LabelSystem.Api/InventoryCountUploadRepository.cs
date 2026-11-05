@@ -71,7 +71,10 @@ public sealed class InventoryCountUploadRepository(SqlConnectionFactory connecti
                 throw new ApiException(409, "COUNT_UPLOAD_BUSY", "有盘点单尚未完成上传，请先处理。");
             await using var history = new SqlCommand("""
                 WITH observations AS (
-                    SELECT p.label_code,l.material_code,l.batch_no,l.from_warehouse_code,l.from_location_code,l.requested_qty,
+                    SELECT p.label_code,l.material_code,l.batch_no,
+                           COALESCE(NULLIF(l.to_warehouse_code,N''),l.from_warehouse_code) AS from_warehouse_code,
+                           CASE WHEN NULLIF(l.to_warehouse_code,N'') IS NOT NULL THEN ISNULL(l.to_location_code,N'')
+                                ELSE l.from_location_code END AS from_location_code,l.requested_qty,
                            ROW_NUMBER() OVER(PARTITION BY p.label_code ORDER BY o.id DESC,l.id DESC) AS rn
                     FROM dbo.business_operation o
                     JOIN dbo.business_operation_line l ON l.operation_id=o.id

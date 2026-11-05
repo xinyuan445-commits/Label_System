@@ -20,6 +20,8 @@ export interface CountFormLine {
   warehouseName?: string
   locationCode: string
   locationName?: string
+  countOriginalWarehouseCode?: string
+  countOriginalLocationCode?: string
   availableQty: number | null
   requestedQty: number
   fieldValues: Record<string, string | number>
@@ -42,7 +44,8 @@ export function countSourceLines(source: CountSource): SourceDocumentLine[] {
 }
 
 export function countFormLine(source: CountSource | null, code: string, id: string, label?: InventoryObjectLine,
-  warehouse = source?.document.warehouseCode ?? '', countByLocation = source?.document.countByLocation ?? false): CountFormLine {
+  warehouse = source?.document.warehouseCode ?? '', countByLocation = source?.document.countByLocation ?? false,
+  targetLocation?: string): CountFormLine {
   countCodeKey(code)
   if (source) assertCountSource(source)
   if (!warehouse.trim()) throw new Error('请选择仓库')
@@ -55,22 +58,26 @@ export function countFormLine(source: CountSource | null, code: string, id: stri
       !['ACTIVE', 'USED'].includes(label.status) || !Number.isFinite(label.availableQty) || label.availableQty < 0) {
     throw new Error('标签当前不可用')
   }
-  if (!same(warehouse, label.warehouseCode)) throw new Error('标签不属于所选仓库')
-  if (countByLocation && !label.locationCode?.trim()) throw new Error('标签缺少货位，请核对')
   if (!label.materialCode || (!source && !label.unitCode)) throw new Error('标签资料需核对')
-  const candidates = source?.lines.filter(line => same(line.materialCode, label.materialCode) &&
-    same(line.batchNo, label.batchNo) && same(line.warehouseCode, label.warehouseCode) &&
-    (!countByLocation || same(line.locationCode, label.locationCode)))
-  if (candidates && candidates.length !== 1) throw new Error(candidates.length ? '原单明细重复，请核对' : '标签不属于所选源单')
+  const managesLocation = source?.document.warehousePositionManaged ?? countByLocation
+  let location = managesLocation ? targetLocation ?? (same(warehouse, label.warehouseCode) ? label.locationCode : '') : ''
+  const materialCandidates = source?.lines.filter(line => same(line.materialCode, label.materialCode) && same(line.batchNo, label.batchNo))
+  if (materialCandidates && materialCandidates.length === 0) throw new Error('标签不属于所选源单')
+  if (source && countByLocation && !materialCandidates?.some(line => same(line.locationCode, location))) location = ''
+  const candidates = materialCandidates?.filter(line => !countByLocation || !location || same(line.locationCode, location))
+  if (candidates && location && candidates.length !== 1) throw new Error('原单明细重复，请核对')
   const line = candidates?.[0]
   if (line && (line.requiresAuxiliaryUnit || !Array.isArray(line.freeItems) ||
       line.freeItems.some(value => typeof value !== 'string' || value.trim()))) {
     throw new Error('此明细的单位或自由项需核对')
   }
   return { ...result, materialCode: label.materialCode, materialName: label.materialName || line?.materialName || '',
-    batchNo: label.batchNo, unitCode: line?.unitCode ?? label.unitCode, warehouseCode: label.warehouseCode,
-    locationCode: label.locationCode, unitName: line?.unitName || label.unitName || label.unitCode,
-    warehouseName: label.warehouseName, locationName: label.locationName, availableQty: label.availableQty,
+    batchNo: label.batchNo, unitCode: line?.unitCode ?? label.unitCode, warehouseCode: warehouse,
+    locationCode: location, unitName: line?.unitName || label.unitName || label.unitCode,
+    countOriginalWarehouseCode: label.warehouseCode, countOriginalLocationCode: label.locationCode,
+    warehouseName: same(warehouse, label.warehouseCode) ? label.warehouseName : undefined,
+    locationName: same(warehouse, label.warehouseCode) && same(location, label.locationCode) ? label.locationName : undefined,
+    availableQty: label.availableQty,
     requestedQty: label.availableQty, countQuantityConfirmed: true, countPendingIdentity: false }
 }
 
@@ -100,6 +107,8 @@ export function applyCountChecks<T extends { labelCode: string; requestedQty: nu
     const location = check.locationCode ?? line.locationCode
     return { ...row, materialCode: line.materialCode, materialName: check.materialName || line.materialName,
       batchNo: line.batchNo, warehouseCode: line.warehouseCode, locationCode: location,
+      countOriginalWarehouseCode: check.originalWarehouseCode ?? (row as Partial<CountFormLine>).countOriginalWarehouseCode ?? line.warehouseCode,
+      countOriginalLocationCode: check.originalLocationCode ?? (row as Partial<CountFormLine>).countOriginalLocationCode ?? location,
       locationName: row.locationCode === location ? row.locationName : undefined,
       unitCode: line.unitCode, unitName: line.unitName || row.unitName,
       availableQty: check.balance ?? null, countPendingIdentity: false }
@@ -113,7 +122,8 @@ export function applyDirectCountChecks<T extends { id: string; labelCode: string
   return lines.map(row => {
     const check = map.get(countCodeKey(row.labelCode))
     if (!check || check.status !== 'MATCHED' || !check.label) throw new Error(check?.message || '标签资料需核对')
-    return { ...row, ...countFormLine(null, row.labelCode, row.id, check.label, warehouse, countByLocation),
+    return { ...row, ...countFormLine(null, row.labelCode, row.id, check.label, warehouse, countByLocation,
+        (row as Partial<CountFormLine>).locationCode),
       requestedQty: row.requestedQty, countQuantityConfirmed: row.countQuantityConfirmed !== false }
   })
 }
