@@ -58,11 +58,14 @@ SELECT id,operation_id,operation_line_id,label_id,event_key,event_role,
        attempt_count,last_error_code,last_error_message,completed_at,payload_json
 FROM dbo.traceback_sync_task WHERE operation_id=@operation_id ORDER BY id;
 
-/* 6. 累计上传计划：冻结本次计算使用的“先前已上传标签”贡献。
-   当前159为首轮，previous_labels_json=[]正常；本次标签见业务明细。
-   后续上传同一原单会按命中料批仓/货位读取历史贡献，并排除本次重盘的同码。 */
-SELECT operation_id,source_document_id,previous_labels_json,created_at
-FROM dbo.inventory_count_upload_plan WHERE operation_id=@operation_id;
+/* 6. 本次上传基线：与其他日志共用business_operation_event，不再有盘点专表。
+   当前159为首轮，previousLabels=[]正常；本次标签见业务明细。
+   后续上传按命中料批仓/货位读取历史贡献，并排除本次重盘的同码。
+   019将原辅助表的数据迁入此通用事件，原快照保持不变。 */
+SELECT operation_id,JSON_VALUE(event_data_json,'$.sourceDocumentId') AS source_document_id,
+       JSON_QUERY(event_data_json,'$.previousLabels') AS previous_labels_json,created_at
+FROM dbo.business_operation_event
+WHERE operation_id=@operation_id AND event_type='UPLOAD_BASELINE';
 
 /* 7. 操作事件：执行过程、失败/恢复和修复审计。
    TRACEBACK_JSON_REPAIRED是JSON修复记录，不是库存数量流水。 */

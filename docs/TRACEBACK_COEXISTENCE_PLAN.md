@@ -1,6 +1,6 @@
 # TraceBack 三表并行运行与迁移方案
 
-当前盘点JSON按[已核查的旧样本合同](TRACEBACK_COUNT_JSON_CONTRACT.md)适配；API0.12.8/Gateway0.11.6仅改盘点，其他事件完整JSON后续逐类检查。159已有JSON修复不重复数量流水，见[最新发布](DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
+当前盘点JSON按[旧样本合同](TRACEBACK_COUNT_JSON_CONTRACT.md)适配，Gateway0.11.6保持；API0.12.9/019将上传基线归并通用操作事件并移除专表，数量、旧表和上传开关不变，见[当前发布](DEPLOYMENT_2026-11-05_GENERIC_UPLOAD_BASELINE.md)。其他事件完整JSON后续逐类检查。
 
 资料复核：2026-11-05。材料出库、调拨、货位调整及888盘点差异已部署；盘点新累计/余额规则实写待用户重测，见[本次记录](DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。首打/补打与恢复已有888/PDF阶段证据，008打印未发布。
 

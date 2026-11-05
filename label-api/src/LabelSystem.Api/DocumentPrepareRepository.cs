@@ -166,11 +166,14 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         for (var index = 0; index < groups.Length; index++)
         {
             var group = groups[index];
+            var countSource = definition.DocumentType == "inventory-count" ? request.InventoryCount?.Source : null;
             var operationNo = $"{definition.OperationPrefix}-{now:yyMMddHHmmss}-{Guid.NewGuid():N}"[..32];
             var clientRequestId = groups.Length == 1 ? groupId : $"{groupId}:{index + 1}";
             var operationId = await InsertOperationAsync(
                 connection, transaction, operationNo, groupId, clientRequestId,
-                group.Type, group.Id, group.No, request, definition,
+                countSource is null ? group.Type : "inventory-count",
+                countSource?.Document.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? group.Id,
+                countSource?.Document.DocumentNo ?? group.No, request, definition,
                 payloadHash, archive, options, now, lockExpiresAt, cancellationToken);
             await InsertLinesAsync(connection, transaction, operationId, request, definition, group.Lines, cancellationToken);
             await InsertEventAsync(connection, transaction, operationId, 1, "REQUEST_RECEIVED",

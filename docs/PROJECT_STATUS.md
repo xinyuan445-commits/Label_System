@@ -2,9 +2,9 @@
 
 按功能查询“能做什么、哪些受限、还缺什么、在哪里验证”，进入[功能档案](features/README.md)。本页保留项目级环境与版本汇总。
 
-资料复核：2026-11-05。盘点dev.93/API0.12.8/Gateway0.11.6已部署；JSON与完成自动上传开关已修复，操作159的新旧余额、ERP实盘和JSON实际复核通过；新自动上传实机待用户验收。生产008未发布，无新迁移。
+资料复核：2026-11-05。API0.12.9/019已部署888，累计基线迁入通用事件并删除专表；上传保持true、数据与余额保留，102项API通过/1跳过。H5 dev.93、Gateway0.11.6及生产008未变。开发统一按[基础可用基准](DEVELOPMENT_BASELINE.md)执行。
 
-本地源码及开发部署：H5 dev.93，API0.12.8、Gateway0.11.6；APK0.5.5/111不变。888盘点累计、上传同步余额及JSON保持，自动上传按开关执行，隐藏未接入开关；审核/弃审和008盘点关闭，见[现行发布](DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
+本地源码及开发部署：H5 dev.93、开发API0.12.9 / Gateway0.11.6，APK不变。019移除盘点专表，基线与过程共用操作事件；原单关联用业务单头，完成自动上传及既有配置保持。实际新的自动上传仍由用户验收，见[现行发布](DEPLOYMENT_2026-11-05_GENERIC_UPLOAD_BASELINE.md)。
 
 本文汇总当前实现、已记录部署及验收边界。架构和业务规则分别以根目录 `ARCHITECTURE.md`、`BUSINESS_LOGIC.md` 为准；数据库及接口合同见各自设计文档。带日期的部署报告、决策记录、测试数据数量和旧版禁写描述只证明当时状态，不覆盖本文的当前状态。源码版本、健康接口中的配置版本和服务器实际安装程序需分别核对，不以版本字符串单独证明发布完成。
 
@@ -16,8 +16,8 @@
 | H5 当前接入 | `172.16.1.159:9891` | 2026-11-05用户要求切888：实际配置/只读来源确认为development / LabelSystem_Dev / 888 / UFDATA_888_2021；5175不变，9890/008正式链保留 |
 | 生产 Business API | `9890`，`LabelSystem_Prod / 008 / UFDATA_008_2021` | 2026-11-04 `ready / production / 0.12.3`；登录、原单/核验成功，原业务写入开关true保留，盘点canSubmit=false |
 | 生产 Gateway | `9880`，`0.11.2.0` | 盘点原单及盈亏类别读取成功；来源配置内容不变，生产门禁和精确白名单保留 |
-| 打印开发 Business API / Gateway | `9891 / 9881`，`LabelSystem_Dev / 888 / UFDATA_888_2021` | API0.12.8/配置0.12.8-count-dev，Gateway0.11.6.0；盘点JSON/已有159修复通过，上传开关恢复true；9881仍仅159本机 |
-| Business API / Gateway源码 | `0.12.8 / 0.11.6` | 仅888更新；生产API0.12.3/Gateway0.11.2保留 |
+| 打印开发 Business API / Gateway | `9891 / 9881`，`LabelSystem_Dev / 888 / UFDATA_888_2021` | API0.12.9/配置0.12.9-count-dev；Gateway0.11.6.0保持，888上传开启；1条基线迁入通用事件、专表已删除 |
+| Business API / Gateway源码 | `0.12.9 / 0.11.6` | 仅开发API更新；生产API0.12.3/Gateway0.11.2保持 |
 | APK / 桥 | `0.5.5 / 111`，`pda-bridge-v1` | PX101A已覆盖安装并启动，桥health/新包装脚本确认通过；物理扫码/离线续扫待现场验收 |
 | 独立打印网页 / 助手 | 每台电脑本地 `127.0.0.1:18003 / 9110`，助手 `0.7.2` | 固定连接159的9891及888来源；159旧18003部署已删除，生产008打印未发布 |
 
@@ -27,7 +27,7 @@
 
 ## 2. 数据库迁移
 
-2026-11-05已读取开发schema_migration并安装018；Test/Prod范围沿用既有记录，本次未执行其迁移：
+2026-11-05已读取开发schema_migration并安装019；Test/Prod沿用既有记录，本次未迁移：
 
 | 迁移 | 用途 | 已记录执行范围 |
 | --- | --- | --- |
@@ -35,8 +35,9 @@
 | `016` / `049_cache_u8_materials.sql` | 当前账套的在用物料缓存 | Dev、Test、Prod，2026-10-19物料部署记录 |
 | `017` / `052_label_print_phase1.sql` | 正式打印模板、设备、任务字段和恢复约束 | 仅 `LabelSystem_Dev` 已记录安装；Test、Prod未记录安装 |
 | `018` / `053_inventory_count_upload_totals.sql` | 累计上传冻结基线、盘点TraceBack角色 | 仅LabelSystem_Dev，本次实际安装/校验 |
+| `019` / `054_merge_inventory_count_baseline_into_events.sql` | 基线迁入通用事件、移除盘点专表 | 仅LabelSystem_Dev，本次安装/校验通过 |
 
-仅开发库新增018（053_inventory_count_upload_totals.sql），冻结累计上传基线及允许COUNT_ADJUSTMENT角色；018记录含64位脚本校验值。不能将开发迁移推广到其他环境，不改已执行SQL。
+019迁移仅开发库安装，原1条基线完整迁入通用UPLOAD_BASELINE事件，原单ID补入通用业务单头后移除专表；018及之前脚本不改写，019独立记录校验值。
 
 ## 3. 已实现与验收边界
 

@@ -103,6 +103,37 @@ public sealed class InventoryCountUploadTests
     }
 
     [Fact]
+    public void MigratedAndNewCommonEventBaselinesKeepIdenticalCumulativePayloadsOnRetry()
+    {
+        const string migrated = """
+            {"documentType":"inventory-count","sourceDocumentId":12,"previousLabels":[
+              {"Code":"OLD","MaterialCode":"M1","BatchNo":"B1","WarehouseCode":"W1","LocationCode":"L1","ActualQuantity":14.000000}]}
+            """;
+        var previous = InventoryCountUploadRepository.ReadBaseline(migrated, 12);
+        var savedAgain = JsonSerializer.Serialize(new DocumentUploadBaseline("inventory-count", 12, previous),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var op = Operation(Line(1, "NEW", 49, 50));
+        var first = InventoryCountUploadRules.Build(op, Request(), Operator(), previous);
+        var retry = InventoryCountUploadRules.Build(op, Request(), Operator(), InventoryCountUploadRepository.ReadBaseline(savedAgain, 12));
+        Assert.Equal(64m, first.Lines.Single()["icvcquantity"]);
+        Assert.Equal(JsonSerializer.Serialize(first), JsonSerializer.Serialize(retry));
+        Assert.Empty(InventoryCountUploadRepository.ReadBaseline(
+            """{"documentType":"inventory-count","sourceDocumentId":12,"previousLabels":[]}""", 12));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("invalid json")]
+    [InlineData("{\"documentType\":\"transfer\",\"sourceDocumentId\":12,\"previousLabels\":[]}")]
+    [InlineData("{\"documentType\":\"inventory-count\",\"sourceDocumentId\":13,\"previousLabels\":[]}")]
+    [InlineData("{\"documentType\":\"inventory-count\",\"sourceDocumentId\":12}")]
+    public void InvalidOrWrongSourceFrozenEventsAreNeverRecomputedAsAnEmptyBaseline(string json)
+    {
+        Assert.Equal("UPLOAD_BASELINE_INVALID", Assert.Throws<ApiException>(() =>
+            InventoryCountUploadRepository.ReadBaseline(json, 12)).Code);
+    }
+
+    [Fact]
     public void LaterUploadAccumulatesUniqueCodesAndCorrectionReplacesPreviousContribution()
     {
         InventoryCountContribution[] previous = [

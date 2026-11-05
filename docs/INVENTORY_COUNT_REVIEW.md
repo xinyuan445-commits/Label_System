@@ -1,6 +1,6 @@
 # 盘点方案复核与后置记录
 
-资料复核：2026-11-05；dev.93 / API0.12.8 / Gateway0.11.6已部署，无新迁移。前端44项、API96通过/1跳过、Gateway合同及构建通过；159数据/JSON已复核修复，新自动上传及恢复实机待用户验证，见[现行发布](DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
+资料复核：2026-11-05；API0.12.9/019已部署，基线归并通用操作事件、原专表移除，102项API通过/1跳过；本次未改H5/Gateway或重跑实机，既有dev.93/0.11.6证据保持，见[发布记录](DEPLOYMENT_2026-11-05_GENERIC_UPLOAD_BASELINE.md)。后续依[基础可用基准](DEVELOPMENT_BASELINE.md)记录，不给正常上传增加前置流程。
 
 ## 1. 现行结论
 
