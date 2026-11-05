@@ -522,6 +522,16 @@ test('盘点只读表头和业务身份检查，不接受跨仓、重复行、�
   row.countQuantityConfirmed = true; helper.requireCountForm(source(), [row])
 })
 
+test('盘点单位跟随原单物料，不比较旧标签的单位文字或编码', async t => {
+  const f = fixture(t), helper = f.load('@/services/inventory-count-documents')
+  const src = source(); src.lines[0].unitCode = '0101'
+  for (const unitCode of ['张', 'U2', '']) {
+    const row = helper.countFormLine(src, code, 'x', { ...label(), unitCode })
+    assert.equal(row.unitCode, '0101')
+    assert.throws(() => helper.countFormLine(src, code, 'x', { ...label(), unitCode, materialCode: 'M2' }))
+  }
+})
+
 test('后台同步旧回执与新明细保存并发时，不能回写覆盖较新草稿', async t => {
   const f = fixture(t), v = await f.select()
   await scanAndConfirm(f, v, '1')

@@ -94,8 +94,6 @@ public static partial class InventoryCountRules
         var match = candidates[0];
         if (match.RequiresAuxiliaryUnit || match.FreeItems is null || match.FreeItems.Any(v => !string.IsNullOrWhiteSpace(v)))
             return new(code, "IDENTITY_NOT_SUPPORTED", "此明细的单位或自由项需另行核对。");
-        if (string.IsNullOrWhiteSpace(match.UnitCode) || !Same(match.UnitCode, snapshot.UnitCode))
-            return new(code, "UNIT_MISMATCH", "计量单位不一致。");
         if (!TryQuantity(observation.Quantity, out _))
             return new(code, "QUANTITY_REQUIRED", "请输入有效实盘数量。", match.Id, match.MaterialName);
         return new(code, "MATCHED", "", match.Id, match.MaterialName, snapshot.Balance, snapshot.LatestFlowId, snapshot.LocationCode);

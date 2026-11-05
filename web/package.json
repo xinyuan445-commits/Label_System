@@ -1,7 +1,7 @@
 {
   "name": "label-system-web",
   "private": true,
-  "version": "0.2.0-dev.89",
+  "version": "0.2.0-dev.90",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

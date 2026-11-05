@@ -49,7 +49,6 @@ public sealed class InventoryCountCollectionTests
     {
         Assert.Equal("OUTSIDE_SOURCE", InventoryCountRules.Match(Source(), Observation(), Label() with { LocationCode = "L2" }).Status);
         Assert.Equal("OUTSIDE_SOURCE", InventoryCountRules.Match(Source(), Observation(), Label() with { BatchNo = "B2" }).Status);
-        Assert.Equal("UNIT_MISMATCH", InventoryCountRules.Match(Source(), Observation(), Label() with { UnitCode = "U2" }).Status);
         Assert.Equal("LABEL_INVALID", InventoryCountRules.Match(Source(), Observation(), Label() with { Balance = -1m }).Status);
         Assert.Equal("LABEL_INVALID", InventoryCountRules.Match(Source(), Observation(), Label() with { Status = "RECONCILIATION_REQUIRED" }).Status);
         Assert.Equal("LABEL_INVALID", InventoryCountRules.Match(Source(), Observation(), Label() with { Code = "other" }).Status);
@@ -59,6 +58,19 @@ public sealed class InventoryCountCollectionTests
         Assert.Equal("AMBIGUOUS_SOURCE", InventoryCountRules.Match(duplicate, Observation(), Label()).Status);
         var free = Source() with { Lines = [Source().Lines[0] with { FreeItems = ["A"] }] };
         Assert.Equal("IDENTITY_NOT_SUPPORTED", InventoryCountRules.Match(free, Observation(), Label()).Status);
+    }
+
+    [Theory]
+    [InlineData("张")]
+    [InlineData("U2")]
+    [InlineData("")]
+    public void CountUsesMaterialUnitWithoutComparingLegacyLabelUnit(string legacyUnit)
+    {
+        var source = Source() with { Lines = [Source().Lines[0] with { UnitCode = "0101" }] };
+        Assert.Equal("MATCHED", InventoryCountRules.Match(source, Observation(),
+            Label() with { UnitCode = legacyUnit }).Status);
+        Assert.Equal("OUTSIDE_SOURCE", InventoryCountRules.Match(source, Observation(),
+            Label() with { UnitCode = legacyUnit, MaterialCode = "M2" }).Status);
     }
 
     [Fact]

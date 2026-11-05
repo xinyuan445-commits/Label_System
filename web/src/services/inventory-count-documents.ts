@@ -57,7 +57,7 @@ export function countFormLine(source: CountSource | null, code: string, id: stri
   }
   if (!same(warehouse, label.warehouseCode)) throw new Error('标签不属于所选仓库')
   if (countByLocation && !label.locationCode?.trim()) throw new Error('标签缺少货位，请核对')
-  if (!label.materialCode || !label.unitCode) throw new Error('标签资料需核对')
+  if (!label.materialCode || (!source && !label.unitCode)) throw new Error('标签资料需核对')
   const candidates = source?.lines.filter(line => same(line.materialCode, label.materialCode) &&
     same(line.batchNo, label.batchNo) && same(line.warehouseCode, label.warehouseCode) &&
     (!countByLocation || same(line.locationCode, label.locationCode)))
@@ -67,9 +67,8 @@ export function countFormLine(source: CountSource | null, code: string, id: stri
       line.freeItems.some(value => typeof value !== 'string' || value.trim()))) {
     throw new Error('此明细的单位或自由项需核对')
   }
-  if (line && (!line.unitCode || !same(line.unitCode, label.unitCode))) throw new Error('计量单位不一致')
   return { ...result, materialCode: label.materialCode, materialName: label.materialName || line?.materialName || '',
-    batchNo: label.batchNo, unitCode: label.unitCode, warehouseCode: label.warehouseCode,
+    batchNo: label.batchNo, unitCode: line?.unitCode ?? label.unitCode, warehouseCode: label.warehouseCode,
     locationCode: label.locationCode, unitName: label.unitName, warehouseName: label.warehouseName,
     locationName: label.locationName, availableQty: label.availableQty, countPendingIdentity: false }
 }
