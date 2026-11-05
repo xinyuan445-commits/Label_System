@@ -1,5 +1,7 @@
 # 标签管理系统数据库设计说明
 
+2026-11-05后续：盘点CountContext进入既有traceback_sync_task.payload_json，无新迁移；159已完成任务原载荷/哈希保留。已有旧表JSON通过受控工具修复，新增一条操作审计、不新增数量流水或改ERP，见[修复记录](../DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
+
 资料复核与开发迁移验证：2026-11-05。仅LabelSystem_Dev安装[053 / 018](053_inventory_count_upload_totals.sql)，开发迁移表及校验值已核对；Dev至018，Test/Prod仍至016，本次未迁移正式库。按用户要求清理开发业务测试数据，保留账号/配置/档案及防重号记录，U8由用户处理。见[发布与清理记录](../DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
 
 正式打印记录沿用业务操作/明细、库存流水、Code登记及同步任务，本地SQLite只放草稿/素材。018新增inventory_count_upload_plan：operation_id主外键、source_document_id可空、previous_labels_json及created_at，原单ID索引。累计来自成功操作明细，首次生成后冻结，未知结果重试载荷不变；同原单未完成上传阻止新计划。traceback_sync_task角色增加COUNT_ADJUSTMENT。

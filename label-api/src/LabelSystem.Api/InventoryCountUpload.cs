@@ -116,7 +116,9 @@ public static class InventoryCountUploadRules
             ["ccvmemo"] = request.Reason ?? ""
         };
         var options = new Dictionary<string, object?> { ["countPartialSave"] = true,
-            ["countByLocation"] = context.CountByLocation, ["countSource"] = context.Source };
+            ["countByLocation"] = context.CountByLocation, ["countSource"] = context.Source,
+            ["countDocumentDate"] = request.Header.DocumentDate.ToString("yyyy-MM-dd"),
+            ["countDepartmentCode"] = request.Header.DepartmentCode };
         var prior = PreviousForUpload(previous ?? [], operation.Lines, context.CountByLocation);
         options["countPreviousLabels"] = prior;
         options["countLabels"] = operation.Lines.Select(l => new { Code = l.LabelCode,

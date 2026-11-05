@@ -59,7 +59,10 @@ public sealed record MaterialOutboundExecutionOperation(
     string? Reason,
     string ArchiveRelativePath,
     string ArchiveSha256,
-    IReadOnlyList<MaterialOutboundExecutionLine> Lines);
+    IReadOnlyList<MaterialOutboundExecutionLine> Lines)
+{
+    public string? OperationNo { get; init; }
+}
 
 public sealed record MaterialOutboundExecutionLine(
     long Id,

@@ -262,10 +262,12 @@ export async function persistBusinessDocumentSettings(
   for (const [property, definition] of Object.entries(documentDefinitions) as Array<
     [keyof DocumentPolicySettings, SettingDefinition]
   >) {
+    if (documentType === 'inventory-count' && property !== 'autoUploadOnComplete') continue
     if (property === 'allowOverIssue' && documentType !== 'material-outbound') continue
     await updateSetting('DOCUMENT', documentType, definition, policy[property])
   }
   for (const item of globalDefinitions) {
+    if (documentType === 'inventory-count') continue
     await updateSetting('GLOBAL', null, item.definition, settings.globalPallet[item.property])
   }
   for (const property of globallySynced) {

@@ -1,6 +1,6 @@
 # U8 Gateway API 设计
 
-资料复核：2026-11-05；开发9881/888为0.11.5（实际test），生产9880/008保留0.11.2。888盘点累计实盘及上传差异已部署，合同/构建通过，新规则实写由用户测试，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。原双层写门禁及精确白名单保持。
+资料复核：2026-11-05；开发9881/888为0.11.6（test），生产9880/008保留0.11.2。盘点JSON合同及既有数据修复通过，自动上传新单待用户测试，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
 
 ## 盘点现行只读合同（0.11.4）
 
@@ -29,7 +29,7 @@ document除原有单号、日期、仓库、状态、版本/行数外，包含�
 
 0.11.0为原单首批读取，0.11.1补类别，0.11.2补仓库接口和货位状态。11月4日真实888/008原单、启用及未启用货位管理的仓库已有只读GET证据，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；11月5日0.11.3已发布开发888并实际验证单位名称；无迁移或业务写入，详见上述本次发布记录。
 
-## 888盘点保存与差异（0.11.5）
+## 888盘点保存与差异（0.11.6）
 
 有原单使用`PATCH /api/v1/documents/inventory-count/{id}`，只允许header.cirdcode、cordcode、ccvmemo及line.autoid匹配的icvcquantity；不允许增删原单行或改料号。无原单使用现有Create路由。两者保留现有操作归档、请求哈希、幂等和恢复。
 
@@ -37,7 +37,7 @@ document除原有单号、日期、仓库、状态、版本/行数外，包含�
 
 现有sync-events增加COUNT_ADJUSTMENT，仅test/888/UFDATA_888_2021允许；差异可正、负、0，盘后余额不能负，不接受目标位置。原Code追加差异，Goods.quantity为盘后余额，保留属性/位置，Order关联盘点/PDA/ERP号。稳定Goods UUID防重复事件；生产及非888在连接写库前拒绝。新规则实写由用户测试，见[发布记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
 
-保存只保持未审核，不写TraceBack差异事件。真实Create/Update及失败恢复仍待用户首测；本次只读回查PDD26101311的1000行和PATCH字段validate成功，见[验收边界](../../docs/DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。
+U8仍未审核，标签差异在上传确认后同步。COUNT_ADJUSTMENT新增必填CountContext：操作/明细ID、日期、仓库及盘货位、盈亏类别、可选来源ID/单号、操作人与设备信息、备注及本次合计；缺失返回COUNT_TRACE_CONTEXT_REQUIRED。Goods同步实盘数量字段和盘前余额、清除旧移动信息，Order使用真实业务号及本次表头。其他事件角色和签名不变，详见[JSON合同](../../docs/TRACEBACK_COUNT_JSON_CONTRACT.md)。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

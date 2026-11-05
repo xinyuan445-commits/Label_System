@@ -69,6 +69,7 @@ internal static class Program
     { if (!Equals(expected, actual)) throw new InvalidOperationException("Inventory count read contract mismatch."); }
     private static void UploadSaveContract()
     {
+        CountJsonContract();
         foreach (var account in new[] { "008", "888" })
         foreach (var role in new[] { "COUNT_ADJUSTMENT", " count_adjustment " })
         {
@@ -132,6 +133,40 @@ internal static class Program
         Equal(false, preparer.PreparePatch(definition, request, DateTimeOffset.Now).IsValid);
         request.Lines[0].Remove("cinvcode"); request.Lines[0]["_action"] = "delete";
         Equal(false, preparer.PreparePatch(definition, request, DateTimeOffset.Now).IsValid);
+    }
+    private static void CountJsonContract()
+    {
+        var request = new U8Gateway.Contracts.TraceBack.TraceBackSyncEventRequest {
+            EventRole = "COUNT_ADJUSTMENT", PdaDocumentNo = "IC-159", OrderUuid = "test-order",
+            ErpDocumentNo = "PDD1", ErpDetailId = "41", OperatorName = "测试盘点员", ExpectedBalance = 49, Quantity = 1,
+            CountContext = new U8Gateway.Contracts.TraceBack.TraceBackCountContext {
+                OperationId = 159, OperationLineId = 201, DocumentDate = "2026-11-05", WarehouseCode = "W1",
+                InCategoryCode = "107", OutCategoryCode = "207", CountByLocation = true,
+                SourceDocumentId = 12, SourceDocumentNo = "PDD1", TotalQuantity = 75 } };
+        var source = new Newtonsoft.Json.Linq.JObject {
+            ["code"] = "MAT1", ["pdaID"] = 999, ["quantity2"] = 1,
+            ["Attribute"] = new Newtonsoft.Json.Linq.JObject { ["batchNumber"] = "B1", ["quantity2"] = 1, ["quantityD11"] = 50 },
+            ["CurrencyGoodsData"] = new Newtonsoft.Json.Linq.JObject { ["uniquekeyGuid"] = "legacy-goods-identity",
+                ["U8"] = new Newtonsoft.Json.Linq.JObject { ["bFree1"] = false, ["transferInWarehouse"] = "stale" } },
+            ["inventory"] = new Newtonsoft.Json.Linq.JObject { ["storageLocationCode"] = "L1", ["onHandQuantity"] = 63 },
+            ["SourceOrder"] = new Newtonsoft.Json.Linq.JObject(), ["mergeDataJson"] = "old" };
+        var goods = U8Gateway.U8.TraceBack.TraceBackCountJson.Goods(request, source.ToString());
+        Equal(50m, (decimal)goods["quantity"]); Equal(50m, (decimal)goods["quantity2"]);
+        Equal(50m, (decimal)goods["Attribute"]["quantity2"]); Equal(49m, (decimal)goods["Attribute"]["quantityD11"]);
+        Equal("legacy-goods-identity", (string)goods["CurrencyGoodsData"]["uniquekeyGuid"]);
+        Equal(null, goods["CurrencyGoodsData"]["U8"]["transferInWarehouse"]);
+        Equal(null, goods["SourceOrder"]); Equal(null, goods["mergeDataJson"]);
+        Equal(null, goods["inventory"]["onHandQuantity"]); Equal("L1", (string)goods["inventory"]["storageLocationCode"]);
+        Equal(201L, (long)goods["pdaID"]); Equal("IC-159", (string)goods["pdaOrderNumber"]);
+        var order = U8Gateway.U8.TraceBack.TraceBackCountJson.Order(request, "仓库一", "盘盈入库", "盘亏出库", null);
+        Equal("IC-159", (string)order["documentNumber"]); Equal("W1", (string)order["CurrencyOrderData"]["U8"]["cWhCode"]);
+        Equal("1", (string)order["CurrencyOrderData"]["U8"]["bPosCheck"]["name"]);
+        Equal("12", (string)order["CurrencyOrderData"]["SourceVoucherID"]); Equal("PDD1,", (string)order["SourceOrderList"]);
+        Equal(Newtonsoft.Json.Linq.JTokenType.Array, order["showList"].Type);
+        Equal(1793808000000L, (long)order["documentDateTs"]);
+        request.CountContext.SourceDocumentId = null; request.CountContext.SourceDocumentNo = null;
+        order = U8Gateway.U8.TraceBack.TraceBackCountJson.Order(request, "仓库一", "盘盈入库", "盘亏出库", null);
+        Equal(null, order["CurrencyOrderData"]["SourceVoucherID"]); Equal(null, order["SourceOrderList"]);
     }
     private static void SharedMutexContract()
     {

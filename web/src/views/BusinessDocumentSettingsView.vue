@@ -120,14 +120,14 @@ onMounted(async () => {
     <div v-if="!loading" class="page-content">
       <section class="settings-card document-settings-card">
         <h2><span>单据设置</span><small>{{ documentTitle }}</small></h2>
-        <div class="setting-row">
+        <div v-if="documentType !== 'inventory-count'" class="setting-row">
           <span>扫托包含托盘</span>
           <div class="setting-actions">
             <label class="toggle"><input v-model="documentPolicy.includePalletByDefault" type="checkbox" /><i aria-hidden="true"></i></label>
             <button type="button" @click="syncToGlobal('includePalletByDefault')">全局</button>
           </div>
         </div>
-        <div class="setting-row">
+        <div v-if="documentType !== 'inventory-count'" class="setting-row">
           <span>扫码后自动添加到明细</span>
           <div class="setting-actions">
             <label class="toggle"><input v-model="documentPolicy.autoAddScannedDetail" type="checkbox" /><i aria-hidden="true"></i></label>
@@ -141,7 +141,7 @@ onMounted(async () => {
             <button type="button" @click="syncToGlobal('autoUploadOnComplete')">全局</button>
           </div>
         </div>
-        <div class="setting-row">
+        <div v-if="documentType !== 'inventory-count'" class="setting-row">
           <span>上传自动审核</span>
           <div class="setting-actions">
             <label class="toggle"><input v-model="documentPolicy.autoApproveAfterUpload" type="checkbox" /><i aria-hidden="true"></i></label>
@@ -158,9 +158,9 @@ onMounted(async () => {
 
       </section>
 
-      <div class="group-title">全局设置</div>
+      <div v-if="documentType !== 'inventory-count'" class="group-title">全局设置</div>
 
-      <section class="settings-card collapsible-card pallet-card">
+      <section v-if="documentType !== 'inventory-count'" class="settings-card collapsible-card pallet-card">
         <button class="collapse-heading" type="button" @click="toggleSection('pallet')">
           <span class="collapse-title"><b>托</b><span>托盘设置</span></span>
           <svg :class="{ expanded: expandedSections.pallet }" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>

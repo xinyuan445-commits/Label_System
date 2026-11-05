@@ -118,7 +118,7 @@ public sealed class MaterialOutboundExecutionService(
                     : ReadErpRows(item.Operation.ErpDocumentType, result.Document);
                 EnsureErpRows(item.Operation, rows);
                 IReadOnlyList<TraceBackSyncTaskDraft> traceBackTasks = TraceBackSyncPlanner.Build(item.Operation, result, item.RedVoucher, rows,
-                        item.Request.OperatorName, options.CurrentValue.ErpAccountId);
+                        item.Request.OperatorName, options.CurrentValue.ErpAccountId, item.Request);
                 await executionRepository.CompleteAsync(
                     item.Operation, result, item.RedVoucher, request.AutoApprove && item.Operation.ErpDocumentType != "inventory-count",
                     rows, traceBackTasks, requestId, cancellationToken);

@@ -2,7 +2,7 @@
 
 按功能查看支持能力、限制与验收证据，进入[功能档案](../docs/features/README.md)；Gateway字段及异常合同继续在本目录维护。
 
-资料复核：2026-11-05；开发9881/888为0.11.5，生产9880/008保留0.11.2。盘点Create/窄字段Update按已上传实盘累计，COUNT_ADJUSTMENT追加盘点差异（含0）；保留原单账面、未命中行及标签位置。合同/构建及开发健康通过，新规则实写由用户测试；审核/删除及生产盘点写入关闭，见[本次发布](../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
+资料复核：2026-11-05；开发9881/888为0.11.6，生产9880/008保留0.11.2。盘点专用Goods/Order JSON按[旧样本合同](../docs/TRACEBACK_COUNT_JSON_CONTRACT.md)重建；修复159现有JSON、未新增数量流水或改ERP。合同/构建及真实快照通过，新上传待用户验收，见[发布记录](../docs/DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
 
 只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。库存来源事件与首打初始登记使用不同接口；盘点差异只允许test/888/UFDATA_888_2021，位置不变。打印已有888/PDF验收，008打印尚未发布，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
 

@@ -65,6 +65,7 @@ namespace U8Gateway.U8.TraceBack
                 (!Same(_database, "UFDATA_888_2021") || !Same(AccountCode(_accountId), "888") ||
                  !Same(_environment, "test")))
                 throw new TraceBackSyncException("COUNT_UPLOAD_TEST_ONLY", "盘点同步仅开放888测试账套。");
+            if (request.EventRole == "COUNT_ADJUSTMENT") TraceBackCountJson.Validate(request);
             bool test = string.Equals(_environment, "test", StringComparison.OrdinalIgnoreCase);
             bool production = string.Equals(
                 _environment, "production", StringComparison.OrdinalIgnoreCase);
@@ -300,7 +301,7 @@ WHERE o.id=@id AND o.traceBackCode=@code;", connection, transaction))
                     throw new TraceBackSyncException("TRACEBACK_ORDER_DUPLICATED", "追溯来源记录重复。");
                 if (count == 1) return;
             }
-            var json = new JObject
+            var order = new JObject
             {
                 ["documentNumber"] = request.PdaDocumentNo ?? string.Empty,
                 ["orderType"] = request.OrderType ?? string.Empty,
@@ -309,7 +310,28 @@ WHERE o.id=@id AND o.traceBackCode=@code;", connection, transaction))
                     ["uploadedErpOrder"] = request.ErpDocumentNo ?? string.Empty,
                     ["sourceOrderType"] = request.OrderType ?? string.Empty
                 }
-            }.ToString(Newtonsoft.Json.Formatting.None);
+            };
+            if (request.EventRole == "COUNT_ADJUSTMENT")
+            {
+                var c = request.CountContext;
+                using (var names = new SqlCommand(@"
+SELECT (SELECT cWhName FROM dbo.Warehouse WHERE cWhCode=@warehouse),
+       (SELECT cRdName FROM dbo.Rd_Style WHERE cRdCode=@in_code),
+       (SELECT cRdName FROM dbo.Rd_Style WHERE cRdCode=@out_code),
+       (SELECT cDepName FROM dbo.Department WHERE cDepCode=@department);", connection, transaction))
+                {
+                    names.Parameters.AddWithValue("@warehouse", c.WarehouseCode);
+                    names.Parameters.AddWithValue("@in_code", c.InCategoryCode);
+                    names.Parameters.AddWithValue("@out_code", c.OutCategoryCode);
+                    names.Parameters.AddWithValue("@department", c.DepartmentCode ?? "");
+                    using (var row = names.ExecuteReader())
+                    {
+                        row.Read();
+                        order = TraceBackCountJson.Order(request, Text(row, 0), Text(row, 1), Text(row, 2), Text(row, 3));
+                    }
+                }
+            }
+            var json = order.ToString(Newtonsoft.Json.Formatting.None);
             using (var insert = new SqlCommand(@"
 INSERT INTO dbo.TraceBackOrder(json,pdaOrderUuid,orderType,[time])
 VALUES(@json,@uuid,@order_type,GETDATE());", connection, transaction))
@@ -328,6 +350,7 @@ VALUES(@json,@uuid,@order_type,GETDATE());", connection, transaction))
             JObject json;
             try { json = JObject.Parse(source.Json); }
             catch { throw new TraceBackSyncException("TRACEBACK_GOODS_JSON_INVALID", "标签属性格式无效。"); }
+            if (request.EventRole == "COUNT_ADJUSTMENT") json = TraceBackCountJson.Goods(request, source.Json);
             decimal quantity = string.Equals(request.EventRole, "COUNT_ADJUSTMENT", StringComparison.OrdinalIgnoreCase)
                 ? request.ExpectedBalance + request.Quantity : string.Equals(
                 request.EventRole, "FULL_MOVE", StringComparison.OrdinalIgnoreCase)

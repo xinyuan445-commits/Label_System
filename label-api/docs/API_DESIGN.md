@@ -1,6 +1,6 @@
 # Label System API
 
-资料复核：2026-11-05；开发9891/888为0.12.7，生产9890/008保留0.12.3。盘点按已上传唯一Code累计实盘，上传确认后同步标签差异；API96通过/1跳过，Gateway合同及构建通过，新规则真实写入由用户重测。见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
+资料复核：2026-11-05；开发9891/888为0.12.8，生产9890/008保留0.12.3。API96通过/1跳过；盘点任务补齐冻结业务元数据，修复159已有JSON，自动上传新单待实测，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
 
 材料出库、调拨、货位调整及888盘点已接TraceBack；不能推广到其他单据。盘点标准草稿/核验不改余额，上传ERP确认后追加差异。审核/弃审及008盘点上传关闭。旧请求缺inventoryCount上下文在镜像/建操作前拒绝，核验canSubmit=false与上传uploadSaveEnabled分开。
 
@@ -56,7 +56,9 @@ H5使用标准IndexedDB草稿及既有009服务端草稿同步，旧独立库仅
 
 版本沿革：0.12.0原单读取/核验，0.12.1类别合同，0.12.2无原单只读核验，0.12.3仓库货位状态及前后复核，0.12.4取消标签/原单单位比较，0.12.5透传原单单位名称（开发888已发布）。
 
-## 888盘点上传与累计（0.12.7）
+## 888盘点上传与累计（0.12.8）
+
+同步任务CountContext由可信归档、操作明细及确认的ERP结果生成并冻结，包含真实操作/明细ID、日期/仓库/盘货位、类别及可选来源、设备/操作人、备注/合计。PdaDocumentNo使用operation_no；非盘点不序列化此可选字段。已完成159任务载荷/哈希保留，JSON修复另记审计，见[合同](../../docs/TRACEBACK_COUNT_JSON_CONTRACT.md)。
 
 复用`POST /api/v1/operations/documents/inventory-count/submit`，沿用当前登录权限、ERP操作人、单据分类权限、clientRequestId、业务组、归档/锁与恢复。生产008拒绝；只允许development / 888 / UFDATA_888_2021，且U8WritesEnabled及InventoryCountUploadsEnabled均为true。开关默认false。请求新增inventoryCount：accountId、databaseName、countByLocation、可选完整source快照（含原指纹）；其余表头/行沿用DocumentPrepareRequest。旧请求和大小写路由变体均在镜像刷新/建操作前拦截。
 

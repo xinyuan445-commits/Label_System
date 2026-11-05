@@ -2,6 +2,7 @@ using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Options;
 
@@ -22,7 +23,13 @@ public sealed record TraceBackSyncEventRequest(
     string? ErpDetailId,
     string OperatorName,
     string? TargetWarehouseCode,
-    string? TargetLocationCode);
+    string? TargetLocationCode,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] TraceBackCountContext? CountContext = null);
+
+public sealed record TraceBackCountContext(long OperationId, long OperationLineId, string DocumentDate,
+    bool CountByLocation, string WarehouseCode, string InCategoryCode, string OutCategoryCode,
+    long? SourceDocumentId, string? SourceDocumentNo, string? DeviceId, string? OperatorId,
+    string? DepartmentCode, string? Remark, decimal TotalQuantity);
 
 public sealed record TraceBackSyncEventResult(
     string EventKey, bool AlreadyApplied, long FlowId, decimal Balance,
@@ -59,7 +66,8 @@ public static class TraceBackSyncPlanner
         bool redVoucher,
         IReadOnlyDictionary<int, (string? LineId, string? PositionId)> erpRows,
         string operatorName,
-        string accountId)
+        string accountId,
+        GatewayDocumentRequest? countRequest = null)
     {
         if (string.IsNullOrWhiteSpace(result.VoucherCode))
             throw new InvalidOperationException("U8 单据号缺失。");
@@ -114,12 +122,25 @@ public static class TraceBackSyncPlanner
             var eventKey = $"tb:{accountId}:{operation.Id}:{line.Id}:{role}:{result.VoucherCode}";
             var goodsUuid = StableGuid("traceback-goods|" + eventKey);
             erpRows.TryGetValue(line.LineNo, out var erp);
+            TraceBackCountContext? countContext = null;
+            if (role == "COUNT_ADJUSTMENT")
+            {
+                if (countRequest is null || !countRequest.Options.TryGetValue("countDocumentDate", out var date))
+                    throw new InvalidOperationException("盘点追溯资料不完整。");
+                var source = countRequest.Options["countSource"] as InventoryCountSource;
+                countRequest.Options.TryGetValue("countDepartmentCode", out var department);
+                countContext = new(operation.Id, line.Id, Convert.ToString(date)!,
+                    countRequest.Options["countByLocation"] is true, operation.WarehouseCode,
+                    Convert.ToString(countRequest.Header["cirdcode"])!, Convert.ToString(countRequest.Header["cordcode"])!,
+                    source?.Document.Id, source?.Document.DocumentNo, operation.DeviceId,
+                    operation.OperatorId, Convert.ToString(department), operation.Reason, products.Sum(l => l.RequestedQty));
+            }
             var payload = new TraceBackSyncEventRequest(
                 eventKey, role, line.LabelCode, quantity,
                 line.TraceBackLatestFlowId!.Value, line.InventoryQtySnapshot,
                 orderUuid.ToString("D"), goodsUuid.ToString("D"), orderType,
-                operation.ClientRequestId, result.VoucherCode!, erp.LineId,
-                operatorName, targetWarehouse, targetLocation);
+                countContext is null ? operation.ClientRequestId : operation.OperationNo ?? $"IC-{operation.Id}", result.VoucherCode!, erp.LineId,
+                operatorName, targetWarehouse, targetLocation, countContext);
             var json = JsonSerializer.Serialize(payload, JsonOptions);
             var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
             tasks.Add(new TraceBackSyncTaskDraft(

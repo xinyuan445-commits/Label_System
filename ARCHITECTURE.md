@@ -2,7 +2,7 @@
 
 按功能查看能力、限制、未完成事项和验收证据，进入[功能档案](docs/features/README.md)。本文件继续维护架构；环境版本在项目状态汇总，功能档案引用详细规则和部署证据，避免复制多份技术设计。
 
-2026-11-05 H5 dev.92、开发API0.12.7 / Gateway0.11.5已部署；888盘点按已上传唯一Code累计实盘，上传确认后同步TraceBack及本地余额。生产008仍关闭盘点上传。H5为5175→9891/9881→888/LabelSystem_Dev，Gateway实际环境test。自动验证通过，新规则实写由用户重新测试，见[本次发布](docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)和[项目状态](docs/PROJECT_STATUS.md)。
+2026-11-05 H5 dev.93、开发API0.12.8 / Gateway0.11.6已部署；888盘点累计实盘及上传同步余额保持，补齐盘点JSON和完成自动上传。5175→9891/9881→888/LabelSystem_Dev；生产008盘点关闭且后台未更新。自动测试及已有JSON修复通过，自动上传新单实机待验，见[本次发布](docs/DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
 
 页面共同设计以[UI_DESIGN.md](UI_DESIGN.md)为准，实际页面结构、差异、待办和发布/验收状态见[页面设计记录](docs/PAGE_DESIGN_RECORD.md)。H5页面调整前必须核对二者，调整后同步维护；业务逻辑独立不能作为另起视觉模板的理由。
 

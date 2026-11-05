@@ -56,6 +56,25 @@ namespace U8Gateway.Contracts.TraceBack
         public string TargetWarehouseCode { get; set; }
         public string TargetLocationCode { get; set; }
         public bool ValidateOnly { get; set; }
+        public TraceBackCountContext CountContext { get; set; }
+    }
+
+    public sealed class TraceBackCountContext
+    {
+        public long OperationId { get; set; }
+        public long OperationLineId { get; set; }
+        public string DocumentDate { get; set; }
+        public bool CountByLocation { get; set; }
+        public string WarehouseCode { get; set; }
+        public string InCategoryCode { get; set; }
+        public string OutCategoryCode { get; set; }
+        public long? SourceDocumentId { get; set; }
+        public string SourceDocumentNo { get; set; }
+        public string DeviceId { get; set; }
+        public string OperatorId { get; set; }
+        public string DepartmentCode { get; set; }
+        public string Remark { get; set; }
+        public decimal TotalQuantity { get; set; }
     }
 
     public sealed class TraceBackSyncEventResult

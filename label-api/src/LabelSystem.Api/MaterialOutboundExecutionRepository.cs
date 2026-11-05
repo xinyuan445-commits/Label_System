@@ -28,7 +28,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                    ISNULL(line.inventory_qty_snapshot,0), line.requested_qty,
                    ISNULL(line.from_warehouse_code,N''), line.from_location_code,
                    line.to_warehouse_code, line.to_location_code, line.remark,
-                   TRY_CONVERT(bigint,JSON_VALUE(line.inventory_attributes_json,'$.traceBackLatestFlowId'))
+                   TRY_CONVERT(bigint,JSON_VALUE(line.inventory_attributes_json,'$.traceBackLatestFlowId')),
+                   op.operation_no
             FROM dbo.business_operation op
             CROSS APPLY
             (
@@ -77,6 +78,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
                     reader.IsDBNull(18) ? null : reader.GetString(18),
                     reader.IsDBNull(19) ? string.Empty : reader.GetString(19),
                     reader.IsDBNull(20) ? string.Empty : reader.GetString(20));
+                builder.OperationNo = reader.GetString(41);
                 builders.Add(operationId, builder);
             }
             if (reader.IsDBNull(21)) continue;
@@ -1156,12 +1158,13 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         string? reason, string archiveRelativePath, string archiveSha256)
     {
         public List<MaterialOutboundExecutionLine> Lines { get; } = [];
+        public string? OperationNo { get; set; }
 
         public MaterialOutboundExecutionOperation Build() => new(
             id, rootOperationId, groupId, clientRequestId, operatorId, operationType,
             erpDocumentType, status, erpStatus, erpDocumentNo, erpVersionAfter, approvalStatus, sourceDocumentType,
             sourceDocumentId, sourceDocumentNo, warehouseCode, deviceId, deviceModel,
-            reason, archiveRelativePath, archiveSha256, Lines);
+            reason, archiveRelativePath, archiveSha256, Lines) { OperationNo = OperationNo };
     }
 }
 

@@ -141,7 +141,8 @@ public sealed class InventoryCountUploadTests
         var op = Operation(Line(1, "GAIN", 49, 50), Line(2, "LOSS", 8, 5), Line(3, "SAME", 14, 14), Line(4, "ZERO", 6, 0));
         var result = new GatewayDocumentResult(true, true, "OK", "", "12", "COUNT12", "v2", null);
         var rows = op.Lines.ToDictionary(l => l.LineNo, _ => ((string?)"41", (string?)null));
-        var tasks = TraceBackSyncPlanner.Build(op, result, false, rows, "User", "888");
+        var countRequest = InventoryCountUploadRules.Build(op, Request(), Operator());
+        var tasks = TraceBackSyncPlanner.Build(op, result, false, rows, "User", "888", countRequest);
         Assert.Equal(4, tasks.Count);
         Assert.All(tasks, t => Assert.Equal("COUNT_ADJUSTMENT", t.EventRole));
         var payloads = tasks.Select(t => JsonSerializer.Deserialize<TraceBackSyncEventRequest>(t.PayloadJson,
@@ -149,7 +150,15 @@ public sealed class InventoryCountUploadTests
         Assert.Equal(new decimal[] { 1, -3, 0, -6 }, payloads.Select(p => p.Quantity));
         Assert.Equal(new decimal[] { 50, 5, 14, 0 }, payloads.Select(p => p.ExpectedBalance + p.Quantity));
         Assert.All(payloads, p => { Assert.Null(p.TargetWarehouseCode); Assert.Null(p.TargetLocationCode); });
-        Assert.Equal(tasks.Select(t => t.EventKey), TraceBackSyncPlanner.Build(op, result, false, rows, "User", "888").Select(t => t.EventKey));
+        Assert.All(payloads, p => {
+            Assert.Equal("IC-1", p.PdaDocumentNo);
+            Assert.Equal("2026-11-05", p.CountContext!.DocumentDate);
+            Assert.Equal("W1", p.CountContext.WarehouseCode);
+            Assert.True(p.CountContext.CountByLocation);
+            Assert.Equal(12, p.CountContext.SourceDocumentId);
+            Assert.Equal("COUNT12", p.CountContext.SourceDocumentNo);
+        });
+        Assert.Equal(tasks.Select(t => t.EventKey), TraceBackSyncPlanner.Build(op, result, false, rows, "User", "888", countRequest).Select(t => t.EventKey));
     }
 
     [Fact]

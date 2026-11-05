@@ -2014,13 +2014,7 @@ async function finishDocument(): Promise<void> {
       completionError.value = '单据校验未通过'
       return
     }
-    if (props.documentType !== 'inventory-count' && documentPolicy.value.autoUploadOnComplete && lines.value.length) {
-      try {
-        await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
-      } catch (error) {
-        notify(error instanceof Error ? error.message : '上传失败', 'error')
-      }
-    }
+    await autoUploadCompletedDocument(stored)
     allowNavigation = true
     await router.replace({
       name: 'outbound-document-manager',
@@ -2037,21 +2031,39 @@ async function finishDocument(): Promise<void> {
 }
 
 async function finishAndLeave(): Promise<void> {
-  const stored = await saveCompletedDocument()
-  if (!stored) {
+  if (finishing.value || countSaving.value || countLookupBusy.value) return
+  finishing.value = true
+  try {
+    const stored = await saveCompletedDocument()
+    if (!stored) {
+      showLeaveConfirm.value = false
+      return
+    }
+    await autoUploadCompletedDocument(stored)
     showLeaveConfirm.value = false
-    return
-  }
-  if (props.documentType !== 'inventory-count' && documentPolicy.value.autoUploadOnComplete && lines.value.length) {
+    allowNavigation = true
+    await router.replace({ name: returnRouteName.value })
+  } catch (error) {
+    notify(error instanceof Error ? error.message : '保存失败', 'error')
+  } finally { finishing.value = false }
+}
+
+async function autoUploadCompletedDocument(stored: StoredOutboundDocument): Promise<void> {
+  if (documentPolicy.value.autoUploadOnComplete && lines.value.length) {
     try {
-      await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
+      const count = props.documentType === 'inventory-count'
+      if (count) {
+        if (!navigator.onLine) { notify('已保存，联网后请上传', 'info'); return }
+        const current = await getCountContext()
+        if (current.accountId !== inventoryCountContext.value?.accountId ||
+            current.databaseName !== inventoryCountContext.value?.databaseName) throw new Error('盘点账套已变化，请重新打开单据')
+        if (!current.uploadSaveEnabled) throw new Error('当前账套未开放盘点上传')
+      }
+      await uploadOutboundDocument(stored, count ? false : documentPolicy.value.autoApproveAfterUpload)
     } catch (error) {
       notify(error instanceof Error ? error.message : '上传失败', 'error')
     }
   }
-  showLeaveConfirm.value = false
-  allowNavigation = true
-  await router.replace({ name: returnRouteName.value })
 }
 
 async function discardAndLeave(): Promise<void> {

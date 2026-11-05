@@ -40,6 +40,8 @@ function fixture(t, type = 'inventory-count') {
   const route = { params: { code: type }, query: {}, name: 'work-function' }
   let nativeScan, nativeBack, identity = 0
   const api = { lookups: 0, validations: 0, directValidations: 0, searches: 0, lastSearch: null,
+    uploads: [], settingsWrites: [], upload: async document => document,
+    context: { accountId: '888', databaseName: 'UFDATA_888_2021', uploadSaveEnabled: true },
     search: async () => ({ items: [{ ...source().document, partnerName: '原料仓', createdBy: '测试制单员' }], hasMore: false }),
     warehouse: async warehouseCode => ({ accountId:'888', databaseName:'UFDATA_888_2021', warehouseCode,
       warehouseName:warehouseCode, positionManaged: warehouseCode==='W1' }),
@@ -75,15 +77,26 @@ function fixture(t, type = 'inventory-count') {
       downloadInventoryCount: async () => source(),
       searchInventoryCounts: async (...args) => { api.searches++; api.lastSearch=args; return api.search(...args) },
       validateInventoryCountItems: async (...args) => { api.validations++; return api.validate(...args) },
-      getCountContext: async () => ({ accountId: '888', databaseName: 'UFDATA_888_2021' }),
+      getCountContext: async () => api.context,
       getCountWarehouse: async code => api.warehouse(code),
       validateDirectCount: async (...args) => { api.directValidations++; return api.directValidate(...args) },
     },
+    '@/services/outbound-document-upload': { uploadOutboundDocument: async (document, autoApprove) => {
+      api.uploads.push({ document, autoApprove }); return api.upload(document, autoApprove)
+    } },
     '@/services/reference-data': Object.fromEntries(['fetchRdStyles','fetchWarehousePositions','fetchDepartments',
       'fetchCurrencies','fetchPurchaseTypes','fetchSalesTypes','searchMaterials'].map(name => [name, async () => []]).concat([
         ['fetchRdStyles', async () => reference.styles],
       ])),
-    '@/api/client': { ApiError: Error, apiRequest: async () => [] },
+    '@/api/client': { ApiError: Error, apiRequest: async (path, options) => {
+      if (options?.method === 'PUT' && path.startsWith('/api/v1/admin/settings/')) {
+        const body = JSON.parse(options.body)
+        api.settingsWrites.push({ path, body })
+        return { scope: path.includes('/global/') ? 'GLOBAL' : 'DOCUMENT', documentType: body.documentType,
+          key: path.split('/').at(-1), value: body.value, isEnabled: true, rowVersion: 'v1', version: 1 }
+      }
+      return []
+    } },
     '@/components/DateField.vue': { default: { props: ['modelValue','disabled'], render() { return Vue.h('button', { disabled: this.disabled }, this.modelValue) } } },
     '@/components/SearchSelect.vue': { default: { props: ['modelValue','disabled'], render() { return Vue.h('button', { disabled: this.disabled }, this.modelValue) } } },
   }
@@ -158,6 +171,88 @@ async function scanAndConfirm(f, v, quantity = '0') {
   v.updateEditorField('body.quantity', quantity)
   await v.confirmEditingLine()
 }
+
+test('盘点完成自动上传遵循开关，只提交一次且不自动审核', async t => {
+  const f = fixture(t), v = await f.select()
+  await scanAndConfirm(f, v, '5')
+  v.documentPolicy.value.autoUploadOnComplete = true
+  v.documentPolicy.value.autoApproveAfterUpload = true
+  const pending = deferred(); f.api.upload = async () => pending.promise
+  const first = v.finishDocument()
+  while (f.api.uploads.length === 0) await new Promise(resolve => setImmediate(resolve))
+  await v.finishDocument()
+  assert.equal(f.api.uploads.length, 1)
+  assert.equal(f.api.uploads[0].autoApprove, false)
+  assert.equal(f.api.uploads[0].document.payload.lines[0].requestedQty, 5)
+  pending.resolve(f.api.uploads[0].document); await first
+  assert.equal(v.finishing.value, false)
+  assert.equal(f.routes.at(-1).name, 'outbound-document-manager')
+})
+
+test('盘点关闭自动上传只保存；返回时完成也遵循自动上传', async t => {
+  const f = fixture(t), v = await f.select()
+  await scanAndConfirm(f, v, '5')
+  v.documentPolicy.value.autoUploadOnComplete = false
+  await v.finishDocument(); assert.equal(f.api.uploads.length, 0)
+  assert.equal((await f.docs()).length, 1)
+  v.documentPolicy.value.autoUploadOnComplete = true
+  v.showLeaveConfirm.value = true
+  await v.finishAndLeave()
+  assert.equal(f.api.uploads.length, 1)
+  assert.equal(v.finishing.value, false)
+})
+
+test('盘点自动上传断网、能力关闭或账套变化时保留草稿且不发送上传', async t => {
+  for (const mode of ['offline', 'disabled', 'account-changed']) {
+    const f = fixture(t), v = await f.select()
+    await scanAndConfirm(f, v, '5')
+    v.documentPolicy.value.autoUploadOnComplete = true
+    if (mode === 'offline') f.globals.navigator.onLine = false
+    if (mode === 'disabled') f.api.context.uploadSaveEnabled = false
+    if (mode === 'account-changed') f.api.context = { accountId: '008', databaseName: 'UFDATA_008_2021', uploadSaveEnabled: true }
+    await v.finishDocument()
+    assert.equal(f.api.uploads.length, 0)
+    assert.equal((await f.docs())[0].payload.lines[0].requestedQty, 5)
+  }
+})
+
+test('盘点自动上传失败保留实盘和草稿，不在失败后重新上传', async t => {
+  const f = fixture(t), v = await f.select()
+  await scanAndConfirm(f, v, '5')
+  v.documentPolicy.value.autoUploadOnComplete = true
+  f.api.upload = async () => { throw new Error('上传失败') }
+  await v.finishDocument()
+  assert.equal(f.api.uploads.length, 1)
+  assert.equal((await f.docs())[0].payload.lines[0].requestedQty, 5)
+  assert.equal(v.finishing.value, false)
+})
+
+test('盘点开关仅展示可用自动上传，其他单据仍保留原开关', async t => {
+  const f = fixture(t)
+  const component = f.load('@/views/BusinessDocumentSettingsView.vue').default
+  const countHtml = await SSR.renderToString(Vue.createSSRApp(component))
+  assert.match(countHtml, /完成自动上传/)
+  assert.doesNotMatch(countHtml, /扫码后自动添加到明细|上传自动审核|扫托包含托盘|托盘设置/)
+  f.route.params.code = 'material-outbound'
+  const materialHtml = await SSR.renderToString(Vue.createSSRApp(component))
+  assert.match(materialHtml, /扫码后自动添加到明细/)
+  assert.match(materialHtml, /上传自动审核/)
+  assert.match(materialHtml, /托盘设置/)
+})
+
+test('盘点保存开关只更新自动上传，不覆盖隐藏的审核/托盘和其他单据设置', async t => {
+  const f = fixture(t), settings = f.load('@/services/business-document-settings')
+  const state = settings.loadBusinessDocumentSettings()
+  settings.ensureDocumentPolicy(state, 'inventory-count').autoUploadOnComplete = true
+  settings.ensureDocumentPolicy(state, 'material-outbound').autoUploadOnComplete = false
+  await settings.persistBusinessDocumentSettings('inventory-count', state)
+  assert.equal(f.api.settingsWrites.length, 1)
+  assert.match(f.api.settingsWrites[0].path, /auto_upload_on_complete$/)
+  assert.equal(f.api.settingsWrites[0].body.value, true)
+  const loaded = settings.loadBusinessDocumentSettings()
+  assert.equal(settings.ensureDocumentPolicy(loaded, 'inventory-count').autoUploadOnComplete, true)
+  assert.equal(settings.ensureDocumentPolicy(loaded, 'material-outbound').autoUploadOnComplete, false)
+})
 
 test('同一环境名切换008/888接口时，会话、草稿和选单隔离且旧数据保留', async t => {
   const f=fixture(t), repo=f.load('@/services/outbound-document-drafts'), selections=f.load('@/services/source-document-selection')
