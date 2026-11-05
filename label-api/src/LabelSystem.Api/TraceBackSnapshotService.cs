@@ -33,13 +33,13 @@ public static class TraceBackSnapshotRules
         bool allowUsed,
         bool comparePosition,
         decimal? expectedBalance = null,
-        long? expectedLatestFlowId = null)
+        long? expectedLatestFlowId = null, bool compareUnit = true)
     {
         RequireUsable(snapshot, allowUsed);
         var balance = snapshot.Balance.GetValueOrDefault();
         if (!Same(snapshot.MaterialCode, materialCode) ||
             !Same(snapshot.BatchNo, batchNo) ||
-            !Same(snapshot.UnitCode, unitCode))
+            compareUnit && !Same(snapshot.UnitCode, unitCode))
             throw Changed();
         if (comparePosition &&
             (!Same(snapshot.WarehouseCode, warehouseCode) ||
@@ -69,7 +69,7 @@ public sealed class TraceBackSnapshotService(
     LabelSystemRepository localInventory)
 {
     private static readonly HashSet<string> TraceBackDocuments = new(
-        ["material-outbound", "transfer-order", "location-adjustment"],
+        ["material-outbound", "transfer-order", "location-adjustment", "inventory-count"],
         StringComparer.OrdinalIgnoreCase);
 
     public async Task<InventoryLookupResult> LookupAsync(
@@ -100,8 +100,9 @@ public sealed class TraceBackSnapshotService(
         if (!TraceBackDocuments.Contains(documentType)) return;
         var products = lines.Where(line => line.ObjectType == "PRODUCT_LABEL").ToArray();
         if (products.Length == 0) return;
-        var snapshots = await gateway.GetTraceBackSnapshotsAsync(
-            products.Select(line => line.Code).ToArray(), cancellationToken);
+        var snapshots = new List<TraceBackLabelSnapshot>();
+        foreach (var batch in products.Select(line => line.Code).Distinct(StringComparer.OrdinalIgnoreCase).Chunk(100))
+            snapshots.AddRange(await gateway.GetTraceBackSnapshotsAsync(batch, cancellationToken));
         var byCode = snapshots.ToDictionary(item => item.Code, StringComparer.OrdinalIgnoreCase);
         var redReturn = documentType.Equals("material-outbound", StringComparison.OrdinalIgnoreCase) &&
                         direction.Equals("RED", StringComparison.OrdinalIgnoreCase);
@@ -111,7 +112,8 @@ public sealed class TraceBackSnapshotService(
                 throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", "未找到标签。");
             TraceBackSnapshotRules.ValidateLine(
                 snapshot, line.MaterialCode, line.BatchNo, line.UnitCode, line.RequestedQty,
-                line.WarehouseCode, line.LocationCode, redReturn, !redReturn);
+                line.WarehouseCode, line.LocationCode, redReturn || documentType == "inventory-count", !redReturn,
+                compareUnit: documentType != "inventory-count");
             await mirrors.UpsertAsync(snapshot, user, rejectChangedSnapshot: true, cancellationToken);
         }
     }
@@ -122,12 +124,13 @@ public sealed class TraceBackSnapshotService(
         bool redVoucher,
         CancellationToken cancellationToken)
     {
-        if (erpDocumentType is not "material-outbound" and not "transfer" and not "location-adjustment")
+        if (erpDocumentType is not "material-outbound" and not "transfer" and not "location-adjustment" and not "inventory-count")
             return;
         var products = lines.Where(line => line.ObjectType == "PRODUCT_LABEL").ToArray();
         if (products.Length == 0) return;
-        var snapshots = await gateway.GetTraceBackSnapshotsAsync(
-            products.Select(line => line.LabelCode).ToArray(), cancellationToken);
+        var snapshots = new List<TraceBackLabelSnapshot>();
+        foreach (var batch in products.Select(line => line.LabelCode).Distinct(StringComparer.OrdinalIgnoreCase).Chunk(100))
+            snapshots.AddRange(await gateway.GetTraceBackSnapshotsAsync(batch, cancellationToken));
         var byCode = snapshots.ToDictionary(item => item.Code, StringComparer.OrdinalIgnoreCase);
         var redReturn = erpDocumentType == "material-outbound" && redVoucher;
         foreach (var line in products)
@@ -139,8 +142,8 @@ public sealed class TraceBackSnapshotService(
                     "TRACEBACK_SNAPSHOT_VERSION_MISSING", "标签数据待核对。");
             TraceBackSnapshotRules.ValidateLine(
                 snapshot, line.MaterialCode, line.BatchNo, line.UnitCode, line.RequestedQty,
-                line.WarehouseCode, line.LocationCode, redReturn, !redReturn,
-                line.InventoryQtySnapshot, line.TraceBackLatestFlowId);
+                line.WarehouseCode, line.LocationCode, redReturn || erpDocumentType == "inventory-count", !redReturn,
+                line.InventoryQtySnapshot, line.TraceBackLatestFlowId, compareUnit: erpDocumentType != "inventory-count");
         }
     }
 }

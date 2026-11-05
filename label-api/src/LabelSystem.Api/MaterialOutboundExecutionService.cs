@@ -77,9 +77,11 @@ public sealed class MaterialOutboundExecutionService(
             if (!pending && !reconciling)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "OPERATION_NOT_PENDING", "业务操作不能上传，需要先核对状态。");
-            await traceBack.ValidateBeforeU8Async(
-                item.Operation.ErpDocumentType, item.Operation.Lines,
-                item.RedVoucher, cancellationToken);
+            if (!reconciling || item.Operation.ErpDocumentType != "inventory-count")
+                await traceBack.ValidateBeforeU8Async(item.Operation.ErpDocumentType, item.Operation.Lines,
+                    item.RedVoucher, cancellationToken);
+            // A count retry may be retrieving an already-saved result. When a write really runs,
+            // the Gateway rechecks the expected TraceBack versions inside its STA queue.
             if (reconciling)
             {
                 await executionRepository.BeginReconciliationAsync(
@@ -93,8 +95,11 @@ public sealed class MaterialOutboundExecutionService(
             }
             try
             {
-                var result = await gateway.CreateDocumentAsync(
-                    item.Operation.ErpDocumentType, item.Request, cancellationToken);
+                var countSourceId = item.Operation.ErpDocumentType == "inventory-count"
+                    ? InventoryCountUploadRules.SourceId(item.Request) : null;
+                var result = countSourceId.HasValue
+                    ? await gateway.UpdateDocumentAsync("inventory-count", countSourceId.Value.ToString(), item.Request, cancellationToken)
+                    : await gateway.CreateDocumentAsync(item.Operation.ErpDocumentType, item.Request, cancellationToken);
                 if (result.Document is not { ValueKind: JsonValueKind.Object } &&
                     !string.IsNullOrWhiteSpace(result.VoucherCode))
                 {
@@ -107,18 +112,20 @@ public sealed class MaterialOutboundExecutionService(
                         Version = result.Version ?? queried.Version
                     };
                 }
-                var rows = ReadErpRows(item.Operation.ErpDocumentType, result.Document);
+                var rows = item.Operation.ErpDocumentType == "inventory-count"
+                    ? InventoryCountUploadRules.ReadRows(item.Operation, result, item.Request)
+                    : ReadErpRows(item.Operation.ErpDocumentType, result.Document);
                 EnsureErpRows(item.Operation, rows);
-                var traceBackTasks = TraceBackSyncPlanner.Build(
-                    item.Operation, result, item.RedVoucher, rows,
-                    item.Request.OperatorName, options.CurrentValue.ErpAccountId);
+                IReadOnlyList<TraceBackSyncTaskDraft> traceBackTasks = item.Operation.ErpDocumentType == "inventory-count"
+                    ? [] : TraceBackSyncPlanner.Build(item.Operation, result, item.RedVoucher, rows,
+                        item.Request.OperatorName, options.CurrentValue.ErpAccountId);
                 await executionRepository.CompleteAsync(
-                    item.Operation, result, item.RedVoucher, request.AutoApprove,
+                    item.Operation, result, item.RedVoucher, request.AutoApprove && item.Operation.ErpDocumentType != "inventory-count",
                     rows, traceBackTasks, requestId, cancellationToken);
                 if (traceBackTasks.Count > 0 &&
                     !await traceBackSync.TrySyncOperationAsync(
                         item.Operation, requestId, cancellationToken)) break;
-                if (request.AutoApprove &&
+                if (request.AutoApprove && item.Operation.ErpDocumentType != "inventory-count" &&
                     !await ApproveAsync(item, result, requestId, cancellationToken)) break;
             }
             catch (GatewayWriteException error)
@@ -226,7 +233,8 @@ public sealed class MaterialOutboundExecutionService(
     {
         var plan = await executionRepository.GetPlanAsync(groupId, user.Id, cancellationToken);
         var erp = await users.GetErpOperatorAsync(user.Id, cancellationToken);
-        foreach (var operation in plan) InventoryCountRules.RejectLegacyWrite(operation.ErpDocumentType);
+        foreach (var operation in plan.Where(p => p.ErpDocumentType == "inventory-count"))
+            InventoryCountUploadRules.RequireTestAccount(options.CurrentValue);
         var payloadCache = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
         var result = new List<PreparedGatewayOperation>(plan.Count);
         foreach (var operation in plan)
@@ -264,6 +272,13 @@ public sealed class MaterialOutboundExecutionService(
                 var document = payload.Deserialize<DocumentPrepareRequest>(JsonOptions)
                     ?? throw InvalidArchive();
                 if (document.Header.DocumentDirection is not ("BLUE" or "RED")) throw InvalidArchive();
+                if (operation.ErpDocumentType == "inventory-count")
+                {
+                    InventoryCountUploadRules.RequireContext(document, options.CurrentValue);
+                    result.Add(new PreparedGatewayOperation(operation,
+                        InventoryCountUploadRules.Build(operation, document, erp), false));
+                    continue;
+                }
                 result.Add(new PreparedGatewayOperation(
                     operation,
                     DocumentGatewayRequestBuilder.Build(operation, document, erp),
@@ -492,7 +507,8 @@ public sealed class MaterialOutboundExecutionService(
     {
         try
         {
-            await gateway.ValidateDocumentAsync(documentType, request, cancellationToken);
+            await gateway.ValidateDocumentAsync(documentType, request, cancellationToken,
+                documentType == "inventory-count" && InventoryCountUploadRules.SourceId(request).HasValue);
         }
         catch (GatewayWriteException error)
         {

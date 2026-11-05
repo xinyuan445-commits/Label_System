@@ -40,29 +40,86 @@
     },
     {
       "documentType": "inventory-count",
-      "status": "candidate-reference-derived",
+      "status": "888-upload-save-only",
       "scopes": [
         {
           "scope": "header",
-          "matchKeys": ["id"],
-          "requiredOnCreate": ["dcvdate", "dacdate", "cwhcode", "cirdcode", "cordcode", "cmaker"],
-          "createWritable": ["dcvdate", "ccvcode", "dacdate", "vt_id", "cwhcode", "ccvbatch", "cdepcode", "cirdcode", "cordcode", "csource", "cpersoncode", "ccvmemo", "cposition", "cmaker", "ccvtype", "ccvperiod", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
-          "updateWritable": ["dacdate", "cdepcode", "cirdcode", "cordcode", "cpersoncode", "ccvmemo", "cposition", "ccvtype", "ccvperiod", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
-          "clearable": ["ccvbatch", "cdepcode", "cpersoncode", "ccvmemo", "cposition", "ccvperiod", "cdefine1", "cdefine2", "cdefine3", "cdefine4", "cdefine5", "cdefine6", "cdefine7", "cdefine8", "cdefine9", "cdefine10", "cdefine11", "cdefine12", "cdefine13", "cdefine14", "cdefine15", "cdefine16"],
-          "defaults": { "vt_id": 29, "cirdcode": "107", "cordcode": "207", "csource": "1", "ccvtype": "普通仓库盘点" },
-          "defaultRules": { "dcvdate": "today", "dacdate": "today", "cmaker": "operatorName" }
+          "matchKeys": [
+            "id"
+          ],
+          "requiredOnCreate": [
+            "dcvdate",
+            "dacdate",
+            "cwhcode",
+            "cirdcode",
+            "cordcode",
+            "cmaker"
+          ],
+          "createWritable": [
+            "dcvdate",
+            "ccvcode",
+            "dacdate",
+            "vt_id",
+            "cwhcode",
+            "cirdcode",
+            "cordcode",
+            "csource",
+            "ccvmemo",
+            "cmaker",
+            "ccvtype",
+            "bposcheck"
+          ],
+          "updateWritable": [
+            "cirdcode",
+            "cordcode",
+            "ccvmemo"
+          ],
+          "clearable": [
+            "ccvmemo"
+          ],
+          "defaults": {
+            "vt_id": 29,
+            "cirdcode": "107",
+            "cordcode": "207",
+            "csource": "1",
+            "ccvtype": "普通仓库盘点"
+          },
+          "defaultRules": {
+            "dcvdate": "today",
+            "dacdate": "today",
+            "cmaker": "operatorName"
+          }
         },
         {
           "scope": "line",
-          "matchKeys": ["autoid", "irowno"],
-          "allowCreateRows": true,
-          "allowDeleteRows": true,
-          "requiredOnCreate": ["cinvcode", "icvcquantity"],
-          "createWritable": ["cinvcode", "cposition", "ccvbatch", "iadinquantity", "iadinnum", "iadoutquantity", "iadoutnum", "iallowwaste", "iactualwaste", "cassunit", "iinvexchrate", "icvnum", "icvquantity", "icvcnum", "icvcquantity", "ccvreason", "rdsid", "ddisdate", "ijhdj", "ijhje", "isjdj", "isjje", "imassdate", "dmadedate", "cmassunit", "iexpiratdatecalcu", "cexpirationdate", "dexpirationdate", "cbmemo", "irowno", "cfree1", "cfree2", "cfree3", "cfree4", "cfree5", "cfree6", "cfree7", "cfree8", "cfree9", "cfree10", "cdefine22", "cdefine23", "cdefine24", "cdefine25", "cdefine26", "cdefine27", "cdefine28", "cdefine29", "cdefine30", "cdefine31", "cdefine32", "cdefine33", "cdefine34", "cdefine35", "cdefine36", "cdefine37", "cbatchproperty1", "cbatchproperty2", "cbatchproperty3", "cbatchproperty4", "cbatchproperty5", "cbatchproperty6", "cbatchproperty7", "cbatchproperty8", "cbatchproperty9", "cbatchproperty10"],
-          "updateWritable": ["cposition", "ccvbatch", "icvcnum", "icvcquantity", "ccvreason", "cbmemo"],
-          "clearable": ["cposition", "ccvbatch", "ccvreason", "cbmemo"],
-          "defaultRules": { "irowno": "rowNumber" },
-          "requiredWhen": { "ccvbatch": "inventory.batchManaged=true", "cposition": "warehouse.positionManaged=true" }
+          "matchKeys": [
+            "autoid"
+          ],
+          "allowCreateRows": false,
+          "allowDeleteRows": false,
+          "requiredOnCreate": [
+            "cinvcode",
+            "icvcquantity"
+          ],
+          "createWritable": [
+            "cinvcode",
+            "cposition",
+            "ccvbatch",
+            "icvquantity",
+            "icvcquantity",
+            "irowno"
+          ],
+          "updateWritable": [
+            "icvcquantity"
+          ],
+          "clearable": [],
+          "defaultRules": {
+            "irowno": "rowNumber"
+          },
+          "requiredWhen": {
+            "ccvbatch": "inventory.batchManaged=true",
+            "cposition": "warehouse.positionManaged=true"
+          }
         }
       ]
     },

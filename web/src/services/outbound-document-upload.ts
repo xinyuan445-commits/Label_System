@@ -1,6 +1,7 @@
 import { apiRequest } from '@/api/client'
 import { readStoredAuthSession } from '@/services/auth-session'
 import { rejectLegacyCountUpload } from '@/services/inventory-count-model'
+import type { CountSource } from '@/services/inventory-count-model'
 import {
   beginOutboundDocumentUpload,
   markOutboundDocumentSubmitted,
@@ -63,6 +64,8 @@ interface InventoryDocumentLine {
 }
 
 interface InventoryDocumentPayload {
+  inventoryCountContext?: { accountId: string; databaseName: string }
+  inventoryCountSource?: CountSource
   documentDate: string
   documentDirection: 'BLUE' | 'RED'
   sourceDocumentType: string
@@ -140,7 +143,7 @@ function inventoryDocumentPayload(document: StoredOutboundDocument): InventoryDo
   return payload as InventoryDocumentPayload
 }
 
-function createInventoryPrepareLines(payload: InventoryDocumentPayload) {
+function createInventoryPrepareLines(payload: InventoryDocumentPayload, count = false) {
   const baseLines = payload.lines.map((line) => ({
     objectType: line.objectType,
     labelCode: line.labelCode,
@@ -158,6 +161,7 @@ function createInventoryPrepareLines(payload: InventoryDocumentPayload) {
     targetLocationCode: line.fieldValues?.['body.targetLocationCode'] || null,
     requiresBatch: line.requiresBatch === true,
   }))
+  if (count) return baseLines
   const sources = (payload.selectedSourceLines ?? []).map((line) => ({
     ...line,
     remainingQty: Number(line.orderQuantity),
@@ -222,12 +226,15 @@ async function submitInventoryDocument(
   clientRequestId: string,
 ): Promise<OperationGroupSnapshot> {
   const payload = inventoryDocumentPayload(document)
+  const count = document.documentType === 'inventory-count'
   if (payload.lines.some((line) => !line.unitCode)) {
     throw new Error('单据明细不完整，请重新扫描')
   }
-  const lines = createInventoryPrepareLines(payload)
+  const lines = createInventoryPrepareLines(payload, count)
+  const flag = payload.headerFieldValues?.['header.countByLocation']
+  if (count && flag !== '1' && flag !== '0') throw new Error('请重新选择原单或仓库')
   return apiRequest<OperationGroupSnapshot>(
-    `/api/v1/operations/documents/${encodeURIComponent(document.documentType)}/submit?autoApprove=${autoApprove}`,
+    `/api/v1/operations/documents/${encodeURIComponent(document.documentType)}/submit?autoApprove=${count ? false : autoApprove}`,
     {
       method: 'POST',
       timeoutMs: 120_000,
@@ -240,6 +247,8 @@ async function submitInventoryDocument(
         deviceCode: null,
         deviceModel: navigator.userAgent.slice(0, 100),
         reason: payload.remark || null,
+        ...(count ? { inventoryCount: { ...payload.inventoryCountContext,
+          countByLocation: flag === '1', source: payload.inventoryCountSource ?? null } } : {}),
         header: {
           documentDate: payload.documentDate,
           documentDirection: payload.documentDirection || 'BLUE',
@@ -358,7 +367,7 @@ export async function executeOutboundDocument(
   document: StoredOutboundDocument,
   autoApprove: boolean,
 ): Promise<StoredOutboundDocument> {
-  rejectLegacyCountUpload(document.documentType)
+  rejectLegacyCountUpload(document.documentType, (document.payload as Partial<InventoryDocumentPayload> | null)?.inventoryCountContext)
   if (!document.serverOperationId) throw new Error('业务组编号缺失')
   const group = await executeOutboundOperationGroup(document.serverOperationId, autoApprove)
   return updateOutboundDocumentGroup(document.id, group)
@@ -368,7 +377,7 @@ export async function uploadOutboundDocument(
   document: StoredOutboundDocument,
   _autoApprove: boolean,
 ): Promise<StoredOutboundDocument> {
-  rejectLegacyCountUpload(document.documentType)
+  rejectLegacyCountUpload(document.documentType, (document.payload as Partial<InventoryDocumentPayload> | null)?.inventoryCountContext)
   try {
     const session = readStoredAuthSession()
     if (!session) throw new Error('请先登录')

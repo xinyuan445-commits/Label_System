@@ -1,16 +1,16 @@
 # Label System API
 
-资料复核：2026-11-05；Business API源码及开发9891/888为0.12.5，生产9890/008保留0.12.3。原单行透传unitName并纳入源指纹，31项盘点测试/构建和888真实只读验证通过，见[部署记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。其余环境与功能边界见[项目状态](../../docs/PROJECT_STATUS.md)和[功能档案](../../docs/features/README.md)。
+资料复核：2026-11-05；Business API源码及开发9891/888为0.12.6，生产9890/008保留0.12.3。888新增上传保存未审核，93项API通过/1项跳过、H5 38项及Gateway合同通过；原生/补丁只读验证成功，实际保存待用户自行首测，见[部署与边界](../../docs/DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。
 
-三类库存业务的TraceBack写入不能推广到所有九类单据。盘点已支持标准草稿和只读核验；ERP新增/回填、完整范围及差异生效仍未完成。旧盘点建档/执行前返回COUNT_WRITE_NOT_READY，全部盘点能力canSubmit=false，不能用通用接口绕过。
+三类库存业务的TraceBack写入不能推广到所有九类单据。盘点支持标准草稿、核验及888上传保存未审核，真实保存待用户首测；审核、完整范围、旧三表差异及生产008上传未开放。旧请求缺inventoryCount上下文仍在镜像/建操作前返回COUNT_WRITE_NOT_READY。只读核验canSubmit=false保持，上传保存由独立uploadSaveEnabled能力控制。
 
-## 盘点现行只读合同（0.12.5）
+## 盘点现行只读合同（0.12.6）
 
 所有下列接口校验当前登录账号的inventory-count功能权限，响应private/no-store。不依赖客户端X-Function-Code授予权限，不接受客户端连接信息、SQL或表名；无匿名离线任务/写令牌。
 
 | 方法与路径 | 请求与行为 | 主要返回 |
 | --- | --- | --- |
-| GET /api/v1/inventory-counts/capabilities | 当前服务配置，不据客户端development名称判断账套 | accountId、databaseName、collectionEnabled=true、directDraftEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000 |
+| GET /api/v1/inventory-counts/capabilities | 当前服务配置，不据客户端development名称判断账套 | accountId、databaseName、collectionEnabled=true、directDraftEnabled=true、canSubmit=false、uploadSaveEnabled（当前仅888可true）、offlineColdStart=false、maximumObservations=1000 |
 | GET /api/v1/inventory-counts | documentNo、startDate、endDate；代理Gateway未审核列表，最多100条 | items、hasMore；超出范围需缩小查询 |
 | GET /api/v1/inventory-counts/{id} | 校验来源账套/数据库、状态、完整行数及原生行ID | accountId、databaseName、document、lines、fingerprint |
 | GET /api/v1/inventory-counts/warehouses/{code} | 实时读取未停用仓库，校验返回账套与编码 | accountId、databaseName、warehouseCode、warehouseName、positionManaged |
@@ -55,6 +55,16 @@ H5使用标准IndexedDB草稿及既有009服务端草稿同步，旧独立库仅
 保存本机、同步草稿和上传ERP分别显示；MATCHED及canSubmit=false不能解释为允许盘点落账。无迁移、无盘点ERP写入。11月5日36项H5、31项API、Gateway合同及构建通过，开发888实际返回unitName=张及真实标签只读核验MATCHED；实机/物理声音/断网验收仍待完成，见[盘点档案](../../docs/features/盘点单.md)和[本次部署](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。
 
 版本沿革：0.12.0原单读取/核验，0.12.1类别合同，0.12.2无原单只读核验，0.12.3仓库货位状态及前后复核，0.12.4取消标签/原单单位比较，0.12.5透传原单单位名称（开发888已发布）。
+
+## 888盘点上传保存（0.12.6）
+
+复用`POST /api/v1/operations/documents/inventory-count/submit`，沿用当前登录权限、ERP操作人、单据分类权限、clientRequestId、业务组、归档/锁与恢复。生产008拒绝；只允许development / 888 / UFDATA_888_2021，且U8WritesEnabled及InventoryCountUploadsEnabled均为true。开关默认false。请求新增inventoryCount：accountId、databaseName、countByLocation、可选完整source快照（含原指纹）；其余表头/行沿用DocumentPrepareRequest。旧请求和大小写路由变体均在镜像刷新/建操作前拦截。
+
+- 有原单校验源快照内容与指纹、未审核状态；以原生autoID匹配料号/批号/仓库/按需货位，按原单账面＋Σ(已扫实盘－上传前标签余额)生成补丁，未扫行保留。已有非零差异实盘行不再盲目覆盖。
+- 无原单不伪造来源，按同料批/按需货位汇总差异，Gateway读取U8当前账面作基准；自由项/辅计量不明确拒绝。
+- Gateway内部调用前再次实时复核旧三表版本、余额与位置；有原单保留原生XML和未改字段。修改类别仍做方向及权限检查，不恢复标签单位比较。
+- 上传强制只保存未审核，不产生盘点差异流水或TraceBack任务；本地镜像可按实时标签刷新。业务组SUCCESS表示ERP保存已确认，不表示U8已审核或库存生效。888审核/弃审暂拦截。
+- 首张Create/Update、未知结果后的实际恢复由用户验收，本次只做自动/原生只读及字段验证，见[发布记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

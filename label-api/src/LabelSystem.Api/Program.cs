@@ -828,6 +828,8 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
     var functionCode = DocumentFunctionCode(documentType);
     await RequireFunctionAsync(context, users, $"approval-{functionCode}", cancellationToken);
     var operation = action.Trim().ToLowerInvariant();
+    if (functionCode == "inventory-count" && options.CurrentValue.ErpAccountId == "888")
+        throw new ApiException(409, "COUNT_APPROVAL_NOT_READY", "盘点审核暂未开放。");
     if (operation is not ("audit" or "unaudit"))
         throw new ApiException(StatusCodes.Status400BadRequest,
             "APPROVAL_ACTION_INVALID", "审核操作无效。");
@@ -901,6 +903,7 @@ app.MapPost("/api/v1/operations/documents/{documentType}/submit", async (
     LabelSystemRepository settings,
     CancellationToken cancellationToken) =>
 {
+    documentType = documentType.Trim().ToLowerInvariant();
     var functionCode = DocumentFunctionCode(documentType);
     await RequireFunctionAsync(context, users, functionCode, cancellationToken);
     var session = RequestContext.User(context);
@@ -910,6 +913,7 @@ app.MapPost("/api/v1/operations/documents/{documentType}/submit", async (
     request = request with { OperatorId = session.Id, OperatorName = session.Name };
     await users.GetErpOperatorAsync(session.Id, cancellationToken);
     var requiredFields = await settings.GetRequiredDocumentFieldsAsync(documentType, cancellationToken);
+    if (documentType == "inventory-count") requiredFields = InventoryCountUploadRules.RequiredFields(requiredFields);
     await ValidateDocumentReferenceDataAsync(
         documentType, request, session.Id, functionCode, requiredFields,
         dataScopes, referenceData, cancellationToken);

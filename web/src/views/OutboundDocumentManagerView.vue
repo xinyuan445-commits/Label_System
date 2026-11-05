@@ -41,6 +41,7 @@ import {
   loadBusinessDocumentSettings,
 } from '@/services/business-document-settings'
 import type { OutboundDocumentType } from '@/services/source-document-selection'
+import { getCountContext } from '@/services/inventory-count-api'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,6 +53,7 @@ const documents = ref<StoredOutboundDocument[]>([])
 const selectedDocument = ref<StoredOutboundDocument | null>(null)
 const message = ref('')
 const uploadingId = ref('')
+const countUploadEnabled = ref(false)
 const processingId = ref('')
 const confirmingLabelCode = ref('')
 const selectionMode = ref(false)
@@ -224,7 +226,7 @@ function toggleSelectAll(): void {
 }
 
 function canUpload(document: StoredOutboundDocument): boolean {
-  if (document.documentType === 'inventory-count') return false
+  if (document.documentType === 'inventory-count' && !countUploadEnabled.value) return false
   if (!document.payload || typeof document.payload !== 'object') return false
   const payload = document.payload as { lines?: unknown[] }
   return Array.isArray(payload.lines) && payload.lines.length > 0
@@ -268,8 +270,8 @@ useDocumentSystemBack(returnToDocument)
 useDocumentOfflineSupport(() => documentType.value)
 
 async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
-  if (document.documentType === 'inventory-count') {
-    message.value = '盘点上传ERP暂未开放'
+  if (document.documentType === 'inventory-count' && !countUploadEnabled.value) {
+    message.value = '当前账套未开放盘点上传'
     return
   }
   if (!canUpload(document)) {
@@ -284,7 +286,9 @@ async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
     const uploaded = await uploadOutboundDocument(document, policy.autoApproveAfterUpload)
     const erpNumbers = erpDocumentNumbers(uploaded)
     message.value = uploaded.serverStatus === 'SUCCESS'
-      ? erpNumbers.length ? `上传完成：${erpNumbers.join('、')}` : '上传完成'
+      ? document.documentType === 'inventory-count'
+        ? erpNumbers.length ? `已保存，未审核：${erpNumbers.join('、')}` : '已保存，未审核'
+        : erpNumbers.length ? `上传完成：${erpNumbers.join('、')}` : '上传完成'
       : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? '需要核对'
         : uploaded.serverStatus === 'PENDING_APPROVAL'
           ? uploaded.serverErrorMessage || '单据已上传，等待审核'
@@ -391,6 +395,9 @@ function statusLabel(document: StoredOutboundDocument): string {
 }
 
 onMounted(() => {
+  if (documentType.value === 'inventory-count') void getCountContext().then(context => {
+    countUploadEnabled.value = context.uploadSaveEnabled === true && context.accountId === '888' && context.databaseName === 'UFDATA_888_2021'
+  }).catch(() => { countUploadEnabled.value = false })
   void refresh()
   unsubscribeDraftChanges = subscribeDraftChanges(() => void refresh())
 })
@@ -517,7 +524,7 @@ onBeforeRouteLeave((to) => {
               :disabled="uploadingId === document.id || !canUpload(document)"
               @click.stop="uploadDocument(document)"
             >
-              {{ document.documentType === 'inventory-count' ? '上传暂未开放' : uploadingId === document.id ? '上传中' : isRetryableFailure(document) ? '重新上传' : '上传 ERP' }}
+              {{ document.documentType === 'inventory-count' && !countUploadEnabled ? '上传暂未开放' : uploadingId === document.id ? '上传中' : isRetryableFailure(document) ? '重新上传' : '上传 ERP' }}
             </button>
           </div>
           <div v-else-if="!selectionMode && activeStatus === 'pending'" class="card-actions">

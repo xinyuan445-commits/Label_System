@@ -1,8 +1,8 @@
 # U8 Gateway API 设计
 
-资料复核：2026-11-05；源码及开发9881/888为0.11.3，生产9880/008保留0.11.2。盘点原单行unitName从物料主单位关联读取，合同/构建和888实际GET验证通过，见[本次发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。各环境配置、生产门禁、精确白名单及Business API独立写入开关不变。
+资料复核：2026-11-05；源码及开发9881/888为0.11.4（实际环境名test），生产9880/008保留0.11.2。888新增盘点未审核保存；合同/构建、原生只读和补丁validate通过，首张实际保存由用户执行，见[本次发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。原有双层写入门禁及精确账套白名单保持。
 
-## 盘点现行只读合同（0.11.3）
+## 盘点现行只读合同（0.11.4）
 
 | 方法与路径 | 行为 | 返回 / 上限 |
 | --- | --- | --- |
@@ -25,9 +25,17 @@ document除原有单号、日期、仓库、状态、版本/行数外，包含�
 
 该组接口沿用现有内部认证，账套/数据库来自服务器固定配置，不接收客户端连接串、表名或SQL；参数化查询无SQL写入、无COM保存。Business API继续复核账套、源指纹及原单/仓库状态，不能只依赖H5显示。
 
-盘点capabilities.create=false、update/delete=false；已有verify/unverify不代表标签盘点差异已接入。原单回填/窄字段Update、无原单Create、完整应盘范围及差异生效仍属[盘点后续方案](../../docs/INVENTORY_COUNT_PLAN.md)，不得把原生接口存在当作业务闭环已验收。
+盘点Create/Update合同新增888保存路径，但运行时只允许development或test环境、888账套及UFDATA_888_2021精确匹配，并要求既有双层写入门禁；生产写入、审核/弃审/删除仍拦截。原生接口和候选能力不代表真实保存或审核差异已验收。
 
 0.11.0为原单首批读取，0.11.1补类别，0.11.2补仓库接口和货位状态。11月4日真实888/008原单、启用及未启用货位管理的仓库已有只读GET证据，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；11月5日0.11.3已发布开发888并实际验证单位名称；无迁移或业务写入，详见上述本次发布记录。
+
+## 888盘点保存（0.11.4）
+
+有原单使用`PATCH /api/v1/documents/inventory-count/{id}`，只允许header.cirdcode、cordcode、ccvmemo及line.autoid匹配的icvcquantity；不允许增删原单行或改料号。无原单使用现有Create路由。两者保留现有操作归档、请求哈希、幂等和恢复。
+
+内部options必须含countPartialSave=true、countByLocation、countSource（有原单的完整基线）、countLabels（每码期望流水/余额/位置及实盘）、countDeltas（汇总差异）。这些由Business API构造，不是客户端SQL或自由字段扩展。有原单在STA队列中复核完整基线、差异计算及旧三表，合并原Load XML再调用USERPCO.Update，回查全部业务明细，未扫行保留。无原单读取CurrentStock/InvPositionSum账面，调用Insert前再次核对库存和标签，再回查新增结果；自由项/辅计量歧义不放行。
+
+保存只保持未审核，不写TraceBack差异事件。真实Create/Update及失败恢复仍待用户首测；本次只读回查PDD26101311的1000行和PATCH字段validate成功，见[验收边界](../../docs/DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

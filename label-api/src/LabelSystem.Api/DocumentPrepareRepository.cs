@@ -6,6 +6,16 @@ namespace LabelSystem.Api;
 
 public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
 {
+    public async Task<MaterialOutboundPrepareResult?> FindExistingAsync(string groupId, string payloadHash,
+        bool writesEnabled, CancellationToken ct)
+    {
+        await using var connection = connections.Create();
+        await connection.OpenAsync(ct);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var existing = await ReadExistingAsync(connection, transaction, groupId, payloadHash, writesEnabled, ct);
+        await transaction.CommitAsync(ct);
+        return existing;
+    }
     private sealed record ResolvedLine(
         DocumentPrepareLine Request,
         long? LabelId,
@@ -54,8 +64,8 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             await ReserveSourceLinesAsync(connection, transaction, request, cancellationToken);
 
         var products = new Dictionary<string, ProductLabelSnapshot>(StringComparer.OrdinalIgnoreCase);
-        var allowUsedProductReturn = definition.DocumentType == "material-outbound" &&
-                                     request.Header.DocumentDirection == "RED";
+        var allowUsedProductReturn = definition.DocumentType == "inventory-count" ||
+            definition.DocumentType == "material-outbound" && request.Header.DocumentDirection == "RED";
         foreach (var code in request.Lines
                      .Where(line => line.ObjectType == "PRODUCT_LABEL")
                      .Select(line => line.LabelCode.Trim())
@@ -204,7 +214,8 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             if (line.ObjectType == "PRODUCT_LABEL")
             {
                 var product = products[line.LabelCode.Trim()];
-                EnsureIdentity(line, product.MaterialCode, product.UnitCode);
+                EnsureIdentity(line, product.MaterialCode,
+                    definition.DocumentType == "inventory-count" ? line.UnitCode : product.UnitCode);
                 EnsurePosition(request, definition, product.WarehouseCode, product.LocationCode, line.LabelCode);
                 if (product.PalletId.HasValue &&
                     !string.Equals(product.PalletCode, line.SourcePalletCode?.Trim(), StringComparison.OrdinalIgnoreCase))

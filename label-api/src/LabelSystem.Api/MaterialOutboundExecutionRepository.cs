@@ -243,8 +243,10 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             }
             else if (operation.ErpDocumentType == "inventory-count")
             {
-                await CompleteCountAsync(connection, transaction, operation, line, erp,
-                    cancellationToken);
+                // Upload saves an unapproved U8 count only. Inventory and TraceBack quantities
+                // must not change before the separate approval/posting workflow is implemented.
+                await ReleaseObjectAsync(connection, transaction, operation, line, cancellationToken);
+                await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
             }
             else
             {

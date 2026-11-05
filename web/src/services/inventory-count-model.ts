@@ -69,9 +69,10 @@ export interface CountObservation {
 }
 export interface CountDraft { task: CountTask; observations: CountObservation[] }
 
-export function rejectLegacyCountUpload(documentType: string): void {
-  if (documentType.trim().toLowerCase() === 'inventory-count') {
-    throw new Error('盘点上传ERP暂未开放')
+export function rejectLegacyCountUpload(documentType: string, context?: { accountId: string; databaseName: string }): void {
+  if (documentType.trim().toLowerCase() === 'inventory-count' &&
+      (context?.accountId !== '888' || context?.databaseName !== 'UFDATA_888_2021')) {
+    throw new Error('盘点上传仅开放888测试账套，请重新保存单据')
   }
 }
 

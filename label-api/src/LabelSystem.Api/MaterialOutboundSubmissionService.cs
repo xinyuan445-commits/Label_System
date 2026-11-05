@@ -45,6 +45,8 @@ public sealed class MaterialOutboundSubmissionService(
         bool autoApprove,
         CancellationToken cancellationToken)
     {
+        documentType = documentType.Trim().ToLowerInvariant();
+        if (documentType == "inventory-count") InventoryCountUploadRules.RequireContext(request, options.CurrentValue);
         EnsureSubmissionAllowed();
         MaterialOutboundPrepareResult? prepared = null;
         try

@@ -7,6 +7,11 @@ using System.Threading;
 using U8Gateway.U8;
 using U8Gateway.Contracts.Approvals;
 using U8Gateway.U8.Sources;
+using U8Gateway.Contracts.Sources;
+using U8Gateway.Metadata;
+using U8Gateway.Core.Documents;
+using U8Gateway.U8.Documents;
+using U8Gateway.U8.Xml;
 
 internal static class Program
 {
@@ -14,6 +19,7 @@ internal static class Program
     {
         try
         {
+            LegacyClrActivation.Ensure();
             Equal("008", U8InventoryCountReader.NormalizeAccount("(default)@008"));
             Equal("888", U8InventoryCountReader.NormalizeAccount("888"));
             var header = U8InventoryCountReader.MapHeader(new ApprovalDocumentSummary
@@ -53,13 +59,55 @@ internal static class Program
             Reject(() => U8InventoryCountReader.RequirePending(new ApprovalDocumentSummary { Status = "pending", AuditedBy = "auditor" }));
             Reject(() => U8InventoryCountReader.RequirePending(null));
             SharedMutexContract();
-            Console.WriteLine("inventory count read contract passed (no SQL/COM)");
+            UploadSaveContract();
+            Console.WriteLine("inventory count read/upload-save contracts passed (no SQL/U8 COM)");
             return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); return 1; }
     }
     private static void Equal(object expected, object actual)
     { if (!Equals(expected, actual)) throw new InvalidOperationException("Inventory count read contract mismatch."); }
+    private static void UploadSaveContract()
+    {
+        var source = new InventoryCountSource { AccountId = "888", DatabaseName = "UFDATA_888_2021",
+            Document = new InventoryCountHeader { Id = 12, DocumentNo = "COUNT12", WarehouseCode = "W1",
+                Version = "v1", CountByLocation = true, InCategoryCode = "107", OutCategoryCode = "207" },
+            Lines = new List<InventoryCountSourceLine> {
+                new InventoryCountSourceLine { Id = 41, MaterialCode = "M1", BatchNo = "B1", WarehouseCode = "W1", LocationCode = "L1",
+                    BookQuantity = 100, ActualQuantity = 0, UnitCode = "0101", UnitName = "张", FreeItems = new string[10] },
+                new InventoryCountSourceLine { Id = 42, MaterialCode = "M2", BatchNo = "B2", WarehouseCode = "W1", LocationCode = "L2",
+                    BookQuantity = 50, ActualQuantity = 8, UnitCode = "0101", FreeItems = new string[10] } } };
+        var request = new DocumentOperationRequest { Header = new Dictionary<string, object> { ["cirdcode"] = "107", ["cordcode"] = "207" },
+            Lines = new List<IDictionary<string, object>> { new Dictionary<string, object> { ["autoid"] = 41L, ["icvcquantity"] = 97m } } };
+        var expected = InventoryCountSaveRules.ExpectedAfter(source, request);
+        Equal((decimal?)97m, expected.Lines[0].ActualQuantity); Equal((decimal?)8m, expected.Lines[1].ActualQuantity);
+        Equal((decimal?)0m, source.Lines[0].ActualQuantity); // Preparing a patch cannot mutate the saved baseline.
+        InventoryCountSaveRules.CheckSource(source, source);
+        Reject(() => InventoryCountSaveRules.CheckSource(source, expected));
+        expected.Lines[0].ActualQuantity = 0; expected.Lines[0].UnitName = "display changed";
+        InventoryCountSaveRules.CheckSource(source, expected);
+        expected.Document.Version = "v2"; Reject(() => InventoryCountSaveRules.CheckSource(source, expected));
+
+        var definition = new ContractDocumentDefinitionStore().Get("inventory-count");
+        Equal(true, definition.Capabilities.Create); Equal(true, definition.Capabilities.Update);
+        var preparer = new DocumentWritePreparer();
+        Equal(true, preparer.PreparePatch(definition, request, DateTimeOffset.Now).IsValid);
+        var codec = new AdoPersistedXmlCodec();
+        var original = codec.Encode(definition, new DocumentPayload { Header = new Dictionary<string, object> { ["id"] = 12, ["ccvmemo"] = "untouched" },
+            Lines = new List<IDictionary<string, object>> {
+                new Dictionary<string, object> { ["autoid"] = 41, ["cinvcode"] = "M1", ["icvquantity"] = 100m, ["icvcquantity"] = 0m },
+                new Dictionary<string, object> { ["autoid"] = 42, ["cinvcode"] = "M2", ["icvquantity"] = 50m, ["icvcquantity"] = 8m } } });
+        var merged = new AdoPersistedXmlPatchMerger(codec).Merge(definition, original,
+            new DocumentPayload { Lines = request.Lines });
+        var decoded = codec.Decode(definition, merged);
+        Equal(2, decoded.Lines.Count); Equal("97", Convert.ToString(decoded.Lines[0]["icvcquantity"]));
+        Equal("100", Convert.ToString(decoded.Lines[0]["icvquantity"]));
+        Equal("8", Convert.ToString(decoded.Lines[1]["icvcquantity"])); Equal("untouched", decoded.Header["ccvmemo"]);
+        request.Lines[0]["cinvcode"] = "WRONG";
+        Equal(false, preparer.PreparePatch(definition, request, DateTimeOffset.Now).IsValid);
+        request.Lines[0].Remove("cinvcode"); request.Lines[0]["_action"] = "delete";
+        Equal(false, preparer.PreparePatch(definition, request, DateTimeOffset.Now).IsValid);
+    }
     private static void SharedMutexContract()
     {
         var name = @"Local\LabelSystem.QueueTest." + Guid.NewGuid().ToString("N");

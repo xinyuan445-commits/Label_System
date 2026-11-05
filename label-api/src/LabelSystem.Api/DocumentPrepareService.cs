@@ -26,7 +26,8 @@ public sealed class DocumentPrepareService(
     ManualReturnValidationService manualReturns,
     U8GatewayClient u8,
     OperationArchiveService archive,
-    IOptionsMonitor<LabelSystemOptions> options)
+    IOptionsMonitor<LabelSystemOptions> options,
+    InventoryCountCollectionService? inventoryCounts = null)
 {
     private static readonly IReadOnlySet<string> MappedHeaderFields = new HashSet<string>(
         [
@@ -52,7 +53,7 @@ public sealed class DocumentPrepareService(
                 false, false, false, false, false, true, false, false, true, false),
             ["inventory-count"] = new(
                 "inventory-count", "盘点单", "INVENTORY_COUNT", "inventory-count", "IC",
-                true, false, false, true, false, false, true, false, false, true),
+                true, false, false, false, false, false, true, false, false, true),
             ["purchase-arrival"] = new(
                 "purchase-arrival", "采购到货", "PURCHASE_ARRIVAL", "purchase-arrival", "PA",
                 false, false, false, true, false, false, false, true, false, false),
@@ -79,21 +80,34 @@ public sealed class DocumentPrepareService(
         string requestId,
         CancellationToken cancellationToken)
     {
-        InventoryCountRules.RejectLegacyWrite(documentType);
+        documentType = documentType.Trim().ToLowerInvariant();
+        var count = documentType == "inventory-count";
+        if (count && request?.InventoryCount is null) InventoryCountRules.RejectLegacyWrite(documentType);
+        if (request is null) throw new ApiException(400, "REQUEST_REQUIRED", "请提交完整单据。");
         if (!Definitions.TryGetValue(documentType, out var definition))
             throw new ApiException(StatusCodes.Status400BadRequest,
                 "DOCUMENT_TYPE_NOT_READY", "当前单据尚未开放预提交。");
 
-        var hasSource = HasSource(request);
+        var payloadJson = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var payloadHash = Hashing.Sha256(payloadJson);
+        if (count)
+        {
+            InventoryCountUploadRules.RequireContext(request, options.CurrentValue);
+            var existing = await operations.FindExistingAsync(request.ClientRequestId, payloadHash,
+                options.CurrentValue.U8WritesEnabled, cancellationToken);
+            if (existing is not null) return existing;
+            await InventoryCountUploadRules.ValidateAsync(request,
+                inventoryCounts ?? throw new InvalidOperationException("盘点服务不可用。"), cancellationToken);
+        }
+        var hasSource = !count && HasSource(request);
         var requiredFields = await settings.GetRequiredDocumentFieldsAsync(documentType, cancellationToken);
+        if (count) requiredFields = InventoryCountUploadRules.RequiredFields(requiredFields);
         ValidateBasicRequest(request, definition, requiredFields, hasSource);
         await ValidateManualReturnLinesAsync(request, definition, cancellationToken);
 
         if (hasSource)
             await ValidateSourceLinesAsync(request.Lines, cancellationToken);
 
-        var payloadJson = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        var payloadHash = Hashing.Sha256(payloadJson);
         var archiveResult = await archive.CreateAsync(
             definition.DocumentType, definition.Title, "prepare", requestId, request, cancellationToken);
 

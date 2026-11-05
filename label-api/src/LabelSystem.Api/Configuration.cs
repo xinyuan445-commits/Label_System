@@ -9,6 +9,7 @@ public sealed class LabelSystemOptions
     public string ErpDatabaseName { get; set; } = "UFDATA_888_2021";
     public int LockMinutes { get; set; } = 15;
     public bool U8WritesEnabled { get; set; }
+    public bool InventoryCountUploadsEnabled { get; set; }
     public bool EnableDevelopmentLogin { get; set; } = true;
 }
 

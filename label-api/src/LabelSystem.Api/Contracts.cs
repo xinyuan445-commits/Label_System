@@ -375,7 +375,9 @@ public sealed record DocumentPrepareRequest(
     string? DeviceModel,
     string? Reason,
     DocumentPrepareHeader Header,
-    IReadOnlyList<DocumentPrepareLine> Lines);
+    IReadOnlyList<DocumentPrepareLine> Lines,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    InventoryCountUploadContext? InventoryCount = null);
 
 public sealed record DocumentPrepareHeader(
     DateOnly DocumentDate,

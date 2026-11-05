@@ -218,7 +218,7 @@ public sealed class InventoryCountCollectionService(U8GatewayClient gateway, IOp
             !string.Equals(request.DatabaseName, source.DatabaseName, StringComparison.OrdinalIgnoreCase))
             throw new ApiException(409, "COUNT_ACCOUNT_MISMATCH", "盘点账套不一致，请重新选择。");
         if (request.SourceFingerprint != source.Fingerprint)
-            throw new ApiException(409, "COUNT_SOURCE_CHANGED", "原盘点单已变化，采集记录已保留。");
+            throw new ApiException(409, "COUNT_SOURCE_CHANGED", "请返回表头重选同一原单，已扫数量保留。");
         var snapshots = new Dictionary<string, TraceBackLabelSnapshot>(StringComparer.OrdinalIgnoreCase);
         foreach (var batch in request.Observations.Chunk(100))
         {
@@ -229,7 +229,7 @@ public sealed class InventoryCountCollectionService(U8GatewayClient gateway, IOp
         }
         var after = await GetSourceAsync(id, ct);
         if (after.Fingerprint != source.Fingerprint)
-            throw new ApiException(409, "COUNT_SOURCE_CHANGED", "原盘点单已变化，采集记录已保留。");
+            throw new ApiException(409, "COUNT_SOURCE_CHANGED", "请返回表头重选同一原单，已扫数量保留。");
         return new(source.Fingerprint, request.Observations.Select(o => snapshots.TryGetValue(o.Code.Trim(), out var snapshot)
             ? InventoryCountRules.Match(source, o, snapshot)
             : new InventoryCountObservationResult(o.Code.Trim(), "NOT_FOUND", "未找到标签。")).ToArray());
@@ -252,6 +252,7 @@ public static class InventoryCountCollectionEndpoints
         });
         group.MapGet("/capabilities", (HttpContext h, IOptionsMonitor<LabelSystemOptions> options) =>
             ApiResults.Ok(h, new { collectionEnabled = true, directDraftEnabled = true, canSubmit = false,
+                uploadSaveEnabled = InventoryCountUploadRules.Enabled(options.CurrentValue),
                 accountId = options.CurrentValue.ErpAccountId, databaseName = options.CurrentValue.ErpDatabaseName,
                 maximumObservations = InventoryCountRules.MaximumObservations, offlineColdStart = false }));
         group.MapGet("", async (HttpContext h, U8GatewayClient gateway, string? documentNo,

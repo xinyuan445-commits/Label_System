@@ -18,7 +18,7 @@
 | 九类制单 `/work/:code` | OutboundDocumentView.vue | 固定页头、表头/扫码两步、底栏、同一个全屏明细编辑 | 盘点仅添加业务字段/校验分支，不再另写布局/CSS | dev.87已部署，实机待验 |
 | 源单选择 `/work/:code/source` | SourceDocumentSelectView.vue | 查询、日期、结果选择、底栏确认 | 盘点进入自动查最近30天；卡片显示仓库名称/编码、日期、条数、制单人和未审核状态，无合并模式 | dev.88已部署，实机待验 |
 | 源单明细 `/work/:code/source-details` | SourceDocumentDetailsView.vue | 原单/需求明细查看与选择 | 盘点显示账面、批号/仓库/货位，无领料动作 | dev.87已部署，实机待验 |
-| 单据管理 `/work/:code/documents` | OutboundDocumentManagerView.vue | 共用草稿、同步状态、继续编辑及上传入口 | 盘点草稿与旧记录在此管理；ERP回填未完成时上传禁用 | dev.87已部署，实机待验 |
+| 单据管理 `/work/:code/documents` | OutboundDocumentManagerView.vue | 共用草稿、同步状态、继续编辑及上传入口 | 盘点草稿与旧记录在此管理；888按实时能力上传保存未审核，008关闭；实写待用户验收 | dev.87已部署，实机待验 |
 | 制单开关 `/work/:code/switches` | BusinessDocumentSettingsView.vue | 单据类型对应开关与保存 | 盘点不显示尚未实现的通用新增开关 | 已有发布，未改 |
 | 单据字段 `/work/:code/document-settings` | DocumentFieldSettingsView.vue | 表头/表体字段显示、必填及默认配置 | 盘点原单只读字段不误接为可编辑表头 | 已有发布，未改 |
 | 盘点 `/work/inventory-count` | OutboundDocumentView.vue（共用） | 原单可选→下一步→扫码确认数量→完成做单→单据管理 | 删除原InventoryCountView.vue；旧数据导入标准草稿、不删除原始库；没有采集页或手工核验 | dev.87已部署，30项自动测试/构建通过，实机待验 |
@@ -77,3 +77,5 @@
 2026-11-05盘点扫码校验（dev.90）：保持原共用布局，取消标签/原单单位比较，单位沿用原单物料。H5 34项及API盘点30项测试通过，5175/开发9891已部署，888真实标签只读核验MATCHED；实机待验，未查看截图。见[发布记录](DEPLOYMENT_2026-11-05_COUNT_UNIT.md)。
 
 2026-11-05盘点显示与默认值（dev.91）：扫码列表和明细确认隐藏标签数量/可用量；在线新扫默认实时余额并可改后确认，离线无余额保持空白，旧草稿及手改数量不覆盖。单位按原单物料名称显示；重选同一原单刷新新增unitName及指纹，已有数量保留。H5 36项、API31项、Gateway合同/构建和888真实只读验证通过，已发布，实机待验，未截图。见[部署记录](DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。
+
+2026-11-05盘点上传（dev.92）：共用单据管理按实时capabilities.uploadSaveEnabled开放888上传，成功显示“已保存，未审核”；源快照变化提示改为返回表头重选同一原单、数量保留。38项H5、API93通过/1跳过、Gateway合同和构建通过；已发布及只读验证，真实上传由用户操作，实机/实写待验。见[发布记录](DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。

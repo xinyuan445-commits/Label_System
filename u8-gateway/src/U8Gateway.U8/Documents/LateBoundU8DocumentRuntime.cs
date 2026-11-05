@@ -23,7 +23,7 @@ using U8Gateway.UserpcoBridge;
 
 namespace U8Gateway.U8.Documents
 {
-    public sealed class LateBoundU8DocumentRuntime : IU8DocumentRuntime
+    public sealed partial class LateBoundU8DocumentRuntime : IU8DocumentRuntime
     {
         private readonly IU8OperationQueue _queue;
         private readonly Func<U8GatewayRuntimeOptions> _options;
@@ -65,6 +65,15 @@ namespace U8Gateway.U8.Documents
         {
             U8GatewayRuntimeOptions options = _options();
             ValidateWriteOptions(options);
+            if (execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount)
+            {
+                if (!CountTestAccount(options) || !OptionBoolean(execution.Request?.Options, "countPartialSave"))
+                    return Failure("COUNT_UPLOAD_TEST_ONLY", "盘点上传仅开放888测试账套。", execution.VoucherCode);
+                if (execution.Operation == DocumentOperationCodes.Edit) return UpdateCount(options, execution);
+                if (execution.Operation != DocumentOperationCodes.Add)
+                    return Failure("COUNT_APPROVAL_NOT_READY", "盘点审核暂未开放。", execution.VoucherCode);
+                PrepareCountCreate(options, execution.Request);
+            }
             if (string.Equals(execution.Operation, DocumentOperationCodes.Add,
                     StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(execution.Profile.Component, "USERPCO",
@@ -215,6 +224,8 @@ namespace U8Gateway.U8.Documents
                 try
                 {
                     bool redVoucher = OptionBoolean(execution.Request.Options, "redVoucher");
+                    if (execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount)
+                        PrepareCountCreate(options, execution.Request, true);
                     UserpcoInsertResult insert = UserpcoWriter.Insert(
                         voucher,
                         execution.Profile.ComponentDocumentType,
@@ -280,6 +291,8 @@ namespace U8Gateway.U8.Documents
                     options, execution.Profile, confirmedId.Value);
                 U8XmlPacket saved = QueryInventory(
                     options.U8, execution.Profile, confirmedId.Value);
+                if (execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount)
+                    VerifyCountCreated(CountReader(options).Get(confirmedId.Value), execution.Request);
                 return new DocumentOperationResult
                 {
                     Confirmed = state.Exists,
@@ -1641,6 +1654,7 @@ namespace U8Gateway.U8.Documents
 
         private static U8Login.clsLogin Login(U8ConnectionOptions options)
         {
+            LegacyClrActivation.Ensure();
             var login = new U8Login.clsLogin();
             DateTime date = options.LoginDate == default(DateTime)
                 ? BusinessClock.Today

@@ -21,6 +21,23 @@ namespace U8Gateway.UserpcoBridge
 
     public static class UserpcoWriter
     {
+        public static UserpcoStateResult Update(object voucher, string voucherType,
+            object head, object body, object position)
+        {
+            string error = string.Empty;
+            Connection connection = null;
+            IXMLDOMDocument2 message = null;
+            bool check = true, beforeCheckStock = true;
+            try
+            {
+                bool succeeded = ((VoucherCO)voucher).Update(voucherType, head, body, position,
+                    ref error, ref connection, ref message, ref check, ref beforeCheckStock,
+                    false, string.Empty, false);
+                return new UserpcoStateResult { Succeeded = succeeded, Error = error };
+            }
+            finally { Release(message); Release(connection); }
+        }
+
         public static UserpcoInsertResult Insert(
             object voucher,
             string voucherType,

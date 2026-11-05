@@ -240,13 +240,13 @@ public sealed partial class U8GatewayClient(
     public async Task ValidateDocumentAsync(
         string documentType,
         GatewayDocumentRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool update = false)
     {
         try
         {
             using var message = CreateRequest(
                 HttpMethod.Post,
-                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}/validate?operation=add");
+                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}/validate?operation={(update ? "edit" : "add")}");
             message.Content = JsonContent.Create(request, options: JsonOptions);
             using var response = await Client().SendAsync(message, cancellationToken);
             var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<JsonElement>>(
@@ -285,16 +285,25 @@ public sealed partial class U8GatewayClient(
         }
     }
 
-    public async Task<GatewayDocumentResult> CreateDocumentAsync(
+    public Task<GatewayDocumentResult> UpdateDocumentAsync(string documentType, string voucherId,
+        GatewayDocumentRequest request, CancellationToken ct) =>
+        WriteDocumentAsync(HttpMethod.Patch, documentType, "/" + Uri.EscapeDataString(voucherId), request, ct);
+
+    public Task<GatewayDocumentResult> CreateDocumentAsync(string documentType,
+        GatewayDocumentRequest request, CancellationToken ct) =>
+        WriteDocumentAsync(HttpMethod.Post, documentType, "", request, ct);
+
+    private async Task<GatewayDocumentResult> WriteDocumentAsync(HttpMethod method,
         string documentType,
+        string suffix,
         GatewayDocumentRequest request,
         CancellationToken cancellationToken)
     {
         try
         {
             using var message = CreateRequest(
-                HttpMethod.Post,
-                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}");
+                method,
+                $"/api/v1/documents/{Uri.EscapeDataString(documentType)}{suffix}");
             message.Content = JsonContent.Create(request, options: JsonOptions);
             using var response = await Client().SendAsync(message, cancellationToken);
             var envelope = await response.Content.ReadFromJsonAsync<GatewayEnvelope<GatewayDocumentResult>>(

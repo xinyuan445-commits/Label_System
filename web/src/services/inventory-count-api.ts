@@ -2,7 +2,7 @@ import { apiRequest } from '@/api/client'
 import type { CountCheck, CountDraft, CountSource } from './inventory-count-model'
 import type { InventoryObjectLine } from './inventory-object-lookup'
 
-export interface CountContext { accountId: string; databaseName: string }
+export interface CountContext { accountId: string; databaseName: string; uploadSaveEnabled?: boolean }
 export interface CountWarehouse extends CountContext { warehouseCode: string; warehouseName: string; positionManaged: boolean }
 export async function getCountWarehouse(code: string): Promise<CountWarehouse> {
   return apiRequest('/api/v1/inventory-counts/warehouses/' + encodeURIComponent(code))
