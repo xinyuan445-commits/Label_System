@@ -2,7 +2,7 @@
 
 功能当前能做什么、使用限制及验收范围见[功能档案](../docs/features/README.md)；本目录继续维护API实现和接口合同。
 
-当前状态核对：2026-11-04。源码/已安装程序集为0.12.3，盘点只读/核验及旧写入口拦截已部署。生产9890/008健康版本0.12.3，开发9891/888配置版本0.12.3-count-dev；原配置与写入门禁保留。详见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)及[项目状态](../docs/PROJECT_STATUS.md)。
+资料复核：2026-11-05；最近部署/实测基线为2026-11-04，本次未重新验证在线服务或数据库。源码/已安装程序集为0.12.3，盘点只读/核验及旧写入口拦截已部署。生产9890/008健康版本0.12.3，开发9891/888配置版本0.12.3-count-dev；原配置与写入门禁保留。详见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)及[项目状态](../docs/PROJECT_STATUS.md)。
 
 既有三类库存业务已接TraceBack实时复核和同步；打印正式发码、首打/补打、回执与初始登记已有888/PDF验收。盘点原单回填与旧表差异链尚未实现，不能按九类接口已建立就认定可用。见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
 
@@ -167,7 +167,7 @@ Gateway `0.5.8` 起，调拨审核和弃审会联动 U8 自动生成的其他出
 
 ## TraceBack 并行运行
 
-0.12.0盘点新增GET /api/v1/inventory-counts及/{id}、GET /capabilities和POST /{id}/validate。限定盘点功能权限；原单来源与配置账套/数据库一致，下载/核验使用完整指纹，最多1000条采集且拆成最多100码查询。只读旧三表，不建盘点镜像/操作/同步任务，canSubmit=false。旧通用盘点建档/执行入口直接返回COUNT_WRITE_NOT_READY，避免ERP写入后才报错。未创建迁移，详细合同见API设计及[复核记录](../docs/INVENTORY_COUNT_REVIEW.md)。
+当前0.12.3盘点支持有原单/{id}/validate、无原单/validate-direct和/warehouses/{code}只读查询，均受盘点权限与账套校验；最多1000码，按100码分批。专用校验不写盘点操作/差异流水，标准扫码查询仍可刷新标签镜像，普通草稿使用009同步。canSubmit=false；旧建档/执行前返回COUNT_WRITE_NOT_READY。未新增迁移，现行合同见API设计及[盘点功能档案](../docs/features/盘点单.md)。
 
 当前提交复核及来源事件白名单只覆盖材料出库、调拨、货位调整；扫码实时查询是共用能力，不能据此认定盘点等其他类型已具备写入闭环。盘点当前上传风险及拟方案见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
 

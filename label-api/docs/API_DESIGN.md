@@ -1,32 +1,61 @@
 # Label System API
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.12.3共享程序集已部署9890/9891；打印工作流仍只在开发9891/888开放，生产未配置或验收；Dev已有017，Test/Prod未记录安装。
+资料复核：2026-11-05；源码与最近已记录部署为Business API0.12.3（11月4日），今日未检查在线服务或重跑测试。环境/版本/迁移见[项目状态](../../docs/PROJECT_STATUS.md)，功能边界见[功能档案](../../docs/features/README.md)。9890/008和9891/888的写入配置分别管理，打印流程仍仅有开发888/PDF阶段验收，生产008打印未发布。
 
-三类库存业务的TraceBack同步不能泛化为所有九类单据。0.12.3盘点原单只读/核验已部署008/888；原单回填和差异事件仍未实现，旧通用盘点建档/执行前返回COUNT_WRITE_NOT_READY。完整边界见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+三类库存业务的TraceBack写入不能推广到所有九类单据。盘点已支持标准草稿和只读核验；ERP新增/回填、完整范围及差异生效仍未完成。旧盘点建档/执行前返回COUNT_WRITE_NOT_READY，全部盘点能力canSubmit=false，不能用通用接口绕过。
 
-## 盘点原单及自动校验接口（0.12.3已部署）
+## 盘点现行只读合同（0.12.3）
 
-- GET /api/v1/inventory-counts/capabilities：盘点权限内返回来源账套/库、collectionEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000。
-- GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=：固定代理Gateway未审核列表，最多100条，hasMore时缩小查询范围。
-- GET /api/v1/inventory-counts/{id}：核对Gateway账套/数据库与当前配置一致、完整行数及稳定行ID，返回原单明细和完整源数据指纹fingerprint。账面bookQuantity取U8原单，不取标签Code数量。
-- POST /api/v1/inventory-counts/{id}/validate：accountId、databaseName、sourceFingerprint、observations[{code,quantity}]。quantity为非负十进制字符串或null，最多12位整数/6位小数；最多1000个唯一完整Code，重复（含大小写/首尾空白）拒绝。拆为最多100码快照查询，查询前后均复核原单指纹；不写镜像、操作、U8或旧三表。
+所有下列接口校验当前登录账号的inventory-count功能权限，响应private/no-store。不依赖客户端X-Function-Code授予权限，不接受客户端连接信息、SQL或表名；无匿名离线任务/写令牌。
 
-逐码结果status为MATCHED、LABEL_INVALID、OUTSIDE_SOURCE、AMBIGUOUS_SOURCE、IDENTITY_NOT_SUPPORTED、UNIT_MISMATCH、QUANTITY_REQUIRED或NOT_FOUND。MATCHED仅表示当前资料匹配，不证明原单范围已盘完整或期间没有移动；所有结果canSubmit=false。原单变更返回409 COUNT_SOURCE_CHANGED，账套不符返回COUNT_ACCOUNT_MISMATCH；本机应保留采集，不覆盖原基线。
+| 方法与路径 | 请求与行为 | 主要返回 |
+| --- | --- | --- |
+| GET /api/v1/inventory-counts/capabilities | 当前服务配置，不据客户端development名称判断账套 | accountId、databaseName、collectionEnabled=true、directDraftEnabled=true、canSubmit=false、offlineColdStart=false、maximumObservations=1000 |
+| GET /api/v1/inventory-counts | documentNo、startDate、endDate；代理Gateway未审核列表，最多100条 | items、hasMore；超出范围需缩小查询 |
+| GET /api/v1/inventory-counts/{id} | 校验来源账套/数据库、状态、完整行数及原生行ID | accountId、databaseName、document、lines、fingerprint |
+| GET /api/v1/inventory-counts/warehouses/{code} | 实时读取未停用仓库，校验返回账套与编码 | accountId、databaseName、warehouseCode、warehouseName、positionManaged |
+| POST /api/v1/inventory-counts/{id}/validate | accountId、databaseName、sourceFingerprint、observations | sourceFingerprint、items、canSubmit=false |
+| POST /api/v1/inventory-counts/validate-direct | accountId、databaseName、warehouseCode、countByLocation（布尔必传）、observations | items、canSubmit=false |
 
-以上接口由服务器固定校验inventory-count功能权限，不依赖客户端X-Function-Code；不提供匿名任务或离线写令牌。H5复用普通IndexedDB草稿与009服务端同步，已保存本机/已同步/已上传ERP分别显示；只读盘点接口自身不保存草稿。本轮无数据库迁移。
+### 原单、仓库及指纹
 
+- document保留单号、日期、仓库、状态、审核人/时间、版本、行数；增加inCategoryCode/inCategoryName、outCategoryCode/outCategoryName及countByLocation、warehousePositionManaged。
+- lines保留CheckVouchs原生行ID、料号、批号、仓库/货位、库存单位、账面bookQuantity、原实盘actualQuantity、10项自由项和辅计量标志。账面取U8原单iCVQuantity，不取Code打印量，actualQuantity区分null和0。最多5000行，不返回被截断的成功结果。
+- fingerprint覆盖完整源快照，包括两项类别、两个货位标志及明细。H5可修改目标类别，但不改写原单快照；源指纹变化需保留数量并重新选择同一原单更新基线，不能静默覆盖。
+- 有原单是否盘货位取CheckVouch.bPosCheck，独立于Warehouse.bWhPos；原单标志未知或盘货位=true而仓库未管理货位时拒绝。无原单取所选仓库实时positionManaged，不按Position条数推断，未知不得默认false。
 
-0.12.1起原单document新增inCategoryCode、inCategoryName、outCategoryCode、outCategoryName，原样承接Gateway的盘盈/盘亏类别并纳入完整fingerprint。类别变化导致旧指纹失效；保留旧草稿，重新选同一原单更新基线。H5自动带入原单类别且允许用户改选，原单源快照保留原值；本轮只保存草稿，不据此修改U8表头。
+### 观察明细与只读复核
 
+observations为[{code,quantity}]，最多1000个唯一完整Code；首尾空白/大小写重复拒绝，Code不为空且不超过100字符。quantity为非负十进制字符串或null，最多12位整数、6位小数；null不等于0，逐码返回数量待确认。客户端不能把0当空值或以打印量填默认实盘。
 
-0.12.2新增POST /api/v1/inventory-counts/validate-direct，使用同一盘点功能权限。请求accountId、databaseName、warehouseCode及observations[{code,quantity}]；服务器按当前账套校验，最多1000个唯一完整Code，分最多100码一批调用旧三表快照。返回items[{code,status,message,label,latestFlowId}]和canSubmit=false；label为当前产品标签身份/余额，空rowVersion不构成写入授权。状态包括MATCHED、OUTSIDE_WAREHOUSE、LABEL_INVALID、QUANTITY_REQUIRED、NOT_FOUND；负余额、旧表异常、缺失物料/单位拒绝。接口不创建原单、标签镜像或差异流水，缺失仓库/跨账套/重复码拒绝；capabilities新增directDraftEnabled=true，ERP写门禁不变。
+有原单核验前后重新读取原单指纹；无原单核验前后重新读取仓库货位管理状态，客户端countByLocation缺失/不符或配置中途变化返回COUNT_POSITION_CHANGED，提示重置后重试。标签快照按最多100码一批读取旧三表，不创建盘点镜像、业务操作、数量流水或同步事件。
 
+按最新快照核对合法状态、非负余额、最新流水、异常、仓库及必要身份。有原单匹配料号/批号/仓库/单位，盘货位时还匹配货位且标签货位必需；不盘货位时按仓库维度匹配，仍保留最新标签位置。重复候选、自由项/辅计量不明不猜测匹配。
 
-0.12.3新增GET /api/v1/inventory-counts/warehouses/{code}，沿用盘点权限，返回accountId、databaseName、warehouseCode、warehouseName、positionManaged。从Gateway实时读取启用仓库bWhPos并验证账套/编码；未知、停用或错误不转换为false，不读取货位数量推断。
+| 逐码status | 含义 / 适用范围 |
+| --- | --- |
+| MATCHED | 本次资料匹配，非完整范围或ERP提交授权 |
+| LABEL_INVALID | 标签状态、余额、流水或旧表异常需核对 |
+| NOT_FOUND | 未找到对应标签 |
+| QUANTITY_REQUIRED | 未填写或数量格式不合格 |
+| LOCATION_REQUIRED | 盘货位但标签缺货位 |
+| OUTSIDE_SOURCE | 不属于原单，有原单核验 |
+| AMBIGUOUS_SOURCE | 原单重复候选，有原单核验 |
+| IDENTITY_NOT_SUPPORTED | 自由项/辅计量不能明确匹配，有原单核验 |
+| UNIT_MISMATCH | 库存单位不一致，有原单核验 |
+| OUTSIDE_WAREHOUSE | 不属于所选仓库，无原单核验 |
 
-原单document新增countByLocation（CheckVouch.bPosCheck）、warehousePositionManaged（Warehouse.bWhPos），均纳入完整源指纹。有原单是否盘货位按原单状态，可与仓库管理标志不同；盘货位为true而仓库未管理货位则拒绝。有原单按货位匹配时标签货位必需，不盘货位时仅按仓库维度匹配，仍保留最新标签货位。
+有原单结果项包含code、status、message及可用的sourceLineId、materialName、balance、latestFlowId、locationCode。无原单结果项包含code、status、message、匹配时的label和latestFlowId；label为空rowVersion，只是读快照，不能用作后续写入授权。
 
-validate-direct新增必传countByLocation布尔值；查询标签前后各实时读取仓库标志，缺失/不符/中途变化返回COUNT_POSITION_CHANGED，提示重置后重试；不产生U8写入。新增逐码LOCATION_REQUIRED。状态匹配仍不证明完整应盘范围或允许上传。
+主要全单错误：COUNT_ACCOUNT_MISMATCH（账套不一致）、COUNT_SOURCE_CHANGED（源指纹变化）、COUNT_SOURCE_INCOMPLETE（原单不完整）、COUNT_POSITION_INVALID（原单货位状态不明）、COUNT_POSITION_CHANGED（仓库设置变化）、COUNT_WAREHOUSE_INVALID（仓库资料不明）、COUNT_OBSERVATIONS_INVALID（码为空/重复/超限）、COUNT_SNAPSHOT_INVALID（快照返回重复）。Gateway的不存在/停用及查询错误按其实际状态处理，失败不伪装成空数据或否。
+
+### 草稿、写入与验证边界
+
+H5使用标准IndexedDB草稿及既有009服务端草稿同步，旧独立库仅作历史导入。原单确认立即保存完整快照，用户表头与源快照分开；离线只保存已加载页面的Code/数量，联网完成前重新核验。专用核验接口本身只读；标准扫码lookup仍可建立/刷新本地标签镜像，不能把两条链描述成全程不写本地库。
+
+保存本机、同步草稿和上传ERP分别显示；MATCHED及canSubmit=false不能解释为允许盘点落账。无迁移、无盘点ERP写入。30项H5、27项API及Gateway合同/构建是11月4日既有证据，今日未重跑，实机/物理声音/断网验收仍待完成，见[盘点档案](../../docs/features/盘点单.md)和[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+
+版本沿革：0.12.0原单读取/核验，0.12.1类别合同，0.12.2无原单只读核验，0.12.3仓库货位状态及前后复核；这里只整理现行合同，没有新发布。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>

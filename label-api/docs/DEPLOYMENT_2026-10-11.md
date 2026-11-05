@@ -1,6 +1,6 @@
 # 2026-10-11 Business API IIS 部署记录
 
-文档核对：2026-11-04。本文件是持续追加的历史部署时间线，标题日期不是当前版本；各段的“本次”“当前”“禁写”和数据量只指所标日期。现行环境/源码与运行版本/迁移范围见[项目当前状态](../../docs/PROJECT_STATUS.md)，后续打印本地部署见[10月20日记录](../../New_Label_Print_System/docs/本地部署与159来源.md)。本轮未发布程序、执行迁移或修改运行配置。
+文档复核：2026-11-05，未重新部署或检查在线状态。11月4日后续盘点发布见[专门记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。本文件是持续追加的历史部署时间线，标题日期不是当前版本；各段的“本次”“当前”“禁写”和数据量只指所标日期。现行环境/源码与运行版本/迁移范围见[项目当前状态](../../docs/PROJECT_STATUS.md)，后续打印本地部署见[10月20日记录](../../New_Label_Print_System/docs/本地部署与159来源.md)。本轮未发布程序、执行迁移或修改运行配置。
 
 2026-10-20打印部署调整：159只保留9891 Business API、9881 Gateway及数据服务；原独立网页18003、`NewLabelPrintDevelopment`任务和`D:\NewLabelPrintDevelopment`已删除。打印网页及助手改在使用电脑本地运行。后续9891打印API发布使用`New_Label_Print_System/deployment/Deploy-888PrintApi.ps1`，不得重新部署服务器端独立网页。
 

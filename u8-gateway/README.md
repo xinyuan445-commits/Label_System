@@ -2,7 +2,7 @@
 
 按功能查看支持能力、限制与验收证据，进入[功能档案](../docs/features/README.md)；Gateway字段及异常合同继续在本目录维护。
 
-当前状态核对：2026-11-04。0.11.2已部署9880/008及9881/888，盘点原单只读验证成功，盘点create能力关闭。两套来源配置保留；独立生产门禁、精确白名单及Business API开关继续有效，修改/删除仍关闭。共享互斥锁权限修复及安装证据见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)和[项目当前状态](../docs/PROJECT_STATUS.md)。
+资料复核：2026-11-05；最近部署/实测基线为2026-11-04，本次未重新验证在线服务或数据库。0.11.2已部署9880/008及9881/888，盘点原单只读验证成功，盘点create能力关闭。两套来源配置保留；独立生产门禁、精确白名单及Business API开关继续有效，修改/删除仍关闭。共享互斥锁权限修复及安装证据见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)和[项目当前状态](../docs/PROJECT_STATUS.md)。
 
 只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。三类库存来源事件及首打初始三表登记使用不同接口；打印登记已有888/PDF验收，生产008打印尚未发布。盘点原单实盘回填/Update和追溯差异事件尚未实现，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
 
@@ -89,7 +89,7 @@ u8-gateway/
 
 ## 当前单据范围
 
-0.11.0源码中的盘点不允许create，专用GET /api/v1/inventory-counts和/{id}仅提供原单读取；原有verify/unverify不代表盘点标签差异已接入。Gateway构建、CodecSmokeTest及InventoryCountSmokeTest已通过，未读取真实888/008数据。盘点后续见[方案](../docs/INVENTORY_COUNT_PLAN.md)。
+当前0.11.2盘点create关闭，专用GET /api/v1/inventory-counts、/{id}及/warehouses/{code}只读返回原单和仓库货位管理状态。11月4日已在888/008读取真实原单及启用/未启用货位管理的仓库，见[部署记录](../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；今日未重测。原有verify/unverify不代表标签盘点差异已接入，后续见[方案](../docs/INVENTORY_COUNT_PLAN.md)。
 
 | 编码 | 单据 |
 | --- | --- |

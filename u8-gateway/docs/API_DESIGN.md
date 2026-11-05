@@ -1,22 +1,33 @@
 # U8 Gateway API 设计
 
-当前状态核对：2026-11-04。版本、环境、迁移和验收汇总见[项目当前状态](../../docs/PROJECT_STATUS.md)。0.11.2共享程序集已部署9880/008和9881/888，生产受控写入门禁保留；开发888已有打印初始登记验收，生产008打印工作流未配置/验收，修改/delete能力仍关闭。见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
+资料复核：2026-11-05；源码及最近已记录部署为Gateway0.11.2（11月4日），今日未验证在线服务或重跑测试。版本、环境及迁移见[项目状态](../../docs/PROJECT_STATUS.md)。9880/008、9881/888分别管理配置；开发888/PDF已做阶段打印验收，生产008打印未发布。生产门禁、精确白名单和Business API独立写开关保持原合同。
 
-本文件记录现有合同；盘点原单回填、范围查询和差异角色仅为[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)中的拟议接口，不能以已存在query/create/verify能力代替Update开发及验收。
+## 盘点现行只读合同（0.11.2）
 
-## 盘点原单只读（0.11.2已部署）
+| 方法与路径 | 行为 | 返回 / 上限 |
+| --- | --- | --- |
+| GET /api/v1/inventory-counts | documentNo、startDate、endDate、limit查询未审核单 | 最多100条并保留hasMore，不以空结果掩盖查询失败 |
+| GET /api/v1/inventory-counts/{id} | 完整读取CheckVouch/CheckVouchs，前后核对审核状态、ufts及行数 | 规范化accountId、databaseName、document、lines；最多5000行，超限拒绝 |
+| GET /api/v1/inventory-counts/warehouses/{code} | 按参数化编码读取dWhEndDate IS NULL的Warehouse | accountId、databaseName、warehouseCode、warehouseName、positionManaged |
 
-GET /api/v1/inventory-counts?documentNo=&startDate=&endDate=&limit=固定查询未审核盘点单，最多100条，保留hasMore；GET /api/v1/inventory-counts/{id}返回规范化accountId、databaseName、document及完整lines。
+原单行ID为autoID，bookQuantity取iCVQuantity，actualQuantity保留iCVCQuantity的null/0差异；位置取cPosition、单位取Inventory主单位，另带10项自由项及辅计量标志。行集合单独返回，不重复序列化审核投影的不完整明细。
 
-原单读取CheckVouch/CheckVouchs；行ID为autoID，bookQuantity取iCVQuantity，actualQuantity保留iCVCQuantity的null/0差异，位置取cPosition，单位取Inventory主单位，并带10项自由项和辅计量标志供业务端保守核验。最多5000行，超限拒绝；读取前后核对审核状态、主版本及行数，不返回截断的成功明细。
+document除原有单号、日期、仓库、状态、版本/行数外，包含以下字段：
 
-源单账户/库由服务器配置返回，不接收客户端连接信息、表名或SQL。内部认证沿用原门禁，读接口无SQL写操作、无COM保存。盘点capabilities.create=false、update/delete=false，已有verify/unverify独立保留，不代表标签盘点差异已落账；Business API也须关闭不完整旧新增路径。
+| 字段 | 来源与含义 |
+| --- | --- |
+| inCategoryCode / inCategoryName | CheckVouch.cIRdCode及对应Rd_Style.cRdName，盘盈类别 |
+| outCategoryCode / outCategoryName | CheckVouch.cORdCode及对应Rd_Style.cRdName，盘亏类别 |
+| countByLocation | CheckVouch.bPosCheck，原单自身是否盘货位 |
+| warehousePositionManaged | Warehouse.bWhPos，仓库货位管理标志 |
 
+两个货位标志独立读取，不用仓库管理标志覆盖原单状态。nchar的0/1及布尔值显式解析，未知/空/非法标志不得转为false；类别为空保持空，不猜类别。仓库接口不依赖Position条数，停用/不存在返回404，未知或重复档案拒绝。
 
-0.11.1起document新增inCategoryCode/inCategoryName（盘盈）、outCategoryCode/outCategoryName（盘亏）。分别只读CheckVouch.cIRdCode/cORdCode，名称按各自编码关联Rd_Style.cRdName；编码为空保持空，不猜默认类别。采用专用InventoryCountHeader，不改变其他审核单据合同；此表头读取位于原有前后ufts核对之间，关联重复时拒绝返回。
+该组接口沿用现有内部认证，账套/数据库来自服务器固定配置，不接收客户端连接串、表名或SQL；参数化查询无SQL写入、无COM保存。Business API继续复核账套、源指纹及原单/仓库状态，不能只依赖H5显示。
 
+盘点capabilities.create=false、update/delete=false；已有verify/unverify不代表标签盘点差异已接入。原单回填/窄字段Update、无原单Create、完整应盘范围及差异生效仍属[盘点后续方案](../../docs/INVENTORY_COUNT_PLAN.md)，不得把原生接口存在当作业务闭环已验收。
 
-0.11.2新增GET /api/v1/inventory-counts/warehouses/{code}：按参数化仓库编码读取未停用Warehouse.cWhCode/cWhName/bWhPos，带规范化账套/数据库。缺失/停用返回404，非法或未知标志拒绝；不依赖Position条数。原单document增加countByLocation/warehousePositionManaged，读取bPosCheck/bWhPos，nchar的0/1和布尔值显式解析，空/未知不当作否。两个标志独立，原单读取仍在前后ufts检查内。无迁移、SQL写入或COM保存。
+0.11.0为原单首批读取，0.11.1补类别，0.11.2补仓库接口和货位状态。11月4日真实888/008原单、启用及未启用货位管理的仓库已有只读GET证据，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；今日没有新部署、迁移或实测。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
