@@ -43,13 +43,13 @@ function document(account = '888', source = true) {
   } }
 }
 
-test('888盘点上传保留零数量和多标签，不按原单数量拆分，强制只保存未审核', async t => {
+test('888盘点上传保留零数量和多标签，不按原单数量拆分，透传自动审核选项', async t => {
   const f = await fixture(); t.after(f.close)
   const doc = document()
   await f.upload(doc, true)
   assert.equal(f.state.requests.length, 1)
   const call = f.state.requests[0], body = JSON.parse(call.options.body)
-  assert.match(call.path, /inventory-count\/submit\?autoApprove=false$/)
+  assert.match(call.path, /inventory-count\/submit\?autoApprove=true$/)
   assert.deepEqual(body.lines.map(l => l.requestedQty), [0, 5])
   assert.equal(body.inventoryCount.source.document.id, 12)
   assert.equal(body.inventoryCount.countByLocation, false)
@@ -77,4 +77,14 @@ test('盘点上传分开传原标签位置与本次盘点位置，跨仓不改�
   const row=JSON.parse(f.state.requests[0].options.body).lines[0]
   assert.equal(row.warehouseCode,'W2');assert.equal(row.locationCode,'OLD')
   assert.equal(row.targetWarehouseCode,'W1');assert.equal(row.targetLocationCode,'L1')
+})
+
+
+test('盘点关闭自动审核保持false，旧托盘草稿不会发送上传请求',async t=>{
+ const f=await fixture();t.after(f.close)
+ await f.upload(document(),false)
+ assert.match(f.state.requests[0].path,/autoApprove=false$/)
+ const before=f.state.requests.length,doc=document();doc.payload.lines[0].objectType='PALLET'
+ await assert.rejects(f.upload(doc,true),/旧托盘/)
+ assert.equal(f.state.requests.length,before)
 })

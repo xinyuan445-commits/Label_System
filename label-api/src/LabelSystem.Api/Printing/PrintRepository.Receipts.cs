@@ -154,7 +154,7 @@ public sealed partial class PrintRepository
               'NORMAL',@kind,f.unit_code,p.current_qty,0,p.current_qty,f.material_code,f.batch_no,
               f.manufacture_date,f.expiry_date,@serial,f.inventory_attributes_json,f.attribute_schema_version,
               f.inventory_identity_hash,f.to_warehouse_code,f.to_location_code,f.to_warehouse_code,f.to_location_code,
-              f.to_pallet_id,f.to_pallet_id,N'数据发送成功登记'
+              NULL,NULL,N'数据发送成功登记'
             FROM dbo.product_label p JOIN dbo.inventory_flow f ON f.id=p.last_flow_id AND f.label_id=p.id WHERE p.id=@label;
             """,("@op",operation.L("id")),("@line",output.LineId),("@kind",output.Kind=="FIRST"?"PRINT":"REPRINT"),
             ("@serial",s.SerialNo),("@label",s.LabelId)),CultureInfo.InvariantCulture);

@@ -16,7 +16,6 @@ const result = ref<InventoryLookupResult | null>(null)
 const loading = ref(false)
 const error = ref('')
 const returnRouteName = computed(() => route.query.origin === 'all-functions' ? 'all-functions' : 'home')
-const totalQuantity = computed(() => result.value?.lines.reduce((sum, item) => sum + item.availableQty, 0) ?? 0)
 
 async function search(): Promise<void> {
   const value = code.value.trim()
@@ -63,23 +62,13 @@ onBeforeRouteLeave((to) => {
 
     <div class="page-content">
       <section class="search-card">
-        <input v-model="code" autocomplete="off" enterkeyhint="search" placeholder="扫描或输入标签/托盘码" @keyup.enter="search" />
+        <input v-model="code" autocomplete="off" enterkeyhint="search" placeholder="扫描或输入标签码" @keyup.enter="search" />
         <button type="button" :disabled="loading" @click="search">{{ loading ? '查询中' : '查询' }}</button>
       </section>
 
       <p v-if="error" class="error-message">{{ error }}</p>
 
       <template v-if="result">
-        <section v-if="result.pallet" class="summary-card">
-          <div><span>托盘</span><strong>{{ result.pallet.labelCode }}</strong></div>
-          <dl>
-            <div><dt>仓库</dt><dd>{{ result.pallet.warehouseCode || '-' }}</dd></div>
-            <div><dt>货位</dt><dd>{{ result.pallet.locationCode || '-' }}</dd></div>
-            <div><dt>标签</dt><dd>{{ result.lines.length }}</dd></div>
-            <div><dt>数量</dt><dd>{{ totalQuantity }}</dd></div>
-          </dl>
-        </section>
-
         <section v-if="result.lines.length" class="result-list">
           <article v-for="item in result.lines" :key="item.labelCode" class="result-card">
             <div class="result-title"><strong>{{ item.labelCode }}</strong><b>{{ item.availableQty }} {{ item.unitCode }}</b></div>
@@ -88,11 +77,10 @@ onBeforeRouteLeave((to) => {
               <div><dt>批次</dt><dd>{{ item.batchNo || '-' }}</dd></div>
               <div><dt>仓库/货位</dt><dd>{{ item.warehouseCode || '-' }} / {{ item.locationCode || '-' }}</dd></div>
               <div><dt>状态</dt><dd>{{ item.status }}</dd></div>
-              <div v-if="item.palletCode"><dt>托盘</dt><dd>{{ item.palletCode }}</dd></div>
             </dl>
           </article>
         </section>
-        <section v-else class="empty-state">托盘内暂无标签</section>
+        <section v-else class="empty-state">未找到标签</section>
       </template>
     </div>
   </main>

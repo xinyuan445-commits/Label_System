@@ -1,6 +1,6 @@
 import { apiRequest } from '@/api/client'
 
-export type InventoryObjectType = 'PRODUCT_LABEL' | 'PALLET'
+export type InventoryObjectType = 'PRODUCT_LABEL'
 
 export interface InventoryObjectLine {
   labelCode: string
@@ -15,7 +15,6 @@ export interface InventoryObjectLine {
   locationCode: string
   locationName?: string
   availableQty: number
-  palletCode?: string
   status: string
   rowVersion: string
 }

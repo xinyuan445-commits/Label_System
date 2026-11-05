@@ -47,14 +47,10 @@ public sealed class MaterialOutboundService(
         var archiveResult = await archive.CreateAsync(
             "material-outbound", "材料出库单", "prepare", requestId, request, cancellationToken);
 
-        var allowPalletizedDirectUse = await settings.GetBooleanSettingAsync(
-            "allow_direct_use_of_palletized_label", null, false, cancellationToken);
-
         return await operations.PrepareAsync(
             request,
             payloadHash,
             archiveResult,
-            allowPalletizedDirectUse,
             options.CurrentValue,
             requestId,
             cancellationToken);
@@ -164,10 +160,12 @@ public sealed class MaterialOutboundService(
 
         foreach (var line in request.Lines)
         {
+            if (!string.IsNullOrWhiteSpace(line.SourcePalletCode))
+                throw new ApiException(400, "LEGACY_DETAIL_UNSUPPORTED", "旧托盘明细请删除后重新扫码。");
             DocumentAdditionalFields.Validate(line.AdditionalFields);
             DocumentAdditionalFields.ValidateRequired(
                 line.AdditionalFields, requiredFields, "body.", MappedBodyFields);
-            if (line.ObjectType is not ("PRODUCT_LABEL" or "PALLET" or "UNLABELED_MATERIAL") ||
+            if (line.ObjectType is not ("PRODUCT_LABEL" or "UNLABELED_MATERIAL") ||
                 string.IsNullOrWhiteSpace(line.LabelCode) ||
                 line.LabelCode.Length > 100 ||
                 !string.Equals(line.SourceType, "production-order", StringComparison.OrdinalIgnoreCase) ||
@@ -183,11 +181,6 @@ public sealed class MaterialOutboundService(
             if (line.ObjectType == "UNLABELED_MATERIAL" && request.DocumentDirection != "RED")
                 throw new ApiException(StatusCodes.Status400BadRequest,
                     "UNLABELED_RETURN_NOT_SUPPORTED", "无标签录入只用于红字材料出库单。");
-            if (line.ObjectType == "PALLET" && request.DocumentDirection == "RED")
-                throw new ApiException(StatusCodes.Status400BadRequest,
-                    "PALLET_RETURN_NOT_SUPPORTED", "红字退料请使用产品标签或无标签明细。");
-            if (line.ObjectType == "PALLET" && line.RequestedQty != 1)
-                throw new ApiException(StatusCodes.Status400BadRequest, "PALLET_QUANTITY_INVALID", "托盘数量必须为 1。");
         }
     }
 

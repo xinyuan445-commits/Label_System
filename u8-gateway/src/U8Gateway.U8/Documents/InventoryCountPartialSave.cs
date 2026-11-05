@@ -31,6 +31,13 @@ namespace U8Gateway.U8.Documents
     }
     public static class InventoryCountSaveRules
     {
+        public static bool AllowsOperation(string operation, bool partialSave) =>
+            operation == DocumentOperationCodes.Verify || partialSave &&
+            (operation == DocumentOperationCodes.Add || operation == DocumentOperationCodes.Edit);
+
+        public static bool AuditAlreadyConfirmed(string operation, bool verified, bool recovering) =>
+            recovering && operation == DocumentOperationCodes.Verify && verified;
+
         public static decimal AccumulatedActual(IEnumerable<CountSaveLabel> current, IEnumerable<CountSaveLabel> previous)
         {
             var quantities = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);

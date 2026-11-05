@@ -1,10 +1,10 @@
 # Label System API
 
-资料复核：2026-11-05；开发API0.12.10 / 019已部署，104项通过/1跳过。盘点核验支持目标货位，上传同步本次目标位置；上传开启，生产未更新，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
+资料复核：2026-11-05；API0.12.11 / 019已部署开发888，113项通过/1跳过。托盘路径移除，盘点上传支持autoApprove；生产未更新，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。
 
-材料出库、调拨、货位调整及888盘点已接TraceBack；不能推广到其他单据。盘点标准草稿/核验不改余额，上传ERP确认后追加差异。审核/弃审及008盘点上传关闭。旧请求缺inventoryCount上下文在镜像/建操作前拒绝，核验canSubmit=false与上传uploadSaveEnabled分开。
+材料出库、调拨、货位调整及888盘点已接TraceBack；不能推广到其他单据。盘点标准草稿/核验不改余额，上传ERP确认后追加差异。盘点上传自动审核及失败重试已接通，独立手工审核/弃审及008盘点上传保持关闭。旧请求缺inventoryCount上下文在镜像/建操作前拒绝，核验canSubmit=false与上传uploadSaveEnabled分开。
 
-## 盘点现行只读合同（0.12.10）
+## 盘点现行只读合同（0.12.11）
 
 所有下列接口校验当前登录账号的inventory-count功能权限，响应private/no-store。不依赖客户端X-Function-Code授予权限，不接受客户端连接信息、SQL或表名；无匿名离线任务/写令牌。
 
@@ -55,7 +55,7 @@ H5使用标准IndexedDB草稿及既有009服务端草稿同步，旧独立库仅
 
 版本沿革：0.12.0原单读取/核验，0.12.1类别合同，0.12.2无原单只读核验，0.12.3仓库货位状态及前后复核，0.12.4取消标签/原单单位比较，0.12.5透传原单单位名称（开发888已发布）。
 
-## 888盘点上传与累计（0.12.10）
+## 888盘点上传与累计（0.12.11）
 
 同步任务CountContext由可信归档、操作明细及确认的ERP结果生成并冻结，包含真实操作/明细ID、日期/仓库/盘货位、类别及可选来源、设备/操作人、备注/合计。PdaDocumentNo使用operation_no；非盘点不序列化此可选字段。已完成159任务载荷/哈希保留，JSON修复另记审计，见[合同](../../docs/TRACEBACK_COUNT_JSON_CONTRACT.md)。
 
@@ -65,7 +65,7 @@ H5使用标准IndexedDB草稿及既有009服务端草稿同步，旧独立库仅
 - 无原单汇总当前标签实盘新增；Gateway独立读取U8账面，不将账面加到实盘，自由项/辅计量不明确拒绝。
 - Gateway内部调用前再次实时复核旧三表版本、余额与位置；有原单保留原生XML和未改字段。修改类别仍做方向及权限检查，不恢复标签单位比较。
 - 019已将原018辅助表归并为通用business_operation_event的UPLOAD_BASELINE事件，保存documentType/sourceDocumentId/previousLabels，固定累计基线；来源字段使用business_operation。重试复用既有基线，不重新读取当前历史改写旧载荷。同原单未完成上传或无原单写入结果未知时保留必要保护，未开始写ERP的无原单准备记录不阻挡其他原单。ERP确认后的差异任务与恢复规则不变。
-- U8仍未审核，888审核/弃审关闭。新规则实写及恢复由用户测试，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)；0.12.6历史证据保留，不能在后续审核重复落标签差异。
+- autoApprove=false保存未审核；true在差异同步后审核，失败沿原组恢复。弃审关闭，真实审核及恢复由用户测试，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)；0.12.6历史证据保留，不能在后续审核重复落标签差异。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
@@ -313,7 +313,7 @@ development 管理员密码校验仍受环境开关保护；`LOCAL` 用户使用
 - 托内标签通过托盘扫码使用，或全局“托内标签单独使用”开关已开启。
 - 来源明细没有被其他未完成业务占用。
 
-通过后按“生产订单内部 ID + 标签当前仓库”拆成多个 `business_operation`，单号只用于展示和一致性复核；各操作共同使用请求的 `clientRequestId` 作为 `submission_group_id`。标签和相关托盘统一锁到组内第一条操作，避免一个标签跨拆单组被并发使用。
+通过后按“生产订单内部 ID + 标签当前仓库”拆成多个 `business_operation`，单号只用于展示和一致性复核；各操作共同使用请求的 `clientRequestId` 作为 `submission_group_id`。产品标签统一锁到组内第一条操作，避免一个标签跨拆单组被并发使用。
 
 旧准备接口曾只创建 `PENDING` 记录；当前正常 H5 只使用单次提交。旧组的取消和心跳仅用于兼容恢复；进入 U8 写流程后禁止直接取消，结果不明确时保留锁等待核对。
 
@@ -323,7 +323,7 @@ development 管理员密码校验仍受环境开关保护；`LOCAL` 用户使用
 
 ## 通用单据预提交
 
-通用提交的 `header` 保存日期、`documentDirection=BLUE|RED`、适用单据的仓库或目标仓库、来源/目标货位、部门、业务类别和可选源单类型；`lines` 保存对象类型、标签或托盘码、来源托盘、料号、单位、本次数量及可选来源单据行。调拨例外：调出仓库、调出货位、调入仓库和调入货位全部按明细提交，表头仓库留空；`departmentCode` 为调出部门，`additionalFields.targetDepartmentCode` 为调入部门，分别映射 U8 `codepcode`、`cidepcode`。服务端重新读取最新库存并校验对象状态、业务锁、料号、单位、仓库和货位。所有单据都允许不传来源字段；只要请求携带任一来源字段，就必须提交完整来源关系并启用来源校验。红字请求已映射 U8 红字标识和相反数量，当前只允许在 888 分单据验收。
+通用提交的 `header` 保存日期、`documentDirection=BLUE|RED`、适用单据的仓库或目标仓库、来源/目标货位、部门、业务类别和可选源单类型；`lines` 保存对象类型、产品标签码、料号、单位、本次数量及可选来源单据行。调拨例外：调出仓库、调出货位、调入仓库和调入货位全部按明细提交，表头仓库留空；`departmentCode` 为调出部门，`additionalFields.targetDepartmentCode` 为调入部门，分别映射 U8 `codepcode`、`cidepcode`。服务端重新读取最新库存并校验对象状态、业务锁、料号、单位、仓库和货位。所有单据都允许不传来源字段；只要请求携带任一来源字段，就必须提交完整来源关系并启用来源校验。红字请求已映射 U8 红字标识和相反数量，当前只允许在 888 分单据验收。
 
 单据字段开关使用现有设置接口保存。DOCUMENT 范围键 `field_input_rules` 的值为字段键到 `{ "visible": boolean, "required": boolean }` 的 JSON 对象；字段定义由 H5 当前版本提供。H5 按设置控制九类制单的字段显示、输入和完整必填校验，Business API 同时按当前单据设置复核仓库、目标仓库、目标货位、部门和业务类别等可配置表头必填项。
 
@@ -339,18 +339,18 @@ DOCUMENT 范围布尔键 `auto_add_scanned_detail` 控制 H5 扫码结果是否�
 - 同一标签数量跨多个同料源单行时，H5 按可用量拆分请求明细；服务端按来源行分别复核和占用。
 - 委外订单源单已通过测试账套只读验证；委外到货单本身仍没有历史样例，不能据此开放写入。
 
-- 调拨的调出仓库/货位取标签当前位置，调入仓库/货位由明细选择；按“调出仓库+调入仓库”拆单，两个仓库必须不同。独立产品标签允许部分数量，托盘及其成员仍全量处理。
-- 货位调整要求目标货位属于当前仓库且与原位置不同；独立产品标签允许部分数量，托盘及其成员全量处理。全量沿用原标签写零数量位置流水；部分扣原码并生成无Code的PENDING_PRINT目标标签，实际首打后才登记目标Code。
-- 调拨和货位调整涉及托盘时，必须同时提交托盘自身及全部当前在托有效产品标签。
-- 现有通用盘点允许实盘0或高于账面，但不支持原单和TraceBack差异同步，尚未形成可验收闭环；托盘首期暂缓。拟议原单/审核生效规则见[盘点方案](../../docs/INVENTORY_COUNT_PLAN.md)，不能当作当前接口行为。
+- 调拨的调出仓库/货位取标签当前位置，调入仓库/货位由明细选择；按“调出仓库+调入仓库”拆单，两个仓库必须不同。产品标签允许部分数量，托盘路径已移除。
+- 货位调整要求目标货位属于当前仓库且与原位置不同；产品标签允许部分数量，托盘路径已移除。全量沿用原标签写零数量位置流水；部分扣原码并生成无Code的PENDING_PRINT目标标签，实际首打后才登记目标Code。
+- 所有单据拒绝PALLET或来源托盘的请求，旧业务不自动转换；历史结构与记录保留。
+- 盘点支持有/无原单、实盘0或高于余额；888上传确认后同步原差异及目标位置，再按autoApprove审核。弃审与008不扩展，见[现行方案](../../docs/INVENTORY_COUNT_PLAN.md)。
 - 总开关开放后，通过校验的请求只在单次提交内部短暂进入 `PENDING/WRITING_ERP`，不向用户暴露待处理阶段。采购到货、委外到货、采购入库和发货单只保存 ERP 关联，不重复改变已有标签余额；销售出库按方向改变余额；调拨和货位调整写 `change_qty=0` 的位置流水；盘点按实盘数写差异流水。
 
 ## 并发和版本
 
 - 功能和设置更新必须提交 `expectedRowVersion`。
 - 行版本不一致返回 `409 DATA_CHANGED`。
-- 标签或托盘被占用返回 `409 LABEL_LOCKED` 或 `409 PALLET_LOCKED`。
-- 调拨或货位调整未整托提交返回 `409 WHOLE_PALLET_REQUIRED`。
+- 产品标签被占用返回409 LABEL_LOCKED。
+- 历史含托盘的业务组继续执行返回409 LEGACY_DETAIL_UNSUPPORTED。
 - 当前仓库或货位变化返回 `409 WAREHOUSE_CHANGED` 或 `409 LOCATION_CHANGED`。
 - U8 源单变化或数量不足返回 `409 SOURCE_LINE_CHANGED` 或 `409 SOURCE_QUANTITY_EXCEEDED`。
 - 源单明细被占用返回 `409 SOURCE_LINE_RESERVED`。
@@ -368,8 +368,8 @@ U8 已确认成功但本地事务未完成的恢复，仅允许原操作处于 `
 - 正式普通用户、角色聚合及更细数据权限；当前只配置正式本地管理员和 ERP 操作员映射。
 - 标签正式发码、流水分配、统一登记、打印和首次库存流水。
 - H5 使用缓存规则执行离线解析及联网后的登记校验。
-- 托盘装箱、装托、拆箱和卸托扫码接口，以及托内产品标签合计校验；托盘仅作为容器，托内物料不得缺少产品标签。
-- 托盘内容变化后的旧 Code 处置和重新发码策略。
+- 托盘功能已移除，不再列为待开发范围。
+- 历史托盘Code/关系只保留审计，不自动改写或重新发码。
 - 云端租户、客户许可序列号和规则分发。
 - 管理员异常解锁和 U8 结果未知核对页面。
 
@@ -381,7 +381,7 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 
 ## 货位调整明细位置（0.8.15）
 
-`location-adjustment` 不再要求表头 `warehouseCode`、`sourceLocationCode` 或 `targetLocationCode`。每条明细提交扫码快照的 `warehouseCode`、`locationCode` 和用户选择的 `targetLocationCode`；服务端以标签或托盘最新库存位置为准，并按实际仓库拆组。目标货位必须存在于当前仓库且不能等于原货位，整托明细的目标位置必须一致。
+`location-adjustment` 不再要求表头 `warehouseCode`、`sourceLocationCode` 或 `targetLocationCode`。每条明细提交扫码快照的 `warehouseCode`、`locationCode` 和用户选择的 `targetLocationCode`；服务端以产品标签最新库存位置为准，并按实际仓库拆组。目标货位必须存在于当前仓库且不能等于原货位。
 
 ## 调拨与货位调整部分数量（0.8.16）
 
@@ -399,7 +399,7 @@ Business API 的调拨审核接口不变。Gateway 将调拨单和 U8 生成的�
 
 ## TraceBack 产品标签读取与同步（0.10.0）
 
-迁移期产品标签查询由 Business API 编排 Gateway 的 TraceBack 快照接口。稳定对外响应继续使用现有 `InventoryLookupResult`，不向 H5 暴露旧表 JSON、数据库字段或 UUID。扫码成功会以 `TRACEBACK_MIRROR` 操作和库存流水建立或刷新本地镜像；托盘查询仍只读本地表。
+迁移期产品标签查询由 Business API 编排 Gateway 的 TraceBack 快照接口。稳定对外响应继续使用现有 `InventoryLookupResult`，不向 H5 暴露旧表 JSON、数据库字段或 UUID。扫码成功会以 `TRACEBACK_MIRROR` 操作和库存流水建立或刷新本地镜像；托盘查询路径已移除。
 
 材料出库、调拨和货位调整在建档前重新查询快照；操作建立后、调用 Gateway 写 U8 前再查询一次，并比较归档的最新流水 ID、余额、身份和位置。蓝字与移动要求余额足够；原标签红字允许零余额且使用本次退回位置。快照变化返回 `TRACEBACK_SNAPSHOT_CHANGED`，旧业务没有归档外部版本时返回 `TRACEBACK_SNAPSHOT_VERSION_MISSING`，异常返回 `TRACEBACK_RECONCILIATION_REQUIRED`，余额不足返回 `LABEL_QUANTITY_INSUFFICIENT`。
 
@@ -438,3 +438,11 @@ Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`�
 两个validate接口的observations接受可选targetLocationCode；有原单结果返回目标locationCode及originalWarehouseCode/originalLocationCode，无原单label保持原快照。上传行warehouseCode/locationCode为原快照，targetWarehouseCode/targetLocationCode为本次位置；服务端强制目标仓库取盘点表头，Gateway实时核验目标档案。原单盘货位时按所选目标货位匹配原生行。历史实盘按目标仓库/按需货位累计，实时版本仍按原位置复核。同步后本地流水记录原→目标，COUNT_ADJUSTMENT数量规则不变。
 
 只保存当前U8盘点单，不生成原仓库ERP调拨/出库；该部分由用户处理。
+
+### 0.12.11：产品标签与盘点审核
+
+2026-11-05现行决定：全系统移除托盘设置、扫码/查询、整托处理和规则使用路径，产品标签独立处理；旧表/字段/历史数据保留，旧托盘单不得自动转为产品单重传。盘点接通自动添加与上传自动审核，沿用已有草稿、业务组及恢复；审核不重复落标签差异。
+
+inventory-objects/lookup只返回产品标签；保留的pallet/palletCode兼容字段固定为空，不读托盘表/装托关系。Prepare不接受PALLET或来源托盘；历史含pallet_id/source_pallet_id的业务组不能继续执行/追溯恢复。旧托盘设置从GET settings过滤，PUT返回SETTING_RETIRED；托盘规则不返回且不能创建、保存/激活。
+
+盘点submit的autoApprove按实际请求执行：ERP确认→原差异同步→U8 verify。关闭则未审核；失败沿PENDING_APPROVAL/NEEDS_RECONCILIATION恢复，审核不新增差异事件。groups validate/execute按业务组真实DocumentType校验功能权限。独立手工审核/弃审入口保持关闭，用户从原单据管理恢复失败审核；只开放原888范围。

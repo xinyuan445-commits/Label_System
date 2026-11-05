@@ -19,8 +19,6 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
     private sealed record ResolvedLine(
         DocumentPrepareLine Request,
         long? LabelId,
-        long? PalletId,
-        long? SourcePalletId,
         decimal? InventoryQty,
         string BatchNo,
         string WarehouseCode,
@@ -76,29 +74,12 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 connection, transaction, code, cancellationToken, true)
                 ?? throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", $"未找到标签：{code}");
             EnsureAvailable(
-                snapshot.Status, snapshot.LockedOperationId, code, false,
+                snapshot.Status, snapshot.LockedOperationId, code,
                 allowUsedProductReturn);
             products.Add(code, snapshot);
         }
 
-        var palletCodes = request.Lines
-            .Where(line => line.ObjectType == "PALLET")
-            .Select(line => line.LabelCode.Trim())
-            .Concat(products.Values.Where(item => item.PalletCode is not null).Select(item => item.PalletCode!))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var pallets = new Dictionary<string, PalletSnapshot>(StringComparer.OrdinalIgnoreCase);
-        foreach (var code in palletCodes)
-        {
-            var snapshot = await LabelSystemRepository.ReadPalletAsync(
-                connection, transaction, code, cancellationToken, true)
-                ?? throw new ApiException(StatusCodes.Status404NotFound, "PALLET_NOT_FOUND", $"未找到托盘：{code}");
-            EnsureAvailable(snapshot.Line.Status, snapshot.LockedOperationId, code, true, false);
-            pallets.Add(code, snapshot);
-        }
-
-        var resolved = ResolveLines(request, definition, products, pallets);
+        var resolved = ResolveLines(request, definition, products);
         if (definition.DocumentType == "transfer-order")
         {
             var unchanged = resolved.FirstOrDefault(line =>
@@ -127,13 +108,6 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             await ValidateLocationAdjustmentTargetsAsync(
                 connection, transaction, resolved, cancellationToken);
         }
-        if (definition.WholePalletMove)
-        {
-            await ValidateWholePalletMovesAsync(connection, transaction, request.Lines, products, pallets, cancellationToken);
-            if (definition.DocumentType is "transfer-order" or "location-adjustment")
-                ValidatePalletMoveTargets(resolved, pallets.Values, definition.DocumentType);
-        }
-
         var now = BusinessClock.NowDatabase;
         var lockExpiresAt = now.AddMinutes(Math.Clamp(options.LockMinutes, 1, 120));
         var groups = hasSource
@@ -185,7 +159,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         var rootOperationId = created.Min(item => item.Id);
         await ApplyLocksAsync(
             connection, transaction, rootOperationId,
-            products.Values.Select(item => item.Id), pallets.Values.Select(item => item.Id), cancellationToken);
+            products.Values.Select(item => item.Id), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         await using (var draftTransaction = (SqlTransaction)await connection.BeginTransactionAsync(
                          IsolationLevel.ReadCommitted, cancellationToken))
@@ -208,8 +182,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
     private static ResolvedLine[] ResolveLines(
         DocumentPrepareRequest request,
         DocumentPrepareDefinition definition,
-        IReadOnlyDictionary<string, ProductLabelSnapshot> products,
-        IReadOnlyDictionary<string, PalletSnapshot> pallets)
+        IReadOnlyDictionary<string, ProductLabelSnapshot> products)
     {
         var result = new List<ResolvedLine>(request.Lines.Count);
         foreach (var line in request.Lines)
@@ -220,10 +193,6 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 EnsureIdentity(line, product.MaterialCode,
                     definition.DocumentType == "inventory-count" ? line.UnitCode : product.UnitCode);
                 EnsurePosition(request, definition, product.WarehouseCode, product.LocationCode, line.LabelCode);
-                if (product.PalletId.HasValue &&
-                    !string.Equals(product.PalletCode, line.SourcePalletCode?.Trim(), StringComparison.OrdinalIgnoreCase))
-                    throw new ApiException(StatusCodes.Status409Conflict,
-                        "PALLET_RELATION_CHANGED", $"标签托盘关系已变化：{line.LabelCode}");
                 var isRedMaterialReturn = definition.DocumentType == "material-outbound" &&
                                           request.Header.DocumentDirection == "RED";
                 var warehouseCode = isRedMaterialReturn
@@ -236,26 +205,15 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                     throw new ApiException(StatusCodes.Status409Conflict,
                         "LABEL_LOCATION_MISSING", $"标签没有退料仓库：{line.LabelCode}");
                 result.Add(new ResolvedLine(
-                    line, product.Id, null, product.PalletId, product.CurrentQty,
+                    line, product.Id, product.CurrentQty,
                     product.BatchNo, warehouseCode, locationCode,
                     ResolveTargetWarehouse(request, definition, line, product.WarehouseCode),
                     ResolveTargetLocation(request, line), product.TraceBackLatestFlowId));
             }
-            else if (line.ObjectType == "PALLET")
-            {
-                var pallet = pallets[line.LabelCode.Trim()];
-                EnsureIdentity(line, pallet.Line.MaterialCode, pallet.Line.UnitCode);
-                EnsurePosition(request, definition, pallet.Line.WarehouseCode, pallet.Line.LocationCode, line.LabelCode);
-                result.Add(new ResolvedLine(
-                    line, null, pallet.Id, null, pallet.Line.AvailableQty,
-                    pallet.Line.BatchNo, pallet.Line.WarehouseCode, pallet.Line.LocationCode,
-                    ResolveTargetWarehouse(request, definition, line, pallet.Line.WarehouseCode),
-                    ResolveTargetLocation(request, line), null));
-            }
             else
             {
                 result.Add(new ResolvedLine(
-                    line, null, null, null, null,
+                    line, null, null,
                     line.BatchNo?.Trim() ?? string.Empty,
                     line.WarehouseCode?.Trim() ?? string.Empty,
                     line.LocationCode?.Trim() ?? string.Empty,
@@ -278,12 +236,6 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             if (!isRedMaterialReturn && !definition.AllowZeroQuantity && total > available)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "LABEL_QUANTITY_INSUFFICIENT", $"标签数量不足：{group.Key.Code}");
-            var belongsToPallet = group.First().SourcePalletId.HasValue;
-            if (definition.WholePalletMove &&
-                (group.Key.ObjectType == "PALLET" || belongsToPallet) &&
-                total != available)
-                throw new ApiException(StatusCodes.Status409Conflict,
-                    "WHOLE_PALLET_QUANTITY_REQUIRED", $"托盘必须整体处理：{group.Key.Code}");
         }
         return result.ToArray();
     }
@@ -292,15 +244,14 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         string status,
         long? lockedOperationId,
         string code,
-        bool pallet,
         bool allowUsedProductReturn)
     {
-        if (status != "ACTIVE" && !(allowUsedProductReturn && !pallet && status == "USED"))
+        if (status != "ACTIVE" && !(allowUsedProductReturn && status == "USED"))
             throw new ApiException(StatusCodes.Status409Conflict,
-                pallet ? "PALLET_NOT_ACTIVE" : "LABEL_NOT_ACTIVE", $"{(pallet ? "托盘" : "标签")}不可用：{code}");
+                "LABEL_NOT_ACTIVE", $"标签不可用：{code}");
         if (lockedOperationId.HasValue)
             throw new ApiException(StatusCodes.Status409Conflict,
-                pallet ? "PALLET_LOCKED" : "LABEL_LOCKED", $"{(pallet ? "托盘" : "标签")}处理中：{code}");
+                "LABEL_LOCKED", $"标签处理中：{code}");
     }
 
     private static void EnsureIdentity(DocumentPrepareLine line, string materialCode, string unitCode)
@@ -383,72 +334,6 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             if (await command.ExecuteScalarAsync(cancellationToken) is not null)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "SOURCE_LINE_RESERVED", "源单明细已被其他未完成单据占用。");
-        }
-    }
-
-    private static async Task ValidateWholePalletMovesAsync(
-        SqlConnection connection,
-        SqlTransaction transaction,
-        IReadOnlyList<DocumentPrepareLine> lines,
-        IReadOnlyDictionary<string, ProductLabelSnapshot> products,
-        IReadOnlyDictionary<string, PalletSnapshot> pallets,
-        CancellationToken cancellationToken)
-    {
-        var requestedLabels = lines
-            .Where(line => line.ObjectType == "PRODUCT_LABEL")
-            .Select(line => line.LabelCode.Trim())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var requestedPallets = lines
-            .Where(line => line.ObjectType == "PALLET")
-            .Select(line => line.LabelCode.Trim())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var pallet in pallets.Values.OrderBy(item => item.Line.LabelCode, StringComparer.OrdinalIgnoreCase))
-        {
-            if (!requestedPallets.Contains(pallet.Line.LabelCode))
-                throw new ApiException(StatusCodes.Status409Conflict,
-                    "WHOLE_PALLET_REQUIRED", $"请同时处理托盘：{pallet.Line.LabelCode}");
-
-            const string sql = """
-                SELECT pl.label_code
-                FROM dbo.pallet_label_relation AS rel WITH (UPDLOCK, HOLDLOCK)
-                INNER JOIN dbo.product_label AS pl WITH (UPDLOCK, HOLDLOCK) ON pl.id=rel.label_id
-                WHERE rel.pallet_id=@pallet_id AND rel.unloaded_at IS NULL AND pl.status='ACTIVE'
-                ORDER BY pl.label_code;
-                """;
-            await using var command = new SqlCommand(sql, connection, transaction);
-            command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = pallet.Id;
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            var contents = new List<string>();
-            while (await reader.ReadAsync(cancellationToken)) contents.Add(reader.GetString(0));
-            foreach (var code in contents)
-            {
-                if (!requestedLabels.Contains(code) || !products.ContainsKey(code))
-                    throw new ApiException(StatusCodes.Status409Conflict,
-                        "WHOLE_PALLET_REQUIRED", $"托盘 {pallet.Line.LabelCode} 必须整托处理。");
-            }
-        }
-    }
-
-    private static void ValidatePalletMoveTargets(
-        IReadOnlyList<ResolvedLine> lines,
-        IEnumerable<PalletSnapshot> pallets,
-        string documentType)
-    {
-        foreach (var pallet in pallets)
-        {
-            var palletLine = lines.FirstOrDefault(line => line.PalletId == pallet.Id);
-            if (palletLine is null) continue;
-            if (lines.Any(line => line.SourcePalletId == pallet.Id &&
-                                  (!string.Equals(line.TargetWarehouseCode, palletLine.TargetWarehouseCode,
-                                      StringComparison.OrdinalIgnoreCase) ||
-                                   !string.Equals(line.TargetLocationCode, palletLine.TargetLocationCode,
-                                      StringComparison.OrdinalIgnoreCase))))
-                throw new ApiException(StatusCodes.Status409Conflict,
-                    "WHOLE_PALLET_TARGET_MISMATCH",
-                    documentType == "location-adjustment"
-                        ? $"托盘 {pallet.Line.LabelCode} 必须整体调整到同一货位。"
-                        : $"托盘 {pallet.Line.LabelCode} 必须整体调入同一位置。");
         }
     }
 
@@ -556,13 +441,11 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             command.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operationId;
             command.Parameters.Add("@line_no", SqlDbType.Int).Value = index + 1;
             command.Parameters.Add("@label_id", SqlDbType.BigInt).Value = line.LabelId.HasValue ? line.LabelId.Value : DBNull.Value;
-            command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = line.PalletId.HasValue ? line.PalletId.Value : DBNull.Value;
+            command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = DBNull.Value;
             command.Parameters.Add("@selection_source", SqlDbType.VarChar, 20).Value =
-                line.LabelId.HasValue
-                    ? line.SourcePalletId.HasValue ? "PALLET_SCAN" : "LABEL_SCAN"
-                    : line.PalletId.HasValue ? "PALLET_SCAN" : DBNull.Value;
+                line.LabelId.HasValue ? "LABEL_SCAN" : DBNull.Value;
             command.Parameters.Add("@source_pallet_id", SqlDbType.BigInt).Value =
-                line.SourcePalletId.HasValue ? line.SourcePalletId.Value : DBNull.Value;
+                DBNull.Value;
             if (line.InventoryQty.HasValue)
                 AddDecimal(command, "@inventory_qty", line.InventoryQty.Value);
             else
@@ -593,7 +476,6 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
         SqlTransaction transaction,
         long operationId,
         IEnumerable<long> labelIds,
-        IEnumerable<long> palletIds,
         CancellationToken cancellationToken)
     {
         foreach (var id in labelIds.Distinct().Order())
@@ -605,16 +487,6 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             command.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
             if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
                 throw new ApiException(StatusCodes.Status409Conflict, "LABEL_LOCKED", "标签正在处理中。");
-        }
-        foreach (var id in palletIds.Distinct().Order())
-        {
-            await using var command = new SqlCommand(
-                "UPDATE dbo.pallet SET locked_operation_id=@operation_id, updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id IS NULL;",
-                connection, transaction);
-            command.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operationId;
-            command.Parameters.Add("@id", SqlDbType.BigInt).Value = id;
-            if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
-                throw new ApiException(StatusCodes.Status409Conflict, "PALLET_LOCKED", "托盘正在处理中。");
         }
     }
 

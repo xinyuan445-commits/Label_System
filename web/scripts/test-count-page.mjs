@@ -140,9 +140,14 @@ function fixture(t, type = 'inventory-count') {
     const component = load('@/views/OutboundDocumentView.vue').default
     const view = component.setup(Vue.reactive({ documentType: typeName }), { expose() {} })
     for (const hook of mounted.slice(index)) await hook()
+    await view.refreshDocumentSettings()
+    if(typeName === 'inventory-count') view.documentPolicy.value.autoAddScannedDetail = false
     return view
   }
   async function select() {
+    const settings = load('@/services/business-document-settings'), state = settings.loadBusinessDocumentSettings()
+    settings.ensureDocumentPolicy(state, 'inventory-count').autoAddScannedDetail = false
+    settings.saveBusinessDocumentSettings(state)
     const helper = load('@/services/inventory-count-documents')
     load('@/services/source-document-selection').saveSourceDocumentSelection({
       outboundDocumentType: 'inventory-count', sourceType: 'inventory-count', sourceTypeLabel: '盘点单',
@@ -169,6 +174,7 @@ function fixture(t, type = 'inventory-count') {
 }
 
 async function scanAndConfirm(f, v, quantity = '0') {
+  v.documentPolicy.value.autoAddScannedDetail = false
   v.goToScanStep()
   await v.addBarcode(code)
   assert.notEqual(v.editingLine.value, null)
@@ -178,7 +184,7 @@ async function scanAndConfirm(f, v, quantity = '0') {
   await v.confirmEditingLine()
 }
 
-test('盘点完成自动上传遵循开关，只提交一次且不自动审核', async t => {
+test('盘点完成自动上传遵循开关，只提交一次并透传自动审核', async t => {
   const f = fixture(t), v = await f.select()
   await scanAndConfirm(f, v, '5')
   v.documentPolicy.value.autoUploadOnComplete = true
@@ -189,7 +195,7 @@ test('盘点完成自动上传遵循开关，只提交一次且不自动审核',
   assert.equal(f.api.uploads.length, 1)
   await v.finishDocument()
   assert.equal(f.api.uploads.length, 1)
-  assert.equal(f.api.uploads[0].autoApprove, false)
+  assert.equal(f.api.uploads[0].autoApprove, true)
   assert.equal(f.api.uploads[0].document.payload.lines[0].requestedQty, 5)
   pending.resolve(f.api.uploads[0].document); await first
   assert.equal(v.finishing.value, false)
@@ -234,28 +240,30 @@ test('盘点自动上传失败保留实盘和草稿，不在失败后重新上�
   assert.equal(v.finishing.value, false)
 })
 
-test('盘点开关仅展示可用自动上传，其他单据仍保留原开关', async t => {
+test('盘点显示三个有效开关，所有单据移除托盘设置', async t => {
   const f = fixture(t)
   const component = f.load('@/views/BusinessDocumentSettingsView.vue').default
   const countHtml = await SSR.renderToString(Vue.createSSRApp(component))
   assert.match(countHtml, /完成自动上传/)
-  assert.doesNotMatch(countHtml, /扫码后自动添加到明细|上传自动审核|扫托包含托盘|托盘设置/)
+  assert.match(countHtml, /扫码后自动添加到明细/)
+  assert.match(countHtml, /上传自动审核/)
+  assert.doesNotMatch(countHtml, /扫托包含托盘|托盘设置/)
   f.route.params.code = 'material-outbound'
   const materialHtml = await SSR.renderToString(Vue.createSSRApp(component))
   assert.match(materialHtml, /扫码后自动添加到明细/)
   assert.match(materialHtml, /上传自动审核/)
-  assert.match(materialHtml, /托盘设置/)
+  assert.doesNotMatch(materialHtml, /扫托包含托盘|托盘设置|混托|空托盘/)
 })
 
-test('盘点保存开关只更新自动上传，不覆盖隐藏的审核/托盘和其他单据设置', async t => {
+test('盘点保存三个开关，不写托盘设置或覆盖其他单据设置', async t => {
   const f = fixture(t), settings = f.load('@/services/business-document-settings')
   const state = settings.loadBusinessDocumentSettings()
   settings.ensureDocumentPolicy(state, 'inventory-count').autoUploadOnComplete = true
   settings.ensureDocumentPolicy(state, 'material-outbound').autoUploadOnComplete = false
   await settings.persistBusinessDocumentSettings('inventory-count', state)
-  assert.equal(f.api.settingsWrites.length, 1)
-  assert.match(f.api.settingsWrites[0].path, /auto_upload_on_complete$/)
-  assert.equal(f.api.settingsWrites[0].body.value, true)
+  assert.equal(f.api.settingsWrites.length, 3)
+  assert.equal(f.api.settingsWrites.find(item => item.path.endsWith('/auto_upload_on_complete')).body.value, true)
+  assert.ok(f.api.settingsWrites.every(item => /auto_add_scanned_detail|auto_upload_on_complete|auto_approve_after_upload/.test(item.path)))
   const loaded = settings.loadBusinessDocumentSettings()
   assert.equal(settings.ensureDocumentPolicy(loaded, 'inventory-count').autoUploadOnComplete, true)
   assert.equal(settings.ensureDocumentPolicy(loaded, 'material-outbound').autoUploadOnComplete, false)
@@ -713,5 +721,29 @@ test('后台同步旧回执与新明细保存并发时，不能回写覆盖较�
     assert.equal(saved.clientRevision, old.clientRevision + 1)
     await repo.markDraftSyncFailed(saved.id, old.clientRevision, 'old error')
     assert.equal((await f.docs())[0].syncError, '')
+  }
+})
+
+
+test('盘点自动添加使用实时余额并落本机，重复扫码警示且不累加', async t => {
+  const f=fixture(t),v=await f.select()
+  v.documentPolicy.value.autoAddScannedDetail=true
+  v.goToScanStep(); await v.addBarcode(code)
+  assert.equal(v.editingLine.value,null)
+  assert.equal(v.lines.value.length,1)
+  assert.equal(v.lines.value[0].requestedQty,10)
+  assert.equal((await f.docs())[0].payload.lines[0].requestedQty,10)
+  const feedback=f.feedback.length;await v.addBarcode(code)
+  assert.equal(v.lines.value.length,1);assert.equal(f.feedback.at(-1),'error');assert.ok(f.feedback.length>feedback)
+})
+
+test('盘点自动添加不猜跨仓货位、离线数量或零实盘，缺值仍确认', async t => {
+  for(const mode of ['cross-warehouse','offline','zero']) {
+    const f=fixture(t),v=await f.select();v.documentPolicy.value.autoAddScannedDetail=true
+    if(mode==='offline')f.globals.navigator.onLine=false
+    if(mode==='cross-warehouse')f.api.lookup=async()=>({pallet:null,lines:[{...label(),warehouseCode:'W2',locationCode:'L2'}]})
+    if(mode==='zero')f.api.lookup=async()=>({pallet:null,lines:[{...label(),availableQty:0,status:'USED'}]})
+    v.goToScanStep();await v.addBarcode(code)
+    assert.equal(v.lines.value.length,0,mode);assert.ok(v.editingLine.value,mode)
   }
 })

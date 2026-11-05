@@ -135,8 +135,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         foreach (var line in operation.Lines)
         {
             if (line.ObjectType == "UNLABELED_MATERIAL") continue;
-            var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
-            var id = line.LabelId ?? line.PalletId ?? 0;
+            const string table = "product_label";
+            var id = line.LabelId ?? 0;
             await using var lockCheck = new SqlCommand(
                 $"SELECT locked_operation_id FROM dbo.{table} WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;",
                 connection, transaction);
@@ -183,8 +183,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         foreach (var line in operation.Lines)
         {
             if (line.ObjectType == "UNLABELED_MATERIAL") continue;
-            var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
-            var id = line.LabelId ?? line.PalletId ?? 0;
+            const string table = "product_label";
+            var id = line.LabelId ?? 0;
             await using var lockCheck = new SqlCommand(
                 $"SELECT locked_operation_id FROM dbo.{table} WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;",
                 connection, transaction);
@@ -228,9 +228,6 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             {
                 if (line.ObjectType == "PRODUCT_LABEL")
                     await CompleteLabelAsync(connection, transaction, operation, line, erp,
-                        redVoucher, cancellationToken);
-                else if (line.ObjectType == "PALLET")
-                    await CompletePalletAsync(connection, transaction, operation, line, erp,
                         redVoucher, cancellationToken);
                 else if (operation.ErpDocumentType == "material-outbound" && redVoucher)
                     await CompleteGeneratedLabelAsync(
@@ -616,53 +613,6 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
     }
 
-    private static async Task CompletePalletAsync(
-        SqlConnection connection, SqlTransaction transaction,
-        MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
-        (string? LineId, string? PositionId) erp, bool redVoucher,
-        CancellationToken cancellationToken)
-    {
-        await using var read = new SqlCommand("""
-            SELECT current_qty,locked_operation_id,last_flow_id
-            FROM dbo.pallet WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;
-            """, connection, transaction);
-        read.Parameters.Add("@id", SqlDbType.BigInt).Value = line.PalletId!.Value;
-        await using var reader = await read.ExecuteReaderAsync(cancellationToken);
-        if (!await reader.ReadAsync(cancellationToken)) throw new InvalidOperationException("托盘不存在。");
-        var before = reader.GetDecimal(0);
-        var lockedBy = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
-        var previousFlowId = reader.IsDBNull(2) ? (long?)null : reader.GetInt64(2);
-        await reader.CloseAsync();
-        var change = redVoucher ? 1m : -1m;
-        var after = before + change;
-        if (lockedBy != operation.RootOperationId || after is < 0 or > 1)
-            throw new InvalidOperationException("托盘状态已变化。");
-        var flowId = await InsertFlowAsync(connection, transaction, operation, line,
-            "PALLET", null, line.PalletId, before, change, after, redVoucher,
-            previousFlowId, cancellationToken);
-        await using (var update = new SqlCommand("""
-            UPDATE dbo.pallet
-            SET current_qty=@qty,status=@status,last_flow_id=@flow_id,last_operation_id=@operation_id,
-                current_warehouse_code=CASE WHEN @qty=0 THEN NULL ELSE @warehouse END,
-                current_location_code=CASE WHEN @qty=0 THEN NULL ELSE @location END,
-                updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
-            WHERE id=@id AND locked_operation_id=@root_id;
-            """, connection, transaction))
-        {
-            update.Parameters.Add("@qty", SqlDbType.Decimal).ConfigureDecimal(after);
-            update.Parameters.Add("@status", SqlDbType.VarChar, 20).Value = after == 0 ? "OUT_OF_STOCK" : "ACTIVE";
-            update.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = flowId;
-            update.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
-            update.Parameters.Add("@warehouse", SqlDbType.NVarChar, 100).Value = line.WarehouseCode;
-            update.Parameters.Add("@location", SqlDbType.NVarChar, 100).Value = DbValue(line.LocationCode, 100);
-            update.Parameters.Add("@id", SqlDbType.BigInt).Value = line.PalletId.Value;
-            update.Parameters.Add("@root_id", SqlDbType.BigInt).Value = operation.RootOperationId;
-            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
-                throw new InvalidOperationException("托盘更新冲突。");
-        }
-        await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
-    }
-
     private static async Task<long> InsertFlowAsync(
         SqlConnection connection, SqlTransaction transaction,
         MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
@@ -724,8 +674,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         (string? LineId, string? PositionId) erp,
         CancellationToken cancellationToken)
     {
-        var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
-        var id = line.LabelId ?? line.PalletId ?? throw new InvalidOperationException("库存对象不存在。");
+        const string table = "product_label";
+        var id = line.LabelId ?? throw new InvalidOperationException("标签不存在。");
         await using var read = new SqlCommand(
             $"SELECT current_qty,locked_operation_id,last_flow_id FROM dbo.{table} WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;",
             connection, transaction);
@@ -739,8 +689,6 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         if (lockedBy != operation.RootOperationId) throw new InvalidOperationException("库存对象锁已变化。");
         if (line.RequestedQty <= 0 || line.RequestedQty > quantity)
             throw new InvalidOperationException("移动数量无效。");
-        if ((line.ObjectType == "PALLET" || line.SourcePalletId.HasValue) && line.RequestedQty != quantity)
-            throw new InvalidOperationException("托盘必须整体移动。");
 
         var targetWarehouse = line.TargetWarehouseCode ?? line.WarehouseCode;
         var targetLocation = line.TargetLocationCode;
@@ -755,9 +703,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             connection, transaction, operation, line, quantity, 0m, quantity,
             line.WarehouseCode, line.LocationCode, targetWarehouse, targetLocation,
             previousFlowId, cancellationToken);
-        var updateSql = line.ObjectType == "PRODUCT_LABEL"
-            ? "UPDATE dbo.product_label SET last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;"
-            : "UPDATE dbo.pallet SET last_flow_id=@flow_id,last_operation_id=@operation_id,current_warehouse_code=@warehouse,current_location_code=@location,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;";
+        const string updateSql = "UPDATE dbo.product_label SET last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;";
         await using var update = new SqlCommand(updateSql, connection, transaction);
         update.Parameters.Add("@flow_id", SqlDbType.BigInt).Value = flowId;
         update.Parameters.Add("@operation_id", SqlDbType.BigInt).Value = operation.Id;
@@ -917,8 +863,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         (string? LineId, string? PositionId) erp,
         CancellationToken cancellationToken)
     {
-        var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
-        var id = line.LabelId ?? line.PalletId ?? throw new InvalidOperationException("库存对象不存在。");
+        const string table = "product_label";
+        var id = line.LabelId ?? throw new InvalidOperationException("标签不存在。");
         await using var read = new SqlCommand(
             $"SELECT current_qty,locked_operation_id,last_flow_id FROM dbo.{table} WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;",
             connection, transaction);
@@ -931,18 +877,12 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         await reader.CloseAsync();
         if (lockedBy != operation.RootOperationId) throw new InvalidOperationException("库存对象锁已变化。");
         var after = line.RequestedQty;
-        if (line.ObjectType == "PALLET" && after is not (0m or 1m))
-            throw new InvalidOperationException("托盘盘点数量无效。");
         var flowId = await InsertStateFlowAsync(
             connection, transaction, operation, line, before, after - before, after,
             line.WarehouseCode, line.LocationCode, InventoryCountUploadRules.TargetWarehouse(line), InventoryCountUploadRules.TargetLocation(line),
             previousFlowId, cancellationToken);
-        var status = line.ObjectType == "PRODUCT_LABEL"
-            ? (after == 0 ? "USED" : "ACTIVE")
-            : (after == 0 ? "OUT_OF_STOCK" : "ACTIVE");
-        var updateSql = line.ObjectType == "PRODUCT_LABEL"
-            ? "UPDATE dbo.product_label SET current_qty=@qty,status=@status,last_flow_id=@flow_id,traceback_sync_status='PENDING',updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;"
-            : "UPDATE dbo.pallet SET current_qty=@qty,status=@status,last_flow_id=@flow_id,last_operation_id=@operation_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;";
+        var status = after == 0 ? "USED" : "ACTIVE";
+        const string updateSql = "UPDATE dbo.product_label SET current_qty=@qty,status=@status,last_flow_id=@flow_id,traceback_sync_status='PENDING',updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;";
         await using var update = new SqlCommand(updateSql, connection, transaction);
         update.Parameters.Add("@qty", SqlDbType.Decimal).ConfigureDecimal(after);
         update.Parameters.Add("@status", SqlDbType.VarChar, 30).Value = status;
@@ -1012,8 +952,8 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
         MaterialOutboundExecutionOperation operation, MaterialOutboundExecutionLine line,
         CancellationToken cancellationToken)
     {
-        var table = line.ObjectType == "PRODUCT_LABEL" ? "product_label" : "pallet";
-        var id = line.LabelId ?? line.PalletId ?? throw new InvalidOperationException("库存对象不存在。");
+        const string table = "product_label";
+        var id = line.LabelId ?? throw new InvalidOperationException("标签不存在。");
         await using var release = new SqlCommand(
             $"UPDATE dbo.{table} SET updated_at=updated_at WHERE id=@id AND locked_operation_id=@root_id;",
             connection, transaction);

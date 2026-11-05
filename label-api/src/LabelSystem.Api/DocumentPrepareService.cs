@@ -14,7 +14,6 @@ public sealed record DocumentPrepareDefinition(
     bool RequireTargetLocation,
     bool RequireDepartment,
     bool RequireCategory,
-    bool WholePalletMove,
     bool AllowZeroQuantity,
     bool SupportsSource,
     bool GroupByWarehouse,
@@ -47,31 +46,31 @@ public sealed class DocumentPrepareService(
         {
             ["transfer-order"] = new(
                 "transfer-order", "调拨单", "TRANSFER", "transfer", "TR",
-                false, false, false, true, false, true, false, false, false, false),
+                false, false, false, true, false, false, false, false, false),
             ["location-adjustment"] = new(
                 "location-adjustment", "货位调整", "LOCATION_ADJUSTMENT", "location-adjustment", "LA",
-                false, false, false, false, false, true, false, false, true, false),
+                false, false, false, false, false, false, false, true, false),
             ["inventory-count"] = new(
                 "inventory-count", "盘点单", "INVENTORY_COUNT", "inventory-count", "IC",
-                true, false, false, false, false, false, true, false, false, false),
+                true, false, false, false, false, true, false, false, false),
             ["purchase-arrival"] = new(
                 "purchase-arrival", "采购到货", "PURCHASE_ARRIVAL", "purchase-arrival", "PA",
-                false, false, false, true, false, false, false, true, false, false),
+                false, false, false, true, false, false, true, false, false),
             ["outsourcing-arrival"] = new(
                 "outsourcing-arrival", "委外到货", "SUBCONTRACT_ARRIVAL", "subcontract-arrival", "OA",
-                false, false, false, true, false, false, false, true, false, false),
+                false, false, false, true, false, false, true, false, false),
             ["purchase-inbound"] = new(
                 "purchase-inbound", "采购入库", "PURCHASE_RECEIPT", "purchase-receipt", "PI",
-                true, false, false, true, true, false, false, true, false, false),
+                true, false, false, true, true, false, true, false, false),
             ["delivery-note"] = new(
                 "delivery-note", "发货单", "SALES_DELIVERY", "sales-delivery", "SD",
-                true, false, false, true, false, false, false, true, false, true),
+                true, false, false, true, false, false, true, false, true),
             ["sales-outbound"] = new(
                 "sales-outbound", "销售出库单", "SALES_OUTBOUND", "sales-outbound", "SO",
-                true, false, false, true, true, false, false, true, false, true),
+                true, false, false, true, true, false, true, false, true),
             ["material-outbound"] = new(
                 "material-outbound", "材料出库单", "MATERIAL_OUTBOUND", "material-outbound", "MO",
-                false, false, false, true, true, false, false, false, true, false),
+                false, false, false, true, true, false, false, true, false),
         };
 
     public async Task<MaterialOutboundPrepareResult> PrepareAsync(
@@ -222,12 +221,14 @@ public sealed class DocumentPrepareService(
         var objects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in request.Lines)
         {
+            if (!string.IsNullOrWhiteSpace(line.SourcePalletCode))
+                throw new ApiException(400, "LEGACY_DETAIL_UNSUPPORTED", "旧托盘明细请删除后重新扫码。");
             DocumentAdditionalFields.Validate(line.AdditionalFields);
             DocumentAdditionalFields.ValidateRequired(
                 line.AdditionalFields, requiredFields, "body.", MappedBodyFields);
-            if (line.ObjectType is not ("PRODUCT_LABEL" or "PALLET" or "UNLABELED_MATERIAL") ||
+            if (line.ObjectType is not ("PRODUCT_LABEL" or "UNLABELED_MATERIAL") ||
                 string.IsNullOrWhiteSpace(line.LabelCode))
-                throw new ApiException(StatusCodes.Status400BadRequest, "OBJECT_INVALID", "标签或托盘无效。");
+                throw new ApiException(StatusCodes.Status400BadRequest, "OBJECT_INVALID", "标签无效。");
             if (string.IsNullOrWhiteSpace(line.MaterialCode) || string.IsNullOrWhiteSpace(line.UnitCode))
                 throw new ApiException(StatusCodes.Status400BadRequest, "LINE_REQUIRED", "明细料号或单位不能为空。");
             Require(line.MaterialName, IsRequired(requiredFields, "body.materialName", false),
@@ -261,14 +262,8 @@ public sealed class DocumentPrepareService(
                 "LINE_REMARK_REQUIRED", "请输入行备注。");
             if (line.RequestedQty < 0 || (!definition.AllowZeroQuantity && line.RequestedQty <= 0))
                 throw new ApiException(StatusCodes.Status400BadRequest, "QUANTITY_INVALID", "明细数量无效。");
-            if (line.ObjectType == "PALLET" && line.RequestedQty != 1)
-                throw new ApiException(StatusCodes.Status400BadRequest, "PALLET_QUANTITY_INVALID", "托盘数量必须为 1。");
-            if (definition.DocumentType == "material-outbound" &&
-                request.Header.DocumentDirection == "RED" && line.ObjectType == "PALLET")
-                throw new ApiException(StatusCodes.Status400BadRequest,
-                    "PALLET_RETURN_NOT_SUPPORTED", "红字退料请使用产品标签或无标签明细。");
             if (!hasSource && !objects.Add($"{line.ObjectType}:{line.LabelCode.Trim()}"))
-                throw new ApiException(StatusCodes.Status400BadRequest, "OBJECT_DUPLICATED", "标签或托盘重复。");
+                throw new ApiException(StatusCodes.Status400BadRequest, "OBJECT_DUPLICATED", "标签重复。");
         }
     }
 

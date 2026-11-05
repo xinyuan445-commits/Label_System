@@ -790,3 +790,7 @@ SQL Agent 作业统一使用 `LabelSystem_` 前缀，owner 为 `sa`。当前未�
 ## 2026-11-05：盘点目标位置（无迁移）
 
 API0.12.10沿用019及通用业务结构。business_operation_line来源仓库/货位保存盘前快照，目标字段保存本次原单/制单仓库及确认货位；inventory_flow记录来源→目标及盘前/差异/盘后数量。product_label仍通过最新流水定位，TraceBack任务保存原快照和本次目标，确认后同步镜像并解锁。上传基线继续用UPLOAD_BASELINE事件，不新增列、表、迁移或开关。仅开发888部署；扫码/草稿不改余额和位置，未扫标签不变。见[发布记录](../DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
+
+## 2026-11-05：移除托盘功能、盘点自动审核（无迁移）
+
+全系统仅产品标签参与业务。pallet_material、pallet、pallet_label_relation及通用明细/流水中的旧字段、外键、记录保留作历史，不删旧迁移。新业务托盘关联为空，读镜像/制单不查询有效装托关系，打印新流水不复制旧归属；取消历史业务仍可释放原锁。盘点审核沿用business_operation.approval_status和原操作事件，差异仍只执行原COUNT_ADJUSTMENT任务。开发库只读核查托盘/有效关系/未完成托盘操作均0，不需数据迁移。见[发布记录](../DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。

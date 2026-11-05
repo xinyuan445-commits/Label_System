@@ -67,12 +67,12 @@ namespace U8Gateway.U8.Documents
             ValidateWriteOptions(options);
             if (execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount)
             {
-                if (!CountTestAccount(options) || !OptionBoolean(execution.Request?.Options, "countPartialSave"))
-                    return Failure("COUNT_UPLOAD_TEST_ONLY", "盘点上传仅开放888测试账套。", execution.VoucherCode);
+                if (!CountTestAccount(options))
+                    return Failure("COUNT_UPLOAD_TEST_ONLY", "盘点写入仅开放888测试账套。", execution.VoucherCode);
+                if (!InventoryCountSaveRules.AllowsOperation(execution.Operation, OptionBoolean(execution.Request?.Options, "countPartialSave")))
+                    return Failure("COUNT_OPERATION_NOT_READY", "盘点暂不支持此操作。", execution.VoucherCode);
                 if (execution.Operation == DocumentOperationCodes.Edit) return UpdateCount(options, execution);
-                if (execution.Operation != DocumentOperationCodes.Add)
-                    return Failure("COUNT_APPROVAL_NOT_READY", "盘点审核暂未开放。", execution.VoucherCode);
-                PrepareCountCreate(options, execution.Request);
+                if (execution.Operation == DocumentOperationCodes.Add) PrepareCountCreate(options, execution.Request);
             }
             if (string.Equals(execution.Operation, DocumentOperationCodes.Add,
                     StringComparison.OrdinalIgnoreCase) &&
@@ -598,6 +598,10 @@ namespace U8Gateway.U8.Documents
                 options,
                 execution.Profile,
                 voucherId.Value);
+            if (execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount &&
+                InventoryCountSaveRules.AuditAlreadyConfirmed(execution.Operation, before.Verified,
+                    OptionBoolean(execution.Request?.Options, "countApprovalRecovery")))
+                return Success(execution, voucherId, before.Version, "单据已审核。");
             string expectedVersion = execution.Request?.ExpectedVersion;
             if (!string.IsNullOrWhiteSpace(expectedVersion) &&
                 !string.Equals(

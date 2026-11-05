@@ -65,8 +65,7 @@ public static class TraceBackSnapshotRules
 
 public sealed class TraceBackSnapshotService(
     U8GatewayClient gateway,
-    TraceBackMirrorRepository mirrors,
-    LabelSystemRepository localInventory)
+    TraceBackMirrorRepository mirrors)
 {
     private static readonly HashSet<string> TraceBackDocuments = new(
         ["material-outbound", "transfer-order", "location-adjustment", "inventory-count"],
@@ -79,11 +78,7 @@ public sealed class TraceBackSnapshotService(
     {
         var snapshot = (await gateway.GetTraceBackSnapshotsAsync([code], cancellationToken)).Single();
         if (snapshot.Status == "NOT_FOUND")
-        {
-            var local = await localInventory.LookupInventoryObjectAsync(code, cancellationToken);
-            if (local.Pallet is not null) return local;
             throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", "未找到标签。");
-        }
         TraceBackSnapshotRules.RequireUsable(snapshot, allowUsed: true);
         var line = await mirrors.UpsertAsync(snapshot, user, rejectChangedSnapshot: false, cancellationToken);
         return new InventoryLookupResult([line], null);

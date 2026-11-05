@@ -287,7 +287,9 @@ async function uploadDocument(document: StoredOutboundDocument): Promise<void> {
     const erpNumbers = erpDocumentNumbers(uploaded)
     message.value = uploaded.serverStatus === 'SUCCESS'
       ? document.documentType === 'inventory-count'
-        ? erpNumbers.length ? `已保存，未审核：${erpNumbers.join('、')}` : '已保存，未审核'
+        ? uploaded.preparedOperations?.length && uploaded.preparedOperations.every(item => item.approvalStatus === 'SUCCESS')
+          ? erpNumbers.length ? `已保存并审核：${erpNumbers.join('、')}` : '已保存并审核'
+          : erpNumbers.length ? `已保存，未审核：${erpNumbers.join('、')}` : '已保存，未审核'
         : erpNumbers.length ? `上传完成：${erpNumbers.join('、')}` : '上传完成'
       : uploaded.serverStatus === 'NEEDS_RECONCILIATION' ? '需要核对'
         : uploaded.serverStatus === 'PENDING_APPROVAL'

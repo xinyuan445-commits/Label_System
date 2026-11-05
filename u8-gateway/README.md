@@ -2,7 +2,7 @@
 
 按功能查看支持能力、限制与验收证据，进入[功能档案](../docs/features/README.md)；Gateway字段及异常合同继续在本目录维护。
 
-资料复核：2026-11-05；开发9881/888为0.11.7，生产9880/008保留0.11.2。盘点保存校验本次目标仓库/货位，COUNT_ADJUSTMENT同步位置及JSON别名；合同/构建通过，跨仓实写待用户验收，见[发布记录](../docs/DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
+资料复核：2026-11-05；开发9881/888为0.11.8，新增盘点verify及已审核状态恢复，合同/构建通过；生产9880/008保留0.11.2，真实审核由用户测试，见[发布记录](../docs/DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。
 
 只读完整物料快照只读取Inventory.dEDate IS NULL的在用料号。库存来源事件与首打初始登记使用不同接口；盘点差异只允许test/888/UFDATA_888_2021，按本次确认目标更新位置。打印已有888/PDF验收，008打印尚未发布，见[盘点方案](../docs/INVENTORY_COUNT_PLAN.md)。
 
@@ -145,3 +145,5 @@ PRINT/REPRINT 的本地零数量登记由 Business API 负责，补打不调用�
 环境、生产开关、精确账套/数据库白名单及内部认证继续有效，没有迁移或改写旧表结构。
 本次2026-11-04仅整理文档，没有调用打印或写入接口；历史验收范围以对应日期证据为准。
 合同及限制见 [打印规格](../docs/PRINT_PHASE1_SPEC.md)、[开发记录](../docs/PRINT_PHASE1_IMPLEMENTATION.md)。
+
+0.11.8盘点：仅888允许verify；Add/Edit仍要求原盘点保存合同，Unverify/Delete不开放。未知审核结果重试先读真实状态，已审核直接确认，避免旧版本误拦或重复原生审核。业务系统全局移除托盘，Gateway仍只处理ERP及产品TraceBack事件，无托盘写入。

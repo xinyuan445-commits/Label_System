@@ -120,12 +120,12 @@ public sealed class MaterialOutboundExecutionService(
                 IReadOnlyList<TraceBackSyncTaskDraft> traceBackTasks = TraceBackSyncPlanner.Build(item.Operation, result, item.RedVoucher, rows,
                         item.Request.OperatorName, options.CurrentValue.ErpAccountId, item.Request);
                 await executionRepository.CompleteAsync(
-                    item.Operation, result, item.RedVoucher, request.AutoApprove && item.Operation.ErpDocumentType != "inventory-count",
+                    item.Operation, result, item.RedVoucher, request.AutoApprove,
                     rows, traceBackTasks, requestId, cancellationToken);
                 if (traceBackTasks.Count > 0 &&
                     !await traceBackSync.TrySyncOperationAsync(
                         item.Operation, requestId, cancellationToken)) break;
-                if (request.AutoApprove && item.Operation.ErpDocumentType != "inventory-count" &&
+                if (request.AutoApprove &&
                     !await ApproveAsync(item, result, requestId, cancellationToken)) break;
             }
             catch (GatewayWriteException error)
@@ -153,6 +153,8 @@ public sealed class MaterialOutboundExecutionService(
         CancellationToken cancellationToken)
     {
         var plan = await executionRepository.GetPlanAsync(groupId, user.Id, cancellationToken);
+        if (plan.Any(item => item.Lines.Any(line => line.ObjectType == "PALLET" || line.PalletId.HasValue || line.SourcePalletId.HasValue)))
+            throw new ApiException(409, "LEGACY_DETAIL_UNSUPPORTED", "旧托盘单据不可继续上传，请核对原单。");
         var candidates = plan.Where(item =>
             item.Status == "NEEDS_RECONCILIATION" && item.ErpStatus == "SUCCESS").ToArray();
         if (candidates.Length == 0)
@@ -184,6 +186,10 @@ public sealed class MaterialOutboundExecutionService(
             item.Operation.Id, cancellationToken);
         var approvalRequestId = ApprovalRequestId(
             item.Operation.ClientRequestId, approvalAttempt);
+        var approvalOptions = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        if (item.Operation.ErpDocumentType == "inventory-count" &&
+            item.Operation.Status == "NEEDS_RECONCILIATION" && item.Operation.ApprovalStatus == "FAILED")
+            approvalOptions["countApprovalRecovery"] = true;
         var approvalRequest = new GatewayDocumentRequest(
             approvalRequestId,
             item.Request.OperatorId,
@@ -200,7 +206,7 @@ public sealed class MaterialOutboundExecutionService(
             [],
             new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, object?>>>(
                 StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
+            approvalOptions);
         try
         {
             var result = await gateway.VerifyDocumentAsync(
@@ -239,10 +245,9 @@ public sealed class MaterialOutboundExecutionService(
         var result = new List<PreparedGatewayOperation>(plan.Count);
         foreach (var operation in plan)
         {
-            if (operation.ErpDocumentType is not ("transfer" or "location-adjustment" or "inventory-count") &&
-                operation.Lines.Any(line => line.ObjectType == "PALLET" || line.SourcePalletId.HasValue))
+            if (operation.Lines.Any(line => line.ObjectType == "PALLET" || line.PalletId.HasValue || line.SourcePalletId.HasValue))
                 throw new ApiException(StatusCodes.Status409Conflict,
-                    "PALLET_EXECUTION_NOT_READY", "该单据暂不支持托盘上传，请使用产品标签。");
+                    "LEGACY_DETAIL_UNSUPPORTED", "旧托盘单据不可继续上传，请核对原单。");
             if (string.IsNullOrWhiteSpace(operation.ArchiveRelativePath) ||
                 string.IsNullOrWhiteSpace(operation.ArchiveSha256))
                 throw new ApiException(StatusCodes.Status409Conflict,

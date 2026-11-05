@@ -20,8 +20,8 @@ public sealed class LabelCodeRuleRepository(
                    v.activated_by, v.activated_at, v.retired_by, v.retired_at, v.row_version
             FROM dbo.label_code_rule AS r
             INNER JOIN dbo.label_code_rule_version AS v ON v.rule_id = r.id
-            WHERE @catalog_only = 0
-               OR (r.is_enabled = 1 AND v.version_status IN ('ACTIVE', 'RETIRED'))
+            WHERE r.object_type <> 'PALLET' AND (@catalog_only = 0
+               OR (r.is_enabled = 1 AND v.version_status IN ('ACTIVE', 'RETIRED')))
             ORDER BY r.priority, r.id, v.version_no DESC;
             """;
         await using var connection = connections.Create();
@@ -125,7 +125,7 @@ public sealed class LabelCodeRuleRepository(
         const string readRuleSql = """
             SELECT rule_code, object_type, row_version
             FROM dbo.label_code_rule WITH (UPDLOCK, HOLDLOCK)
-            WHERE id=@rule_id;
+            WHERE id=@rule_id AND object_type<>'PALLET';
             """;
         string code;
         string objectType;
@@ -206,7 +206,7 @@ public sealed class LabelCodeRuleRepository(
             UPDATE dbo.label_code_rule
             SET rule_name=@name, priority=@priority, is_enabled=@is_enabled,
                 updated_by=@user_id, updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
-            WHERE id=@rule_id;
+            WHERE id=@rule_id AND object_type<>'PALLET';
             """;
         await using (var updateRule = new SqlCommand(updateRuleSql, connection, transaction))
         {
@@ -264,7 +264,7 @@ public sealed class LabelCodeRuleRepository(
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(
             IsolationLevel.Serializable, cancellationToken);
         const string ruleSql = """
-            SELECT row_version FROM dbo.label_code_rule WITH (UPDLOCK, HOLDLOCK) WHERE id=@rule_id;
+            SELECT row_version FROM dbo.label_code_rule WITH (UPDLOCK, HOLDLOCK) WHERE id=@rule_id AND object_type<>'PALLET';
             """;
         byte[] ruleVersion;
         await using (var command = new SqlCommand(ruleSql, connection, transaction))
@@ -355,7 +355,7 @@ public sealed class LabelCodeRuleRepository(
         const string touchSql = """
             UPDATE dbo.label_code_rule
             SET updated_by=@user_id, updated_at=DATEADD(HOUR,8,SYSUTCDATETIME())
-            WHERE id=@rule_id;
+            WHERE id=@rule_id AND object_type<>'PALLET';
             """;
         await using (var touch = new SqlCommand(touchSql, connection, transaction))
         {
@@ -380,7 +380,7 @@ public sealed class LabelCodeRuleRepository(
             throw new ApiException(StatusCodes.Status400BadRequest,
                 "LABEL_CODE_RULE_CODE_INVALID", "规则编号无效。");
         if (name.Length is < 1 or > 100 ||
-            objectType is not ("PRODUCT_LABEL" or "PALLET" or "INVENTORY_OBJECT" or "EXTERNAL") ||
+            objectType is not ("PRODUCT_LABEL" or "INVENTORY_OBJECT" or "EXTERNAL") ||
             priority is < 0 or > 10000)
             throw new ApiException(StatusCodes.Status400BadRequest,
                 "LABEL_CODE_RULE_INVALID", "规则内容无效。");

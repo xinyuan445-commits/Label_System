@@ -977,10 +977,12 @@ app.MapPost("/api/v1/operations/groups/{groupId}/validate", async (
     HttpContext context,
     string groupId,
     MaterialOutboundExecutionService service,
+    MaterialOutboundRepository repository,
     UserRepository users,
     CancellationToken cancellationToken) =>
 {
-    await RequireFunctionAsync(context, users, "material-outbound", cancellationToken);
+    var group = await repository.GetGroupAsync(groupId, RequestContext.User(context).Id, false, cancellationToken);
+    await RequireFunctionAsync(context, users, DocumentFunctionCode(group.DocumentType), cancellationToken);
     return ApiResults.Ok(context, await service.ValidateAsync(
         groupId, RequestContext.User(context), cancellationToken));
 });
@@ -990,10 +992,12 @@ app.MapPost("/api/v1/operations/groups/{groupId}/execute", async (
     string groupId,
     ExecuteOperationGroupRequest request,
     MaterialOutboundExecutionService service,
+    MaterialOutboundRepository repository,
     UserRepository users,
     CancellationToken cancellationToken) =>
 {
-    await RequireFunctionAsync(context, users, "material-outbound", cancellationToken);
+    var group = await repository.GetGroupAsync(groupId, RequestContext.User(context).Id, false, cancellationToken);
+    await RequireFunctionAsync(context, users, DocumentFunctionCode(group.DocumentType), cancellationToken);
     return ApiResults.Ok(context, await service.ExecuteAsync(
         groupId, request, RequestContext.User(context),
         RequestContext.Id(context), cancellationToken));

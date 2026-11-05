@@ -13,7 +13,7 @@ import {
 
 interface SubmissionLine {
   labelCode: string
-  objectType: 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
+  objectType: 'PRODUCT_LABEL' | 'UNLABELED_MATERIAL'
   sourcePalletCode?: string
   materialCode: string
   materialName?: string
@@ -52,7 +52,7 @@ interface InventoryDocumentLine {
   countOriginalWarehouseCode?: string
   countOriginalLocationCode?: string
   labelCode: string
-  objectType: 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
+  objectType: 'PRODUCT_LABEL' | 'UNLABELED_MATERIAL'
   sourcePalletCode?: string
   materialCode: string
   materialName?: string
@@ -113,10 +113,10 @@ function materialOutboundPayload(document: StoredOutboundDocument): MaterialOutb
 }
 
 function createPrepareLines(payload: MaterialOutboundPayload) {
+  if (payload.submissionGroups.some(group => group.lines.some(line => (line.objectType as string) === 'PALLET' || line.sourcePalletCode))) throw new Error('旧托盘明细请删除后重新扫码')
   return payload.submissionGroups.flatMap((group) => group.lines.map((line) => ({
     objectType: line.objectType,
     labelCode: line.labelCode,
-    sourcePalletCode: line.sourcePalletCode || null,
     sourceType: payload.sourceDocumentType,
     sourceDocumentId: group.sourceDocumentId,
     sourceDocumentNo: group.sourceDocumentNo,
@@ -146,10 +146,10 @@ function inventoryDocumentPayload(document: StoredOutboundDocument): InventoryDo
 }
 
 function createInventoryPrepareLines(payload: InventoryDocumentPayload, count = false) {
+  if (payload.lines.some(line => (line.objectType as string) === 'PALLET' || line.sourcePalletCode)) throw new Error('旧托盘明细请删除后重新扫码')
   const baseLines = payload.lines.map((line) => ({
     objectType: line.objectType,
     labelCode: line.labelCode,
-    sourcePalletCode: line.sourcePalletCode || null,
     materialCode: line.materialCode,
     unitCode: line.unitCode,
     requestedQty: Number(line.requestedQty),
@@ -184,21 +184,6 @@ function createInventoryPrepareLines(payload: InventoryDocumentPayload, count = 
       (source) => source.productCode.localeCompare(line.materialCode, undefined, { sensitivity: 'accent' }) === 0 &&
         source.remainingQty > 0,
     )
-    if (line.objectType === 'PALLET') {
-      const source = candidates.find((item) => item.remainingQty >= pending)
-      if (!source) throw new Error(`托盘料号不在所选源单可用范围：${line.labelCode}`)
-      source.remainingQty -= pending
-      result.push({
-        ...line,
-        sourceType: source.sourceType,
-        sourceDocumentId: source.sourceDocumentId,
-        sourceDocumentNo: source.sourceDocumentNo,
-        sourceLineId: source.sourceLineId,
-        sourceLineNo: source.sourceLineNo,
-        sourceProductCode: source.productCode,
-      })
-      continue
-    }
     for (const source of candidates) {
       if (pending <= 0) break
       const quantity = Math.min(pending, source.remainingQty)
@@ -236,7 +221,7 @@ async function submitInventoryDocument(
   const flag = payload.headerFieldValues?.['header.countByLocation']
   if (count && flag !== '1' && flag !== '0') throw new Error('请重新选择原单或仓库')
   return apiRequest<OperationGroupSnapshot>(
-    `/api/v1/operations/documents/${encodeURIComponent(document.documentType)}/submit?autoApprove=${count ? false : autoApprove}`,
+    `/api/v1/operations/documents/${encodeURIComponent(document.documentType)}/submit?autoApprove=${autoApprove}`,
     {
       method: 'POST',
       timeoutMs: 120_000,

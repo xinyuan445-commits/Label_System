@@ -6,6 +6,7 @@ using System.Security.Principal;
 using System.Threading;
 using U8Gateway.U8;
 using U8Gateway.Contracts.Approvals;
+using U8Gateway.Contracts.Documents;
 using U8Gateway.U8.Sources;
 using U8Gateway.Contracts.Sources;
 using U8Gateway.Metadata;
@@ -60,6 +61,15 @@ internal static class Program
             Reject(() => U8InventoryCountReader.RequirePending(null));
             SharedMutexContract();
             UploadSaveContract();
+            Equal(true, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Verify, false));
+            Equal(true, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Add, true));
+            Equal(false, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Add, false));
+            Equal(false, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Unverify, true));
+            Equal(false, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Delete, true));
+            Equal(false, InventoryCountSaveRules.AuditAlreadyConfirmed(DocumentOperationCodes.Verify, true, false));
+            Equal(true, InventoryCountSaveRules.AuditAlreadyConfirmed(DocumentOperationCodes.Verify, true, true));
+            Equal(false, InventoryCountSaveRules.AuditAlreadyConfirmed(DocumentOperationCodes.Verify, false, true));
+            Equal(false, InventoryCountSaveRules.AuditAlreadyConfirmed(DocumentOperationCodes.Unverify, true, true));
             Console.WriteLine("inventory count read/upload-save contracts passed (no SQL/U8 COM)");
             return 0;
         }

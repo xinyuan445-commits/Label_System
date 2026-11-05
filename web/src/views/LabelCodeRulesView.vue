@@ -77,8 +77,7 @@ const usedFields = computed(() =>
 
 const objectTypeLabels: Record<LabelObjectType, string> = {
   PRODUCT_LABEL: '产品标签',
-  PALLET: '托盘标签',
-  INVENTORY_OBJECT: '产品/托盘通用',
+  INVENTORY_OBJECT: '通用标签',
   EXTERNAL: '外部标签',
 }
 const segmentKindLabels: Record<LabelSegmentKind, string> = {

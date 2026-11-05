@@ -66,7 +66,7 @@ import { countCodeKey, type CountSource } from '@/services/inventory-count-model
 import { getCountContext, getCountWarehouse, validateDirectCount, validateInventoryCountItems, type CountContext, type CountWarehouse } from '@/services/inventory-count-api'
 import { getRuntimeConfig } from '@/services/runtime-config'
 
-type LineObjectType = 'PRODUCT_LABEL' | 'PALLET' | 'UNLABELED_MATERIAL'
+type LineObjectType = 'PRODUCT_LABEL' | 'UNLABELED_MATERIAL'
 const materialOutboundSourceCategoryCode = '202'
 
 interface Props {
@@ -629,7 +629,6 @@ function locationNameFor(warehouse: string, code: string, snapshotName = ''): st
 function bodyDisplayValue(line: OutboundLine, key: string): string | number {
   const value = bodyValue(line, key)
   if (key === 'body.objectType') {
-    if (value === 'PALLET') return '托盘'
     return value === 'UNLABELED_MATERIAL' ? '无标签物料' : '标签'
   }
   if (key === 'body.materialName') return materialNameFor(line) || '--'
@@ -791,6 +790,7 @@ function missingRequiredBodyField(line: OutboundLine): DocumentFieldDefinition |
 }
 
 function lineEditError(line: OutboundLine): string {
+  if ((line.objectType as string) === 'PALLET' || line.sourcePalletCode) return '旧托盘明细请删除后重新扫码'
   if (props.documentType === 'inventory-count') {
     try {
       requireCountForm(inventoryCountSource.value, [line], warehouseCode.value)
@@ -817,11 +817,6 @@ function lineEditError(line: OutboundLine): string {
   ) {
     return '本次处理数量不能超过标签当前数量'
   }
-  if (
-    ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
-    (line.objectType === 'PALLET' || Boolean(line.sourcePalletCode)) &&
-    quantity !== line.availableQty
-  ) return '托盘必须整体处理'
   if (
     line.locationCode && line.warehouseCode &&
     !warehousePositionOptions.value.some((item) =>
@@ -1142,34 +1137,13 @@ async function addBarcode(rawCode: string): Promise<void> {
 
   try {
     const lookup = await lookupInventoryObject(barcode, props.documentType)
-    const isPalletScan = lookup.pallet !== null
-    if (
-      props.documentType === 'material-outbound' &&
-      documentDirection.value === 'RED' && isPalletScan
-    ) throw new Error('红字退料请扫描产品标签')
-    const requiresWholePallet = ['transfer-order', 'location-adjustment'].includes(props.documentType)
-    const found = [
-      ...lookup.lines,
-      ...(lookup.pallet && (requiresWholePallet || documentPolicy.value.includePalletByDefault)
-        ? [lookup.pallet]
-        : []),
-    ]
-    if (!found.length) throw new Error('托盘内没有可处理标签')
-    const allowUsedReturnLabel = props.documentType === 'material-outbound' &&
-      documentDirection.value === 'RED' && !isPalletScan
+    const found = lookup.lines
+    if (lookup.pallet || found.length !== 1 || found[0]?.objectType !== 'PRODUCT_LABEL') throw new Error('请扫描产品标签')
+    const allowUsedReturnLabel = props.documentType === 'material-outbound' && documentDirection.value === 'RED'
     if (found.some((item) => item.status !== 'ACTIVE' && !(
       allowUsedReturnLabel && item.objectType === 'PRODUCT_LABEL' && item.status === 'USED'
     ))) {
       throw new Error('标签当前不可用')
-    }
-    if (
-      !isPalletScan &&
-      found.some((item) => item.palletCode) &&
-      (requiresWholePallet || !documentSettings.value.globalPallet.allowPalletizedLabelDirectUse)
-    ) {
-      notify('请扫描托盘码', 'error')
-      playScanFeedback('error')
-      return
     }
     if (
       props.documentType === 'material-outbound' &&
@@ -1257,7 +1231,6 @@ async function addBarcode(rawCode: string): Promise<void> {
             ? { 'body.targetLocationCode': targetLocationCode.value }
             : {}),
         },
-        sourcePalletCode: item.objectType === 'PRODUCT_LABEL' ? item.palletCode : undefined,
         requiresOverIssueQuantity,
         returnByLabel,
       })
@@ -1312,7 +1285,13 @@ async function addCountBarcode(rawCode: string): Promise<void> {
       if (lookup.pallet || lookup.lines.length !== 1) throw new Error('请扫描产品标签')
       label = lookup.lines[0]
     }
-    openLineConfirmation([countFormLine(inventoryCountSource.value, rawCode, createLineId(), label, warehouseCode.value, countByLocation.value === true)])
+    const line = countFormLine(inventoryCountSource.value, rawCode, createLineId(), label, warehouseCode.value, countByLocation.value === true)
+    if (documentPolicy.value.autoAddScannedDetail && !line.countPendingIdentity && line.requestedQty > 0 && !lineEditError(line)) {
+      await persistCountLines([...lines.value, line])
+      notify('已添加', 'success'); playScanFeedback('success')
+    } else {
+      openLineConfirmation([line])
+    }
   } catch (error) {
     notify(error instanceof Error ? error.message : '标签查询失败', 'error'); playScanFeedback('error')
   } finally {
@@ -1512,21 +1491,7 @@ async function removeLine(id: string): Promise<void> {
     catch (error) { notify(error instanceof Error ? error.message : '保存失败', 'error') }
     return
   }
-  const selected = lines.value.find((line) => line.id === id)
-  if (
-    selected &&
-    ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
-    (selected.objectType === 'PALLET' || selected.sourcePalletCode)
-  ) {
-    const palletCode = selected.objectType === 'PALLET'
-      ? selected.labelCode
-      : selected.sourcePalletCode
-    lines.value = lines.value.filter(
-      (line) => line.labelCode !== palletCode && line.sourcePalletCode !== palletCode,
-    )
-  } else {
-    lines.value = lines.value.filter((line) => line.id !== id)
-  }
+  lines.value = lines.value.filter((line) => line.id !== id)
   if (overIssueTargets.value[id]) {
     const next = { ...overIssueTargets.value }
     delete next[id]
@@ -1908,6 +1873,7 @@ function validate(): string {
       (props.documentType !== 'material-outbound' || documentDirection.value !== 'RED')) {
     return '无标签明细只用于红字材料出库单'
   }
+  if (lines.value.some(line => (line.objectType as string) === 'PALLET' || line.sourcePalletCode)) return '旧托盘明细请删除后重新扫码'
   const requiredBodyFields = documentFields.value.filter(
     (field) => field.area === 'body' && fieldRequired(field.key),
   )
@@ -1935,13 +1901,6 @@ function validate(): string {
       (line) => line.availableQty !== null && normalizeQty(line.requestedQty) > line.availableQty,
     )
   ) return '本次处理数量不能超过标签当前数量'
-  if (
-    ['transfer-order', 'location-adjustment'].includes(props.documentType) &&
-    lines.value.some((line) =>
-      (line.objectType === 'PALLET' || Boolean(line.sourcePalletCode)) &&
-      normalizeQty(line.requestedQty) !== line.availableQty,
-    )
-  ) return '托盘必须整体处理'
   if (
     props.documentType !== 'material-outbound' &&
     selectedSourceLines.value.length > 0 &&
@@ -2084,7 +2043,7 @@ async function autoUploadCompletedDocument(stored: StoredOutboundDocument): Prom
             current.databaseName !== inventoryCountContext.value?.databaseName) throw new Error('盘点账套已变化，请重新打开单据')
         if (!current.uploadSaveEnabled) throw new Error('当前账套未开放盘点上传')
       }
-      await uploadOutboundDocument(stored, count ? false : documentPolicy.value.autoApproveAfterUpload)
+      await uploadOutboundDocument(stored, documentPolicy.value.autoApproveAfterUpload)
     } catch (error) {
       notify(error instanceof Error ? error.message : '上传失败', 'error')
     }
@@ -2468,7 +2427,7 @@ onBeforeRouteLeave((to) => {
             v-model="scanCode"
             autocomplete="off"
             enterkeyhint="done"
-            :placeholder="documentType === 'inventory-count' ? '标签码' : '标签码或托盘码'"
+            placeholder="标签码"
             @keyup.enter="simulateOrAdd"
           />
           <button type="button" @click="simulateOrAdd">添加</button>
@@ -2676,9 +2635,6 @@ onBeforeRouteLeave((to) => {
               :disabled="countSaving || finishing"
               :type="fieldInputType(field)"
               :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
-              :readonly="field.key === 'body.quantity' &&
-                ['transfer-order', 'location-adjustment'].includes(documentType) &&
-                (editingLine.objectType === 'PALLET' || Boolean(editingLine.sourcePalletCode))"
               autocomplete="off"
               @focus="keepEditorInputVisible"
               @input="updateEditorInput(field, $event)"
@@ -3185,10 +3141,6 @@ h1 {
   font-weight: 750;
 }
 
-.object-badge.pallet {
-  background: #fff0e3;
-  color: #a95b17;
-}
 
 .line-heading button {
   width: 34px;

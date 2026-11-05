@@ -1,7 +1,7 @@
 import { apiRequest } from '@/api/client'
 import { getRuntimeConfig } from '@/services/runtime-config'
 
-export type LabelObjectType = 'PRODUCT_LABEL' | 'PALLET' | 'INVENTORY_OBJECT' | 'EXTERNAL'
+export type LabelObjectType = 'PRODUCT_LABEL' | 'INVENTORY_OBJECT' | 'EXTERNAL'
 export type LabelRuleVersionStatus = 'DRAFT' | 'ACTIVE' | 'RETIRED' | 'BLOCKED'
 export type LabelSegmentKind =
   | 'LITERAL'
@@ -208,7 +208,9 @@ export async function refreshLabelCodeRuleCatalog(): Promise<LabelCodeRuleCatalo
 export function readCachedLabelCodeRuleCatalog(): LabelCodeRuleCatalog | null {
   try {
     const value = localStorage.getItem(catalogStorageKey())
-    return value ? JSON.parse(value) as LabelCodeRuleCatalog : null
+    if (!value) return null
+    const catalog = JSON.parse(value) as LabelCodeRuleCatalog
+    return { ...catalog, rules: catalog.rules.filter(rule => (rule.objectType as string) !== 'PALLET') }
   } catch {
     return null
   }

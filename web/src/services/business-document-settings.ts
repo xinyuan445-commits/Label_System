@@ -9,27 +9,16 @@ import {
 } from '@/services/business-document-fields'
 
 export interface DocumentPolicySettings {
-  includePalletByDefault: boolean
   autoAddScannedDetail: boolean
   autoUploadOnComplete: boolean
   autoApproveAfterUpload: boolean
   allowOverIssue: boolean
 }
 
-export interface GlobalPalletSettings {
-  allowMixedMaterials: boolean
-  allowMixedBatches: boolean
-  allowMixedWarehouses: boolean
-  allowMixedLocations: boolean
-  allowPalletReuse: boolean
-  allowPalletizedLabelDirectUse: boolean
-}
-
 export interface BusinessDocumentSettings {
   globalPolicy: DocumentPolicySettings
   documentPolicies: Partial<Record<BusinessDocumentType, DocumentPolicySettings>>
   documentFields: Partial<Record<BusinessDocumentType, DocumentFieldSettings>>
-  globalPallet: GlobalPalletSettings
 }
 
 interface SettingItem {
@@ -52,7 +41,6 @@ const storageKey = 'label-system:business-document-settings:v1'
 const rows = new Map<string, SettingItem>()
 
 const documentDefinitions: Record<keyof DocumentPolicySettings, SettingDefinition> = {
-  includePalletByDefault: { key: 'include_pallet_in_document_by_default', name: '扫托包含托盘' },
   autoAddScannedDetail: { key: 'auto_add_scanned_detail', name: '扫码后自动添加到明细' },
   autoUploadOnComplete: { key: 'auto_upload_on_complete', name: '完成自动上传' },
   autoApproveAfterUpload: { key: 'auto_approve_after_upload', name: '上传自动审核' },
@@ -64,38 +52,15 @@ const documentFieldDefinition: SettingDefinition = {
   name: '填写字段设置',
 }
 
-const globalDefinitions: Array<{
-  property: keyof GlobalPalletSettings
-  definition: SettingDefinition
-}> = [
-  { property: 'allowMixedMaterials', definition: { key: 'allow_mixed_materials', name: '不同物料混托' } },
-  { property: 'allowMixedBatches', definition: { key: 'allow_mixed_batches', name: '同料不同批次混托' } },
-  { property: 'allowMixedWarehouses', definition: { key: 'allow_mixed_warehouses', name: '不同仓库混托' } },
-  { property: 'allowMixedLocations', definition: { key: 'allow_mixed_locations', name: '不同货位混托' } },
-  { property: 'allowPalletReuse', definition: { key: 'allow_pallet_reuse', name: '空托盘允许复用' } },
-  { property: 'allowPalletizedLabelDirectUse', definition: { key: 'allow_direct_use_of_palletized_label', name: '托内标签单独使用' } },
-]
-
 const defaultPolicy: DocumentPolicySettings = {
-  includePalletByDefault: true,
   autoAddScannedDetail: true,
   autoUploadOnComplete: false,
   autoApproveAfterUpload: false,
   allowOverIssue: false,
 }
 
-const defaultGlobalPallet: GlobalPalletSettings = {
-  allowMixedMaterials: true,
-  allowMixedBatches: true,
-  allowMixedWarehouses: false,
-  allowMixedLocations: false,
-  allowPalletReuse: true,
-  allowPalletizedLabelDirectUse: false,
-}
-
 function copyPolicy(value?: Partial<DocumentPolicySettings>): DocumentPolicySettings {
   return {
-    includePalletByDefault: value?.includePalletByDefault ?? defaultPolicy.includePalletByDefault,
     autoAddScannedDetail: value?.autoAddScannedDetail ?? defaultPolicy.autoAddScannedDetail,
     autoUploadOnComplete: value?.autoUploadOnComplete ?? defaultPolicy.autoUploadOnComplete,
     autoApproveAfterUpload: value?.autoApproveAfterUpload ?? defaultPolicy.autoApproveAfterUpload,
@@ -135,7 +100,6 @@ export function createDefaultBusinessDocumentSettings(): BusinessDocumentSetting
     globalPolicy: copyPolicy(),
     documentPolicies: {},
     documentFields: {},
-    globalPallet: { ...defaultGlobalPallet },
   }
 }
 
@@ -157,7 +121,6 @@ export function loadBusinessDocumentSettings(): BusinessDocumentSettings {
       globalPolicy: copyPolicy(stored.globalPolicy),
       documentPolicies,
       documentFields,
-      globalPallet: { ...defaultGlobalPallet, ...(stored.globalPallet ?? {}) },
     }
   } catch {
     return defaults
@@ -220,11 +183,6 @@ export async function fetchBusinessDocumentSettings(
   >) {
     policy[property] = booleanValue(items, 'DOCUMENT', definition.key, policy[property])
   }
-  for (const item of globalDefinitions) {
-    settings.globalPallet[item.property] = booleanValue(
-      items, 'GLOBAL', item.definition.key, settings.globalPallet[item.property],
-    )
-  }
   saveBusinessDocumentSettings(settings)
   return settings
 }
@@ -262,13 +220,8 @@ export async function persistBusinessDocumentSettings(
   for (const [property, definition] of Object.entries(documentDefinitions) as Array<
     [keyof DocumentPolicySettings, SettingDefinition]
   >) {
-    if (documentType === 'inventory-count' && property !== 'autoUploadOnComplete') continue
     if (property === 'allowOverIssue' && documentType !== 'material-outbound') continue
     await updateSetting('DOCUMENT', documentType, definition, policy[property])
-  }
-  for (const item of globalDefinitions) {
-    if (documentType === 'inventory-count') continue
-    await updateSetting('GLOBAL', null, item.definition, settings.globalPallet[item.property])
   }
   for (const property of globallySynced) {
     const definition = documentDefinitions[property]

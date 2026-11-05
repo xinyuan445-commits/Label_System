@@ -115,6 +115,7 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         var result = new List<SettingItem>();
         while (await reader.ReadAsync(cancellationToken))
         {
+            if (IsRetiredSettingKey(reader.GetString(2))) continue;
             using var document = JsonDocument.Parse(reader.GetString(4));
             result.Add(new SettingItem(
                 reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1),
@@ -211,6 +212,8 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
     {
         scope = scope.Trim().ToUpperInvariant();
         key = key.Trim();
+        if (IsRetiredSettingKey(key))
+            throw new ApiException(400, "SETTING_RETIRED", "该设置已移除。");
         if (scope is not ("GLOBAL" or "DOCUMENT"))
             throw new ApiException(StatusCodes.Status400BadRequest, "SETTING_SCOPE_INVALID", "设置范围无效。");
         if (scope == "DOCUMENT" && string.IsNullOrWhiteSpace(request.DocumentType))
@@ -328,54 +331,14 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
         await connection.OpenAsync(cancellationToken);
 
         var product = await ReadProductLabelAsync(connection, null, code, cancellationToken);
-        var pallet = await ReadPalletAsync(connection, null, code, cancellationToken);
-        if (product is not null && pallet is not null)
-            throw new ApiException(StatusCodes.Status409Conflict, "BARCODE_DUPLICATED", "条码数据异常。");
         if (product is not null)
             return new InventoryLookupResult([new InventoryObjectLine(
                 product.Code, "PRODUCT_LABEL", product.MaterialCode,
                 string.IsNullOrWhiteSpace(product.MaterialName) ? product.MaterialCode : product.MaterialName,
                 product.BatchNo, product.UnitCode, product.UnitName,
                 product.WarehouseCode, product.WarehouseName, product.LocationCode, product.LocationName, product.CurrentQty,
-                product.PalletCode, product.Status, RowVersions.Encode(product.RowVersion))], null);
-        if (pallet is null)
-            throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", "未找到标签。");
-
-        const string contentsSql = """
-            SELECT pl.label_code, f.material_code, f.batch_no, f.unit_code,
-                   f.to_warehouse_code, f.to_location_code, pl.current_qty,
-                   p.pallet_code, pl.status, pl.row_version,
-                   JSON_VALUE(f.inventory_attributes_json, '$.materialName'),
-                   JSON_VALUE(f.inventory_attributes_json, '$.unitName'),
-                   w.warehouse_name, pos.position_name,
-                   pl.traceback_latest_flow_id, pl.mirror_source
-            FROM dbo.pallet_label_relation AS rel
-            INNER JOIN dbo.product_label AS pl ON pl.id = rel.label_id
-            INNER JOIN dbo.pallet AS p ON p.id = rel.pallet_id
-            LEFT JOIN dbo.inventory_flow AS f ON f.id = pl.last_flow_id
-            LEFT JOIN dbo.u8_warehouse_cache AS w
-              ON w.warehouse_code = f.to_warehouse_code AND w.is_active = 1
-            LEFT JOIN dbo.u8_position_cache AS pos
-              ON pos.position_code = f.to_location_code
-             AND pos.warehouse_code = f.to_warehouse_code AND pos.is_active = 1
-            WHERE rel.pallet_id = @pallet_id AND rel.unloaded_at IS NULL
-            ORDER BY pl.label_code;
-            """;
-        await using var command = new SqlCommand(contentsSql, connection);
-        command.Parameters.Add("@pallet_id", SqlDbType.BigInt).Value = pallet.Id;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var lines = new List<InventoryObjectLine>();
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            lines.Add(new InventoryObjectLine(
-                reader.GetString(0), "PRODUCT_LABEL", DbString(reader, 1),
-                reader.IsDBNull(10) ? DbString(reader, 1) : reader.GetString(10),
-                DbString(reader, 2), DbString(reader, 3), reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-                DbString(reader, 4), reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
-                DbString(reader, 5), reader.IsDBNull(13) ? string.Empty : reader.GetString(13), reader.GetDecimal(6),
-                reader.GetString(7), reader.GetString(8), RowVersions.Encode((byte[])reader[9])));
-        }
-        return new InventoryLookupResult(lines, pallet.Line);
+                null, product.Status, RowVersions.Encode(product.RowVersion))], null);
+        throw new ApiException(StatusCodes.Status404NotFound, "LABEL_NOT_FOUND", "未找到标签。");
     }
 
     internal static async Task<ProductLabelSnapshot?> ReadProductLabelAsync(
@@ -391,7 +354,7 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
                    pl.row_version, f.material_code, f.batch_no, f.unit_code,
                    COALESCE(NULLIF(f.to_warehouse_code,N''),f.from_warehouse_code),
                    CASE WHEN NULLIF(f.to_warehouse_code,N'') IS NULL
-                        THEN f.from_location_code ELSE f.to_location_code END, p.id, p.pallet_code,
+                        THEN f.from_location_code ELSE f.to_location_code END, CAST(NULL AS bigint), CAST(NULL AS nvarchar(100)),
                    JSON_VALUE(f.inventory_attributes_json, '$.materialName'),
                    JSON_VALUE(f.inventory_attributes_json, '$.unitName'),
                    w.warehouse_name, pos.position_name,
@@ -406,13 +369,6 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
                                           THEN f.from_location_code ELSE f.to_location_code END
              AND pos.warehouse_code = COALESCE(NULLIF(f.to_warehouse_code,N''),f.from_warehouse_code)
              AND pos.is_active = 1
-            OUTER APPLY
-            (
-                SELECT TOP (1) pallet.id, pallet.pallet_code
-                FROM dbo.pallet_label_relation AS rel
-                INNER JOIN dbo.pallet AS pallet ON pallet.id = rel.pallet_id
-                WHERE rel.label_id = pl.id AND rel.unloaded_at IS NULL
-            ) AS p
             WHERE pl.label_code = @code;
             """;
         await using var command = new SqlCommand(sql, connection, transaction);
@@ -431,40 +387,10 @@ public sealed class LabelSystemRepository(SqlConnectionFactory connections)
             reader.IsDBNull(17) ? null : reader.GetInt64(17), reader.GetString(18));
     }
 
-    internal static async Task<PalletSnapshot?> ReadPalletAsync(
-        SqlConnection connection,
-        SqlTransaction? transaction,
-        string code,
-        CancellationToken cancellationToken,
-        bool forUpdate = false)
-    {
-        var hint = forUpdate ? " WITH (UPDLOCK, HOLDLOCK)" : string.Empty;
-        var sql = $"""
-            SELECT p.id, p.pallet_code, p.material_code, p.batch_no, p.unit_code,
-                   p.current_warehouse_code, p.current_location_code, p.current_qty,
-                   p.status, p.locked_operation_id, p.row_version,
-                   w.warehouse_name, pos.position_name
-            FROM dbo.pallet AS p{hint}
-            LEFT JOIN dbo.u8_warehouse_cache AS w
-              ON w.warehouse_code = p.current_warehouse_code AND w.is_active = 1
-            LEFT JOIN dbo.u8_position_cache AS pos
-              ON pos.position_code = p.current_location_code
-             AND pos.warehouse_code = p.current_warehouse_code AND pos.is_active = 1
-            WHERE p.pallet_code = @code;
-            """;
-        await using var command = new SqlCommand(sql, connection, transaction);
-        command.Parameters.Add("@code", SqlDbType.NVarChar, 100).Value = code;
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        if (!await reader.ReadAsync(cancellationToken)) return null;
-        var id = reader.GetInt64(0);
-        var line = new InventoryObjectLine(
-            reader.GetString(1), "PALLET", reader.GetString(2), reader.GetString(2),
-            DbString(reader, 3), reader.GetString(4), string.Empty,
-            DbString(reader, 5), reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-            DbString(reader, 6), reader.IsDBNull(12) ? string.Empty : reader.GetString(12), reader.GetDecimal(7),
-            reader.GetString(1), reader.GetString(8), RowVersions.Encode((byte[])reader[10]));
-        return new PalletSnapshot(id, line, reader.IsDBNull(9) ? null : reader.GetInt64(9));
-    }
+    internal static bool IsRetiredSettingKey(string key) => key.ToLowerInvariant() is
+        "include_pallet_in_document_by_default" or "allow_mixed_materials" or "allow_mixed_batches" or
+        "allow_mixed_warehouses" or "allow_mixed_locations" or "allow_pallet_reuse" or
+        "allow_direct_use_of_palletized_label";
 
     private static void AddSettingKeyParameters(
         SqlCommand command,
@@ -502,5 +428,3 @@ public sealed record ProductLabelSnapshot(
     string? PalletCode,
     long? TraceBackLatestFlowId,
     string MirrorSource);
-
-public sealed record PalletSnapshot(long Id, InventoryObjectLine Line, long? LockedOperationId);

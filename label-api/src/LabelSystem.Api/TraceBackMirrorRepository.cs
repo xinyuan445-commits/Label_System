@@ -153,16 +153,9 @@ public sealed class TraceBackMirrorRepository(
                    COALESCE(NULLIF(f.to_warehouse_code,N''),f.from_warehouse_code),
                    CASE WHEN NULLIF(f.to_warehouse_code,N'') IS NULL
                         THEN f.from_location_code ELSE f.to_location_code END,
-                   ISNULL(f.object_sequence_no,0),p.pallet_code,pl.traceback_sync_status
+                   ISNULL(f.object_sequence_no,0),CAST(NULL AS nvarchar(100)),pl.traceback_sync_status
             FROM dbo.product_label pl WITH (UPDLOCK,HOLDLOCK)
             LEFT JOIN dbo.inventory_flow f ON f.id=pl.last_flow_id
-            OUTER APPLY
-            (
-                SELECT TOP (1) pallet.pallet_code
-                FROM dbo.pallet_label_relation rel
-                JOIN dbo.pallet pallet ON pallet.id=rel.pallet_id
-                WHERE rel.label_id=pl.id AND rel.unloaded_at IS NULL
-            ) p
             WHERE pl.label_code=@code;
             """;
         await using var command = new SqlCommand(sql, connection, transaction);
