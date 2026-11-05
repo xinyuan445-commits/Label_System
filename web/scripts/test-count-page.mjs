@@ -37,7 +37,8 @@ function fixture(t, type = 'inventory-count') {
     URL, URLSearchParams, Error, Event, console, setTimeout: () => 1, clearTimeout() {} }
   const route = { params: { code: type }, query: {}, name: 'work-function' }
   let nativeScan, nativeBack, identity = 0
-  const api = { lookups: 0, validations: 0, directValidations: 0,
+  const api = { lookups: 0, validations: 0, directValidations: 0, searches: 0, lastSearch: null,
+    search: async () => ({ items: [{ ...source().document, partnerName: '原料仓', createdBy: '测试制单员' }], hasMore: false }),
     warehouse: async warehouseCode => ({ accountId:'888', databaseName:'UFDATA_888_2021', warehouseCode,
       warehouseName:warehouseCode, positionManaged: warehouseCode==='W1' }),
     lookup: async () => ({ pallet: null, lines: [label()] }),
@@ -70,7 +71,7 @@ function fixture(t, type = 'inventory-count') {
     '@/services/inventory-object-lookup': { lookupInventoryObject: async (...args) => { api.lookups++; return api.lookup(...args) } },
     '@/services/inventory-count-api': {
       downloadInventoryCount: async () => source(),
-      searchInventoryCounts: async () => ({ items: [{ ...source().document }], hasMore: false }),
+      searchInventoryCounts: async (...args) => { api.searches++; api.lastSearch=args; return api.search(...args) },
       validateInventoryCountItems: async (...args) => { api.validations++; return api.validate(...args) },
       getCountContext: async () => ({ accountId: '888', databaseName: 'UFDATA_888_2021' }),
       getCountWarehouse: async code => api.warehouse(code),
@@ -130,11 +131,18 @@ function fixture(t, type = 'inventory-count') {
     })
     return mount()
   }
+  async function mountPicker() {
+    const index=mounted.length
+    const component=load('@/views/SourceDocumentSelectView.vue').default
+    const state=component.setup({}, {expose(){}})
+    for (const hook of mounted.slice(index)) await hook()
+    return state
+  }
   t.after(async () => {
     for (const hook of unmounted) hook()
     await load('@/services/inventory-count-store').inventoryCountStore.close()
   })
-  return { load, mount, select, api, reference, globals, feedback, routes, route,
+  return { load, mount, mountPicker, select, api, reference, globals, feedback, routes, route,
     nativeScan: value => nativeScan?.({ barcode: value }), nativeBack: () => nativeBack?.(),
     docs: () => load('@/services/outbound-document-drafts').listAllLocalDocuments() }
 }
@@ -156,13 +164,16 @@ test('盘点和材料出库共用同一制单组件；盘点选单渲染没有�
   const openedPicker = { ...component, setup(props, context) {
     const state = component.setup(props, context); state.queryOpen.value = true
     state.results.value = [{ sourceDocumentId: 12, sourceDocumentNo: 'COUNT12', documentDate: '2026-11-04',
-      productCode: 'W1', warehouseCode: 'W1', materialCount: 9 }]
+      productCode: 'W1', warehouseCode: 'W1', warehouseName: '原料仓', materialCount: 9,
+      sourceCreatedBy: '测试制单员', sourceStatus: 'pending' }]
     return state
   } }
   const html = await SSR.renderToString(Vue.createSSRApp(openedPicker))
   assert.match(html, /盘点单/)
   assert.doesNotMatch(html, /合并|显示方式|选单类型|单号或产品/)
   assert.match(html, /COUNT12/); assert.match(html, /9条明细/)
+  assert.match(html, /原料仓/); assert.match(html, /W1/)
+  assert.match(html, /测试制单员/); assert.match(html, /未审核/)
   const form = f.load('@/views/OutboundDocumentView.vue').default
   const countHtml = await SSR.renderToString(Vue.createSSRApp(form, { documentType: 'inventory-count' }))
   assert.match(countHtml, /单据管理/); assert.match(countHtml, /下一步/)
@@ -185,6 +196,39 @@ test('盘点和材料出库共用同一制单组件；盘点选单渲染没有�
     }
     assert.equal(/(?:^|\s)disabled(?:\s|$)/.test(controls.get('W1')),hasSource)
   }
+})
+
+test('盘点选单进入自动按默认日期查询一次，补齐卡片元数据，其他业务不自动查询', async t => {
+  const f=fixture(t), picker=await f.mountPicker()
+  assert.equal(f.api.searches,1)
+  assert.equal(f.api.lastSearch[0],'')
+  assert.equal(f.api.lastSearch[1],picker.startDate.value)
+  assert.equal(f.api.lastSearch[2],picker.endDate.value)
+  assert.equal(picker.results.value[0].warehouseName,'原料仓')
+  assert.equal(picker.results.value[0].sourceCreatedBy,'测试制单员')
+  assert.equal(picker.results.value[0].sourceStatus,'pending')
+  assert.equal(picker.queryOpen.value,false)
+  assert.equal(picker.selectedDocumentId.value,null)
+  const other=fixture(t,'material-outbound'), materialPicker=await other.mountPicker()
+  assert.equal(other.api.searches,0);assert.equal(materialPicker.searched.value,false)
+})
+
+test('盘点自动查询空结果/失败时展开条件，查询中不重复请求且旧选择不残留', async t => {
+  const f=fixture(t)
+  f.api.search=async()=>({items:[],hasMore:false})
+  const picker=await f.mountPicker()
+  assert.equal(picker.queryOpen.value,true);assert.equal(picker.searched.value,true)
+  picker.selectedDocumentId.value=12
+  const wait=deferred()
+  f.api.search=async()=>{await wait.promise;throw new Error('查询失败')}
+  const first=picker.search();await picker.search()
+  assert.equal(f.api.searches,2);assert.equal(picker.selectedDocumentId.value,null)
+  wait.resolve();await first
+  assert.equal(picker.errorMessage.value,'查询失败');assert.equal(picker.queryOpen.value,true)
+  f.api.search=async()=>({items:[],hasMore:true})
+  await picker.search()
+  assert.match(picker.errorMessage.value,/缩小查询范围/)
+  assert.equal(picker.queryOpen.value,true)
 })
 
 test('标准选单整单确认，带回完整原单；明细仍用共用选单路径', async t => {

@@ -23,6 +23,8 @@ export interface CountSummary {
   documentDate: string | null
   warehouseCode: string
   partnerName: string
+  createdBy?: string | null
+  status?: string
   lineCount: number
 }
 

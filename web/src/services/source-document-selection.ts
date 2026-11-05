@@ -20,6 +20,9 @@ export interface SourceDocumentLine {
   materialCount: number
   batchNo?: string
   warehouseCode?: string
+  warehouseName?: string
+  sourceCreatedBy?: string | null
+  sourceStatus?: string
   locationCode?: string
 }
 
@@ -169,7 +172,9 @@ export async function searchSourceDocuments(
     return result.items.map(item => ({ sourceType: 'inventory-count', sourceDocumentId: item.id,
       sourceDocumentNo: item.documentNo, sourceLineId: item.id, sourceLineNo: null,
       documentDate: item.documentDate?.slice(0, 10) ?? '', productCode: item.warehouseCode,
-      productName: '', orderQuantity: 0, departmentCode: '', materialCount: item.lineCount }))
+      productName: '', orderQuantity: 0, departmentCode: '', materialCount: item.lineCount,
+      warehouseCode: item.warehouseCode, warehouseName: item.partnerName,
+      sourceCreatedBy: item.createdBy, sourceStatus: item.status }))
   }
   if (shouldUseMockData()) {
     const keyword = query.keyword.trim().toLocaleLowerCase()

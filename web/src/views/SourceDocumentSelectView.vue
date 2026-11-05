@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import DateField from '@/components/DateField.vue'
@@ -123,6 +123,7 @@ function offsetBeijingDate(offsetDays: number): string {
 }
 
 async function search(): Promise<void> {
+  if (loading.value) return
   errorMessage.value = ''
   searched.value = true
   if (!sourceType.value) {
@@ -139,6 +140,8 @@ async function search(): Promise<void> {
   }
 
   loading.value = true
+  selectedLineIds.value = []
+  selectedDocumentId.value = null
   try {
     const normalizedKeyword = keyword.value.trim()
     results.value = await searchSourceDocuments({
@@ -148,12 +151,11 @@ async function search(): Promise<void> {
       startDate: normalizedKeyword ? '' : startDate.value,
       endDate: normalizedKeyword ? '' : endDate.value,
     })
-    selectedLineIds.value = []
-    selectedDocumentId.value = null
-    queryOpen.value = false
+    queryOpen.value = isInventoryCount.value && results.value.length === 0
   } catch (error) {
     results.value = []
     errorMessage.value = error instanceof Error ? error.message : '查询失败'
+    if (isInventoryCount.value) queryOpen.value = true
   } finally {
     loading.value = false
   }
@@ -247,6 +249,10 @@ async function returnToDocument(): Promise<void> {
 
 useDocumentSystemBack(returnToDocument)
 
+onMounted(async () => {
+  if (isInventoryCount.value) await search()
+})
+
 onBeforeRouteLeave((to) => {
   if (allowDocumentReturn) {
     allowDocumentReturn = false
@@ -338,14 +344,19 @@ onBeforeRouteLeave((to) => {
         </div>
 
         <template v-if="isInventoryCount">
-          <button v-for="result in results" :key="result.sourceDocumentId" class="result-card"
+          <button v-for="result in results" :key="result.sourceDocumentId" class="result-card count-result-card"
             :class="{ selected: selectedDocumentId === result.sourceDocumentId }" type="button"
             :disabled="loading" @click="toggleDocument(result.sourceDocumentId)">
             <span class="check" aria-hidden="true">{{ selectedDocumentId === result.sourceDocumentId ? '✓' : '' }}</span>
-            <span class="result-main"><strong>{{ result.sourceDocumentNo }}</strong>
-              <span>仓库 {{ result.warehouseCode || result.productCode }} · {{ result.materialCount }}条明细</span>
-              <small>{{ result.documentDate }}</small></span>
-            <span class="material-count">{{ result.materialCount }}</span>
+            <span class="result-main">
+              <span class="count-result-heading">
+                <strong>{{ result.sourceDocumentNo }}</strong>
+                <span v-if="result.sourceStatus === 'pending'" class="count-status">未审核</span>
+              </span>
+              <span class="count-warehouse">仓库：{{ result.warehouseName || result.warehouseCode || result.productCode }}<small v-if="result.warehouseName">（{{ result.warehouseCode || result.productCode }}）</small></span>
+              <span class="count-result-meta"><span>日期：{{ result.documentDate || '—' }}</span><span>{{ result.materialCount }}条明细</span></span>
+              <small class="count-maker">制单人：{{ result.sourceCreatedBy || '—' }}</small>
+            </span>
           </button>
         </template>
         <template v-else-if="displayMode === 'merged'">
@@ -496,4 +507,15 @@ onBeforeRouteLeave((to) => {
   gap: 12px;
   padding-top: 1px;
 }
+
+.count-result-card { grid-template-columns: 25px minmax(0, 1fr); }
+.count-result-card .result-main { gap: 7px; }
+.count-result-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.count-result-heading strong { min-width: 0; }
+.count-status { flex-shrink: 0; padding: 2px 7px; border-radius: 6px; background: #eaf3fd; color: #2368c4; font-size: 11px; font-weight: 650; }
+.count-warehouse { overflow-wrap: anywhere; line-height: 1.5; }
+.count-warehouse small { font-weight: 400; }
+.count-result-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.count-result-card .count-result-meta { color: #65758a; font-size: 12px; font-weight: 400; }
+.count-maker { overflow-wrap: anywhere; }
 </style>
