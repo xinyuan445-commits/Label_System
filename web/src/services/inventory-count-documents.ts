@@ -69,8 +69,9 @@ export function countFormLine(source: CountSource | null, code: string, id: stri
   }
   return { ...result, materialCode: label.materialCode, materialName: label.materialName || line?.materialName || '',
     batchNo: label.batchNo, unitCode: line?.unitCode ?? label.unitCode, warehouseCode: label.warehouseCode,
-    locationCode: label.locationCode, unitName: label.unitName, warehouseName: label.warehouseName,
-    locationName: label.locationName, availableQty: label.availableQty, countPendingIdentity: false }
+    locationCode: label.locationCode, unitName: line?.unitName || label.unitName || label.unitCode,
+    warehouseName: label.warehouseName, locationName: label.locationName, availableQty: label.availableQty,
+    requestedQty: label.availableQty, countQuantityConfirmed: true, countPendingIdentity: false }
 }
 
 export function requireCountForm(source: CountSource | null | undefined,
@@ -87,7 +88,7 @@ export function requireCountForm(source: CountSource | null | undefined,
   }
 }
 
-export function applyCountChecks<T extends { labelCode: string; requestedQty: number; locationCode?: string; locationName?: string }>(
+export function applyCountChecks<T extends { labelCode: string; requestedQty: number; locationCode?: string; locationName?: string; unitName?: string }>(
   source: CountSource, lines: T[], checks: CountCheck[]): Array<T & Partial<CountFormLine>> {
   const map = new Map(checks.map(check => [countCodeKey(check.code), check]))
   if (map.size !== lines.length || checks.length !== lines.length) throw new Error('标签校验结果不完整')
@@ -100,7 +101,8 @@ export function applyCountChecks<T extends { labelCode: string; requestedQty: nu
     return { ...row, materialCode: line.materialCode, materialName: check.materialName || line.materialName,
       batchNo: line.batchNo, warehouseCode: line.warehouseCode, locationCode: location,
       locationName: row.locationCode === location ? row.locationName : undefined,
-      unitCode: line.unitCode, availableQty: check.balance ?? null, countPendingIdentity: false }
+      unitCode: line.unitCode, unitName: line.unitName || row.unitName,
+      availableQty: check.balance ?? null, countPendingIdentity: false }
   })
 }
 

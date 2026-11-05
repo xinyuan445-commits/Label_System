@@ -35,12 +35,13 @@ internal static class Program
             {
                 ["autoID"] = 41, ["irowno"] = 2, ["cInvCode"] = "M1", ["cCVBatch"] = "B1",
                 ["cPosition"] = "L1", ["iCVQuantity"] = 10.5m, ["iCVCQuantity"] = DBNull.Value,
-                ["_UnitCode"] = "U1", ["_StockUnitCode"] = "U1", ["cFree1"] = "blue"
+                ["_UnitCode"] = "U1", ["_UnitName"] = " 张 ", ["_StockUnitCode"] = "U1", ["cFree1"] = "blue"
             };
             var mapped = U8InventoryCountReader.MapLine(row, "W1", 1);
             Equal(41L, mapped.Id); Equal(10.5m, mapped.BookQuantity); Equal(null, mapped.ActualQuantity);
             Equal("W1", mapped.WarehouseCode); Equal("blue", mapped.FreeItems[0]);
             Equal(false, mapped.RequiresAuxiliaryUnit);
+            Equal("U1", mapped.UnitCode); Equal("张", mapped.UnitName);
             row["iCVCQuantity"] = 0m;
             Equal((decimal?)0, U8InventoryCountReader.MapLine(row, "W1", 1).ActualQuantity);
             row["_StockUnitCode"] = "OTHER";

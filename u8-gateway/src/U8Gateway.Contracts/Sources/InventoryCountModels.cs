@@ -42,6 +42,7 @@ namespace U8Gateway.Contracts.Sources
         public string WarehouseCode { get; set; }
         public string LocationCode { get; set; }
         public string UnitCode { get; set; }
+        public string UnitName { get; set; }
         public decimal BookQuantity { get; set; }
         public decimal? ActualQuantity { get; set; }
         public string[] FreeItems { get; set; } = new string[10];

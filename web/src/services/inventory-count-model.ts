@@ -7,6 +7,7 @@ export interface CountSourceLine {
   warehouseCode: string
   locationCode: string
   unitCode: string
+  unitName?: string
   bookQuantity: number
   actualQuantity: number | null
   freeItems: string[]

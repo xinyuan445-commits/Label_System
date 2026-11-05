@@ -48,8 +48,10 @@ namespace U8Gateway.U8.Sources
             // read when present without inventing fields absent from a particular U8 schema.
             const string sql = @"
 select top (@take) d.*, i.cInvName as _MaterialName, i.cComUnitCode as _UnitCode,
+       u.cComUnitName as _UnitName,
        i.cSTComUnitCode as _StockUnitCode
 from dbo.CheckVouchs d left join dbo.Inventory i on i.cInvCode=d.cInvCode
+left join dbo.ComputationUnit u on u.cComunitCode=i.cComUnitCode
 where d.ID=@id order by d.autoID;";
             using (var connection = new SqlConnection(_connectionString))
             using (var command = new SqlCommand(sql, connection))
@@ -164,7 +166,7 @@ where cWhCode=@code and dWhEndDate is null;", connection))
                 LineNo = Value(row, "irowno") == null ? fallbackLine : Convert.ToInt32(Value(row, "irowno"), CultureInfo.InvariantCulture),
                 MaterialCode = Text(row, "cInvCode"), MaterialName = Text(row, "_MaterialName"),
                 BatchNo = Text(row, "cCVBatch"), WarehouseCode = warehouse ?? "",
-                LocationCode = Text(row, "cPosition"), UnitCode = unit,
+                LocationCode = Text(row, "cPosition"), UnitCode = unit, UnitName = Text(row, "_UnitName"),
                 BookQuantity = Number(row, "iCVQuantity", false).Value,
                 ActualQuantity = Number(row, "iCVCQuantity", true),
                 FreeItems = Enumerable.Range(1, 10).Select(n => Text(row, "cFree" + n)).ToArray(),

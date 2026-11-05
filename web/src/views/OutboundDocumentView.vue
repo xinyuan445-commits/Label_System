@@ -516,6 +516,7 @@ function fieldVisible(key: string): boolean {
   if (props.documentType === 'inventory-count') {
     if (key.startsWith('header.')) return ['header.documentDate', 'header.warehouseCode', 'header.inCategoryCode', 'header.outCategoryCode', 'header.countByLocation', 'header.remark'].includes(key)
     if (key === 'body.quantity') return true
+    if (key === 'body.availableQty') return false
   }
   if (props.documentType === 'transfer-order' &&
       ['header.departmentCode', 'header.targetDepartmentCode'].includes(key)) {
@@ -594,6 +595,14 @@ function materialNameFor(line: OutboundLine): string {
   )?.materialName ?? ''
 }
 
+function unitNameFor(line: OutboundLine): string {
+  if (props.documentType === 'inventory-count') {
+    const name = inventoryCountSource.value?.lines.find(item => item.materialCode === line.materialCode)?.unitName
+    if (name) return name
+  }
+  return line.unitName || line.unitCode || '--'
+}
+
 function warehouseNameFor(code: string, snapshotName = ''): string {
   return warehousePositionOptions.value.find(
     (item) => item.warehouseCode === code,
@@ -613,7 +622,7 @@ function bodyDisplayValue(line: OutboundLine, key: string): string | number {
     return value === 'UNLABELED_MATERIAL' ? '无标签物料' : '标签'
   }
   if (key === 'body.materialName') return materialNameFor(line) || '--'
-  if (key === 'body.unitCode') return line.unitName || line.unitCode || '--'
+  if (key === 'body.unitCode') return unitNameFor(line)
   if (key === 'body.warehouseCode') {
     return warehouseNameFor(line.warehouseCode, line.warehouseName)
   }
@@ -2461,8 +2470,8 @@ onBeforeRouteLeave((to) => {
               <div v-if="line.batchNo"><dt>批号</dt><dd>{{ line.batchNo }}</dd></div>
               <div><dt>仓库</dt><dd>{{ warehouseNameFor(line.warehouseCode, line.warehouseName) }}</dd></div>
               <div v-if="line.locationCode"><dt>货位</dt><dd>{{ locationNameFor(line.warehouseCode, line.locationCode, line.locationName) }}</dd></div>
-              <div v-if="line.unitCode"><dt>单位</dt><dd>{{ line.unitName || line.unitCode }}</dd></div>
-              <div v-if="line.objectType !== 'UNLABELED_MATERIAL'"><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
+              <div v-if="line.unitCode"><dt>单位</dt><dd>{{ unitNameFor(line) }}</dd></div>
+              <div v-if="documentType !== 'inventory-count' && line.objectType !== 'UNLABELED_MATERIAL'"><dt>标签数量</dt><dd>{{ formatQty(line.availableQty) }}</dd></div>
               <div class="line-used-qty"><dt>{{ documentType === 'inventory-count' ? '盘点数量' : line.objectType === 'UNLABELED_MATERIAL' ? '退料数量' : '本标签使用' }}</dt><dd>{{ line.countQuantityConfirmed === false ? '待填' : formatQty(line.requestedQty) }}</dd></div>
               <template v-if="documentDirection === 'BLUE' && selectedSourceLines.length && materialProgressFor(line)">
                 <div><dt>需拣数量</dt><dd>{{ formatQty(materialProgressFor(line)?.remainingQty ?? 0) }}</dd></div>

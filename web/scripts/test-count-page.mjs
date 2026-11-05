@@ -16,7 +16,7 @@ const source = () => ({ accountId: '888', databaseName: 'UFDATA_888_2021',
     status: 'pending', version: '0x01', lineCount: 1, countByLocation: true, warehousePositionManaged: true,
     inCategoryCode: '107', inCategoryName: '盘盈入库', outCategoryCode: '207', outCategoryName: '盘亏出库' },
   lines: [{ id: 41, lineNo: 1, materialCode: 'M1', materialName: '物料', batchNo: 'B1',
-    warehouseCode: 'W1', locationCode: 'L1', unitCode: 'U1', bookQuantity: 10,
+    warehouseCode: 'W1', locationCode: 'L1', unitCode: 'U1', unitName: '张', bookQuantity: 10,
     actualQuantity: null, freeItems: Array(10).fill(''), requiresAuxiliaryUnit: false }], fingerprint: 'A'.repeat(64) })
 const code = '008|M1|B1|65.00|2609270095'
 const label = () => ({ labelCode: code, objectType: 'PRODUCT_LABEL', materialCode: 'M1', materialName: '物料',
@@ -154,7 +154,7 @@ async function scanAndConfirm(f, v, quantity = '0') {
   v.goToScanStep()
   await v.addBarcode(code)
   assert.notEqual(v.editingLine.value, null)
-  assert.equal(v.editorFieldValue(v.editingLine.value, 'body.quantity'), '')
+  assert.equal(v.editorFieldValue(v.editingLine.value, 'body.quantity'), f.globals.navigator.onLine ? 10 : '')
   v.updateEditorField('body.quantity', quantity)
   await v.confirmEditingLine()
 }
@@ -510,7 +510,7 @@ test('材料出库原有选项、数量校验和表单编辑不受盘点影响',
   assert.equal(v.fieldRequired('header.departmentCode'), true)
 })
 
-test('盘点只读表头和业务身份检查，不接受跨仓、重复行、辅单位或默认0', async t => {
+test('盘点身份检查不接受跨仓、重复行或辅单位，当前余额可作盘点默认值', async t => {
   const f = fixture(t), helper = f.load('@/services/inventory-count-documents')
   assert.throws(() => helper.countFormLine(source(), code, 'x', { ...label(), warehouseCode: 'W2' }))
   const duplicate = source(); duplicate.lines.push({ ...duplicate.lines[0], id: 42 }); duplicate.document.lineCount = 2
@@ -518,8 +518,9 @@ test('盘点只读表头和业务身份检查，不接受跨仓、重复行、�
   const aux = source(); aux.lines[0].requiresAuxiliaryUnit = true
   assert.throws(() => helper.countFormLine(aux, code, 'x', label()))
   const row = helper.countFormLine(source(), code, 'x', label())
+  assert.equal(row.requestedQty, 10); helper.requireCountForm(source(), [row])
+  row.countQuantityConfirmed = false
   assert.throws(() => helper.requireCountForm(source(), [row]))
-  row.countQuantityConfirmed = true; helper.requireCountForm(source(), [row])
 })
 
 test('盘点单位跟随原单物料，不比较旧标签的单位文字或编码', async t => {
@@ -528,8 +529,47 @@ test('盘点单位跟随原单物料，不比较旧标签的单位文字或编�
   for (const unitCode of ['张', 'U2', '']) {
     const row = helper.countFormLine(src, code, 'x', { ...label(), unitCode })
     assert.equal(row.unitCode, '0101')
+    assert.equal(row.unitName, '张')
     assert.throws(() => helper.countFormLine(src, code, 'x', { ...label(), unitCode, materialCode: 'M2' }))
   }
+})
+
+test('盘点默认实时余额并显示单位名称，修改和联网复核不覆盖盘点量', async t => {
+  const f = fixture(t), v = await f.select()
+  v.goToScanStep(); await v.addBarcode(code)
+  assert.equal(v.editorFieldValue(v.editingLine.value, 'body.quantity'), 10)
+  assert.equal(v.bodyDisplayValue(v.editingLine.value, 'body.unitCode'), '张')
+  assert.equal(v.bodyDisplayValue({ ...v.editingLine.value, unitName: undefined }, 'body.unitCode'), '张')
+  assert.equal(v.fieldVisible('body.availableQty'), false)
+  assert.equal(v.readonlyEditorFields.value.some(field => field.key === 'body.availableQty'), false)
+  await v.confirmEditingLine()
+  assert.equal(v.lines.value[0].requestedQty, 10)
+  v.openLineEditor(v.lines.value[0]); v.updateEditorField('body.quantity', '3')
+  await v.confirmEditingLine(); await v.finishDocument()
+  assert.equal(v.lines.value[0].requestedQty, 3)
+  assert.equal(v.lines.value[0].unitName, '张')
+  assert.equal((await f.docs())[0].payload.lines[0].requestedQty, 3)
+  const form = f.load('@/views/OutboundDocumentView.vue').default
+  const rendered = await SSR.renderToString(Vue.createSSRApp({ ...form, setup(props, context) {
+    const state = form.setup(props, context)
+    state.currentStep.value = 2; state.lines.value = v.lines.value
+    return state
+  } }, { documentType: 'inventory-count' }))
+  assert.doesNotMatch(rendered, /标签数量|可用量/)
+  assert.match(rendered, /<dt>单位<\/dt><dd>张<\/dd>/)
+})
+
+test('合法零余额默认盘点0，断网无余额不默认，复核保留手改数量', async t => {
+  const f = fixture(t), helper = f.load('@/services/inventory-count-documents')
+  const zero = helper.countFormLine(source(), code, 'x', { ...label(), availableQty: 0, status: 'USED' })
+  assert.equal(zero.requestedQty, 0); assert.equal(zero.countQuantityConfirmed, true)
+  const offline = helper.countFormLine(source(), code, 'x')
+  assert.equal(offline.countQuantityConfirmed, false); assert.equal(offline.availableQty, null)
+  const direct = helper.countFormLine(null, code, 'x', { ...label(), unitCode: '张' }, 'W1')
+  assert.equal(direct.unitName, '张'); assert.equal(direct.requestedQty, 10)
+  const result = helper.applyDirectCountChecks('W1', [{ ...direct, requestedQty: 2 }],
+    [{ code, status: 'MATCHED', label: { ...label(), availableQty: 8 } }])
+  assert.equal(result[0].requestedQty, 2)
 })
 
 test('后台同步旧回执与新明细保存并发时，不能回写覆盖较新草稿', async t => {

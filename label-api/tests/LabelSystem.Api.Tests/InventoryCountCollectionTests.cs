@@ -119,6 +119,18 @@ public sealed class InventoryCountCollectionTests
     }
 
     [Fact]
+    public void SourceUnitNameSurvivesGatewayJsonAndFingerprint()
+    {
+        var source = Source() with { Lines = [Source().Lines[0] with { UnitCode = "0101", UnitName = "张" }] };
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var restored = JsonSerializer.Deserialize<InventoryCountSource>(JsonSerializer.Serialize(source, options), options)!;
+        Assert.Equal("0101", restored.Lines[0].UnitCode);
+        Assert.Equal("张", restored.Lines[0].UnitName);
+        Assert.NotEqual(InventoryCountRules.Fingerprint(source), InventoryCountRules.Fingerprint(source with {
+            Lines = [source.Lines[0] with { UnitName = "其他名称" }] }));
+    }
+
+    [Fact]
     public async Task LegacyCreateIsRejectedBeforeAnyDatabaseOrGatewayAccess()
     {
         var service = new DocumentPrepareService(null!, null!, null!, null!, null!, null!);

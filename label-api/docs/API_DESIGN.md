@@ -1,10 +1,10 @@
 # Label System API
 
-资料复核：2026-11-05；Business API源码及开发9891/888已升级0.12.4，生产9890/008保留0.12.3。取消盘点标签/原单单位比较，30项盘点测试及真实标签只读核验通过，见[部署记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_UNIT.md)。环境/版本/迁移见[项目状态](../../docs/PROJECT_STATUS.md)，功能边界见[功能档案](../../docs/features/README.md)。写入配置分别管理，打印流程仍仅有开发888/PDF阶段验收，生产008打印未发布。
+资料复核：2026-11-05；Business API源码及开发9891/888为0.12.5，生产9890/008保留0.12.3。原单行透传unitName并纳入源指纹，31项盘点测试/构建和888真实只读验证通过，见[部署记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。其余环境与功能边界见[项目状态](../../docs/PROJECT_STATUS.md)和[功能档案](../../docs/features/README.md)。
 
 三类库存业务的TraceBack写入不能推广到所有九类单据。盘点已支持标准草稿和只读核验；ERP新增/回填、完整范围及差异生效仍未完成。旧盘点建档/执行前返回COUNT_WRITE_NOT_READY，全部盘点能力canSubmit=false，不能用通用接口绕过。
 
-## 盘点现行只读合同（0.12.4）
+## 盘点现行只读合同（0.12.5）
 
 所有下列接口校验当前登录账号的inventory-count功能权限，响应private/no-store。不依赖客户端X-Function-Code授予权限，不接受客户端连接信息、SQL或表名；无匿名离线任务/写令牌。
 
@@ -20,13 +20,13 @@
 ### 原单、仓库及指纹
 
 - document保留单号、日期、仓库、状态、审核人/时间、版本、行数；增加inCategoryCode/inCategoryName、outCategoryCode/outCategoryName及countByLocation、warehousePositionManaged。
-- lines保留CheckVouchs原生行ID、料号、批号、仓库/货位、库存单位、账面bookQuantity、原实盘actualQuantity、10项自由项和辅计量标志。账面取U8原单iCVQuantity，不取Code打印量，actualQuantity区分null和0。最多5000行，不返回被截断的成功结果。
+- lines保留CheckVouchs原生行ID、料号、批号、仓库/货位、库存单位unitCode及名称unitName、账面bookQuantity、原实盘actualQuantity、10项自由项和辅计量标志。账面取U8原单iCVQuantity，不取Code打印量，actualQuantity区分null和0。最多5000行，不返回被截断的成功结果。
 - fingerprint覆盖完整源快照，包括两项类别、两个货位标志及明细。H5可修改目标类别，但不改写原单快照；源指纹变化需保留数量并重新选择同一原单更新基线，不能静默覆盖。
 - 有原单是否盘货位取CheckVouch.bPosCheck，独立于Warehouse.bWhPos；原单标志未知或盘货位=true而仓库未管理货位时拒绝。无原单取所选仓库实时positionManaged，不按Position条数推断，未知不得默认false。
 
 ### 观察明细与只读复核
 
-observations为[{code,quantity}]，最多1000个唯一完整Code；首尾空白/大小写重复拒绝，Code不为空且不超过100字符。quantity为非负十进制字符串或null，最多12位整数、6位小数；null不等于0，逐码返回数量待确认。客户端不能把0当空值或以打印量填默认实盘。
+observations为[{code,quantity}]，最多1000个唯一完整Code；首尾空白/大小写重复拒绝，Code不为空且不超过100字符。quantity为非负十进制字符串或null，最多12位整数、6位小数；null不等于0，逐码返回数量待确认。客户端不能把0当空值或以打印量填默认实盘；在线新扫使用实时标签余额默认填盘点量，允许修改后确认，离线无余额留空，既有盘点量不自动覆盖。
 
 有原单核验前后重新读取原单指纹；无原单核验前后重新读取仓库货位管理状态，客户端countByLocation缺失/不符或配置中途变化返回COUNT_POSITION_CHANGED，提示重置后重试。标签快照按最多100码一批读取旧三表，不创建盘点镜像、业务操作、数量流水或同步事件。
 
@@ -52,9 +52,9 @@ observations为[{code,quantity}]，最多1000个唯一完整Code；首尾空白/
 
 H5使用标准IndexedDB草稿及既有009服务端草稿同步，旧独立库仅作历史导入。原单确认立即保存完整快照，用户表头与源快照分开；离线只保存已加载页面的Code/数量，联网完成前重新核验。专用核验接口本身只读；标准扫码lookup仍可建立/刷新本地标签镜像，不能把两条链描述成全程不写本地库。
 
-保存本机、同步草稿和上传ERP分别显示；MATCHED及canSubmit=false不能解释为允许盘点落账。无迁移、无盘点ERP写入。11月5日单位规则修正后34项H5、30项API及构建通过，开发888真实标签只读核验MATCHED；Gateway沿用11月4日合同/构建证据，实机/物理声音/断网验收仍待完成，见[盘点档案](../../docs/features/盘点单.md)和[本次部署](../../docs/DEPLOYMENT_2026-11-05_COUNT_UNIT.md)。
+保存本机、同步草稿和上传ERP分别显示；MATCHED及canSubmit=false不能解释为允许盘点落账。无迁移、无盘点ERP写入。11月5日36项H5、31项API、Gateway合同及构建通过，开发888实际返回unitName=张及真实标签只读核验MATCHED；实机/物理声音/断网验收仍待完成，见[盘点档案](../../docs/features/盘点单.md)和[本次部署](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。
 
-版本沿革：0.12.0原单读取/核验，0.12.1类别合同，0.12.2无原单只读核验，0.12.3仓库货位状态及前后复核，0.12.4取消标签/原单单位比较（开发888已发布）。
+版本沿革：0.12.0原单读取/核验，0.12.1类别合同，0.12.2无原单只读核验，0.12.3仓库货位状态及前后复核，0.12.4取消标签/原单单位比较，0.12.5透传原单单位名称（开发888已发布）。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
@@ -417,3 +417,5 @@ Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`�
 - `GET templates`只列启用模板，`GET templates/archived`列停用模板；`PUT templates/{id}/state`按行版本停用或重新启用。历史已发布版本保持不可变，停用模板不能用于新打印任务。
 - 旧`/api/labelsystem/simulation/helper/*`、mode及restart-helper已从独立Flask移除，返回404。API合成种子方法属于历史自动化工具，当前SimulationOnly=false时关闭，不作为正常用户功能。
 - `source-print/{kind}`转接请求带本机`deviceId`与`printer`，先校验再预约；首打、补打和恢复继续使用原017唯一事件。
+
+2026-11-05后续0.12.5：原单unitName透传及指纹、36项H5/31项API/Gateway合同与888实际只读验证见[本次发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。

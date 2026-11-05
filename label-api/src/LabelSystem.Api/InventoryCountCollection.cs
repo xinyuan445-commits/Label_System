@@ -16,7 +16,7 @@ public sealed record InventoryCountWarehouse(string AccountId, string DatabaseNa
     string WarehouseName, bool? PositionManaged);
 public sealed record InventoryCountSourceLine(long Id, int LineNo, string MaterialCode, string MaterialName,
     string BatchNo, string WarehouseCode, string LocationCode, string UnitCode, decimal BookQuantity,
-    decimal? ActualQuantity, IReadOnlyList<string> FreeItems, bool RequiresAuxiliaryUnit);
+    decimal? ActualQuantity, IReadOnlyList<string> FreeItems, bool RequiresAuxiliaryUnit, string? UnitName = null);
 public sealed record InventoryCountSource(string AccountId, string DatabaseName, InventoryCountHeader Document,
     IReadOnlyList<InventoryCountSourceLine> Lines, string Fingerprint = "");
 public sealed record InventoryCountObservation(string Code, string? Quantity);

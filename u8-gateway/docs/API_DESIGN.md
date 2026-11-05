@@ -1,8 +1,8 @@
 # U8 Gateway API 设计
 
-资料复核：2026-11-05；源码及最近已记录部署为Gateway0.11.2（11月4日），今日未验证在线服务或重跑测试。版本、环境及迁移见[项目状态](../../docs/PROJECT_STATUS.md)。9880/008、9881/888分别管理配置；开发888/PDF已做阶段打印验收，生产008打印未发布。生产门禁、精确白名单和Business API独立写开关保持原合同。
+资料复核：2026-11-05；源码及开发9881/888为0.11.3，生产9880/008保留0.11.2。盘点原单行unitName从物料主单位关联读取，合同/构建和888实际GET验证通过，见[本次发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_DEFAULT.md)。各环境配置、生产门禁、精确白名单及Business API独立写入开关不变。
 
-## 盘点现行只读合同（0.11.2）
+## 盘点现行只读合同（0.11.3）
 
 | 方法与路径 | 行为 | 返回 / 上限 |
 | --- | --- | --- |
@@ -10,7 +10,7 @@
 | GET /api/v1/inventory-counts/{id} | 完整读取CheckVouch/CheckVouchs，前后核对审核状态、ufts及行数 | 规范化accountId、databaseName、document、lines；最多5000行，超限拒绝 |
 | GET /api/v1/inventory-counts/warehouses/{code} | 按参数化编码读取dWhEndDate IS NULL的Warehouse | accountId、databaseName、warehouseCode、warehouseName、positionManaged |
 
-原单行ID为autoID，bookQuantity取iCVQuantity，actualQuantity保留iCVCQuantity的null/0差异；位置取cPosition、单位取Inventory主单位，另带10项自由项及辅计量标志。行集合单独返回，不重复序列化审核投影的不完整明细。
+原单行ID为autoID，bookQuantity取iCVQuantity，actualQuantity保留iCVCQuantity的null/0差异；位置取cPosition、unitCode取Inventory主单位，unitName通过该编码关联ComputationUnit.cComUnitName，空名称保留空；另带10项自由项及辅计量标志。行集合单独返回，不重复序列化审核投影的不完整明细。
 
 document除原有单号、日期、仓库、状态、版本/行数外，包含以下字段：
 
@@ -27,7 +27,7 @@ document除原有单号、日期、仓库、状态、版本/行数外，包含�
 
 盘点capabilities.create=false、update/delete=false；已有verify/unverify不代表标签盘点差异已接入。原单回填/窄字段Update、无原单Create、完整应盘范围及差异生效仍属[盘点后续方案](../../docs/INVENTORY_COUNT_PLAN.md)，不得把原生接口存在当作业务闭环已验收。
 
-0.11.0为原单首批读取，0.11.1补类别，0.11.2补仓库接口和货位状态。11月4日真实888/008原单、启用及未启用货位管理的仓库已有只读GET证据，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；今日没有新部署、迁移或实测。
+0.11.0为原单首批读取，0.11.1补类别，0.11.2补仓库接口和货位状态。11月4日真实888/008原单、启用及未启用货位管理的仓库已有只读GET证据，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；11月5日0.11.3已发布开发888并实际验证单位名称；无迁移或业务写入，详见上述本次发布记录。
 
 <details>
 <summary>历史阶段更新（2026-10-19～20，保留原记录）</summary>
