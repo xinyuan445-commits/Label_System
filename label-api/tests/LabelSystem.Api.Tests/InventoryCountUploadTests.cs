@@ -66,12 +66,12 @@ public sealed class InventoryCountUploadTests
     }
 
     [Fact]
-    public void NativeRowUsesBookPlusScannedDifferencesAndDoesNotTouchUnscannedRow()
+    public void NativeRowUsesUploadedActualsAndDoesNotTouchBookOrUnscannedRow()
     {
         var result = InventoryCountUploadRules.Build(Operation(Line(1, "TAG1", 10, 7), Line(2, "TAG2", 20, 20)), Request(), Operator());
         Assert.Single(result.Lines);
         Assert.Equal(41L, result.Lines[0]["autoid"]);
-        Assert.Equal(97m, result.Lines[0]["icvcquantity"]);
+        Assert.Equal(27m, result.Lines[0]["icvcquantity"]);
         Assert.False(result.Lines[0].ContainsKey("icvquantity"));
         Assert.Equal(12, InventoryCountUploadRules.SourceId(result));
         Assert.Equal("v1", result.ExpectedVersion);
@@ -80,28 +80,76 @@ public sealed class InventoryCountUploadTests
     }
 
     [Fact]
-    public void ZeroActualAndGainAreDifferencesRatherThanRejectedOrClamped()
+    public void ZeroActualAndGainAreSavedAsActualsIncludingPreviouslyCountedRows()
     {
         var zero = InventoryCountUploadRules.Build(Operation(Line(1, "TAG1", 10, 0)), Request(), Operator());
-        Assert.Equal(90m, zero.Lines.Single()["icvcquantity"]);
+        Assert.Equal(0m, zero.Lines.Single()["icvcquantity"]);
         var gain = InventoryCountUploadRules.Build(Operation(Line(1, "TAG1", 10, 12)), Request(), Operator());
-        Assert.Equal(102m, gain.Lines.Single()["icvcquantity"]);
-        var source = Source() with { Lines = [Source().Lines[0] with { BookQuantity = 1 }] };
-        Assert.Equal("COUNT_NEGATIVE_RESULT", Assert.Throws<ApiException>(() => InventoryCountUploadRules.Build(
-            Operation(Line(1, "TAG1", 10, 0)), Request() with { InventoryCount = new("888", "UFDATA_888_2021", true, source) }, Operator())).Code);
+        Assert.Equal(12m, gain.Lines.Single()["icvcquantity"]);
         var alreadyCounted = Source() with { Lines = [Source().Lines[0] with { ActualQuantity = 90 }] };
-        Assert.Equal("COUNT_ROW_ALREADY_COUNTED", Assert.Throws<ApiException>(() => InventoryCountUploadRules.Build(
-            Operation(Line(1, "TAG1", 10, 9)), Request() with { InventoryCount = new("888", "UFDATA_888_2021", true, alreadyCounted) }, Operator())).Code);
+        Assert.Equal(9m, InventoryCountUploadRules.Build(Operation(Line(1, "TAG1", 10, 9)),
+            Request() with { InventoryCount = new("888", "UFDATA_888_2021", true, alreadyCounted) }, Operator()).Lines.Single()["icvcquantity"]);
     }
 
     [Fact]
-    public void DirectCreateGroupsSameScopeAndPassesDifferencesForNativeStockBaseline()
+    public void DirectCreateGroupsActualsSeparatelyFromNativeStockBaseline()
     {
         var result = InventoryCountUploadRules.Build(Operation(Line(1, "TAG1", 10, 9), Line(2, "TAG2", 20, 22)),
             Request() with { InventoryCount = new("888", "UFDATA_888_2021", false) }, Operator());
         Assert.Null(InventoryCountUploadRules.SourceId(result)); Assert.Single(result.Lines);
         Assert.Equal("M1", result.Lines[0]["cinvcode"]); Assert.Equal("", result.Lines[0]["cposition"]);
-        Assert.Equal(new decimal[] { 1m }, result.Options["countDeltas"]);
+        Assert.Equal(31m, result.Lines.Single()["icvcquantity"]);
+        Assert.False(result.Options.ContainsKey("countDeltas"));
+    }
+
+    [Fact]
+    public void LaterUploadAccumulatesUniqueCodesAndCorrectionReplacesPreviousContribution()
+    {
+        InventoryCountContribution[] previous = [
+            new("OLD", "M1", "B1", "W1", "L1", 14), new("TAG1", "M1", "B1", "W1", "L1", 49),
+            new("OTHER_LOCATION", "M1", "B1", "W1", "L2", 80), new("OTHER_MATERIAL", "M2", "B1", "W1", "L1", 70),
+            new("OTHER_WAREHOUSE", "M1", "B1", "W2", "L1", 60) ];
+        var op = Operation(Line(1, "TAG1", 49, 50));
+        var result = InventoryCountUploadRules.Build(op, Request(), Operator(), previous);
+        Assert.Equal(64m, result.Lines.Single()["icvcquantity"]);
+        Assert.Single((InventoryCountContribution[])result.Options["countPreviousLabels"]!);
+        var repeated = InventoryCountUploadRules.Build(op, Request(), Operator(), previous);
+        Assert.Equal(result.Lines.Single()["icvcquantity"], repeated.Lines.Single()["icvcquantity"]);
+        var warehouseCount = Request() with { InventoryCount = new("888", "UFDATA_888_2021", false) };
+        Assert.Equal(144m, InventoryCountUploadRules.Build(op, warehouseCount, Operator(), previous).Lines.Single()["icvcquantity"]);
+    }
+
+    [Fact]
+    public void UserFourLabelsProduceFiveFiftyAndTwentyRegardlessOfBookAndPrintedQuantities()
+    {
+        var source = Source() with { Lines = [
+            Source().Lines[0] with { BookQuantity = 8 },
+            Source().Lines[0] with { Id = 42, MaterialCode = "M2", BookQuantity = 62 },
+            Source().Lines[0] with { Id = 43, MaterialCode = "M3", BookQuantity = 77 } ] };
+        var op = Operation(Line(1, "008|M1|B1|50.00|001", 5, 5),
+            Line(2, "008|M2|B1|50.00|002", 49, 50) with { MaterialCode = "M2" },
+            Line(3, "008|M3|B1|32.00|003", 14, 14) with { MaterialCode = "M3" },
+            Line(4, "008|M3|B1|19|004", 6, 6) with { MaterialCode = "M3" });
+        var request = Request() with { InventoryCount = new("888", "UFDATA_888_2021", true, source) };
+        var result = InventoryCountUploadRules.Build(op, request, Operator());
+        Assert.Equal(new decimal[] { 5, 50, 20 }, result.Lines.Select(l => (decimal)l["icvcquantity"]!));
+    }
+
+    [Fact]
+    public void CountWritesStableSignedTraceBackDifferencesIncludingZero()
+    {
+        var op = Operation(Line(1, "GAIN", 49, 50), Line(2, "LOSS", 8, 5), Line(3, "SAME", 14, 14), Line(4, "ZERO", 6, 0));
+        var result = new GatewayDocumentResult(true, true, "OK", "", "12", "COUNT12", "v2", null);
+        var rows = op.Lines.ToDictionary(l => l.LineNo, _ => ((string?)"41", (string?)null));
+        var tasks = TraceBackSyncPlanner.Build(op, result, false, rows, "User", "888");
+        Assert.Equal(4, tasks.Count);
+        Assert.All(tasks, t => Assert.Equal("COUNT_ADJUSTMENT", t.EventRole));
+        var payloads = tasks.Select(t => JsonSerializer.Deserialize<TraceBackSyncEventRequest>(t.PayloadJson,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web))!).ToArray();
+        Assert.Equal(new decimal[] { 1, -3, 0, -6 }, payloads.Select(p => p.Quantity));
+        Assert.Equal(new decimal[] { 50, 5, 14, 0 }, payloads.Select(p => p.ExpectedBalance + p.Quantity));
+        Assert.All(payloads, p => { Assert.Null(p.TargetWarehouseCode); Assert.Null(p.TargetLocationCode); });
+        Assert.Equal(tasks.Select(t => t.EventKey), TraceBackSyncPlanner.Build(op, result, false, rows, "User", "888").Select(t => t.EventKey));
     }
 
     [Fact]

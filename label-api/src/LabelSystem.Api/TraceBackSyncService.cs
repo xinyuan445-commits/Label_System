@@ -74,6 +74,7 @@ public static class TraceBackSyncPlanner
             "material-outbound" => "材料出库",
             "transfer" => "调拨单",
             "location-adjustment" => "货位调整单",
+            "inventory-count" => "盘点单",
             _ => throw new InvalidOperationException("单据类型不支持追溯同步。")
         };
         var tasks = new List<TraceBackSyncTaskDraft>(products.Length);
@@ -83,7 +84,12 @@ public static class TraceBackSyncPlanner
             decimal quantity;
             string? targetWarehouse = null;
             string? targetLocation = null;
-            if (operation.ErpDocumentType == "material-outbound")
+            if (operation.ErpDocumentType == "inventory-count")
+            {
+                role = "COUNT_ADJUSTMENT";
+                quantity = line.RequestedQty - line.InventoryQtySnapshot;
+            }
+            else if (operation.ErpDocumentType == "material-outbound")
             {
                 role = redVoucher ? "MATERIAL_RETURN" : "MATERIAL_ISSUE";
                 quantity = redVoucher ? line.RequestedQty : -line.RequestedQty;

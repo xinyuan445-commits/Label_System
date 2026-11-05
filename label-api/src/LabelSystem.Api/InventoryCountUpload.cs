@@ -94,8 +94,19 @@ public static class InventoryCountUploadRules
         if (bad.Status is not null) throw new ApiException(409, bad.Status, bad.Message);
     }
 
+    public static InventoryCountContribution[] PreviousForUpload(IEnumerable<InventoryCountContribution> previous,
+        IReadOnlyList<MaterialOutboundExecutionLine> current, bool byLocation)
+    {
+        var codes = current.Select(l => l.LabelCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return previous.Where(p => !codes.Contains(p.Code) && current.Any(l =>
+            Same(l.MaterialCode, p.MaterialCode) && Same(l.BatchNo, p.BatchNo) &&
+            Same(l.WarehouseCode, p.WarehouseCode) && (!byLocation || Same(l.LocationCode, p.LocationCode)))).ToArray();
+    }
+
+    private static bool Same(string? a, string? b) => string.Equals(a ?? "", b ?? "", StringComparison.OrdinalIgnoreCase);
+
     public static GatewayDocumentRequest Build(MaterialOutboundExecutionOperation operation,
-        DocumentPrepareRequest request, ErpOperator erp)
+        DocumentPrepareRequest request, ErpOperator erp, IReadOnlyList<InventoryCountContribution>? previous = null)
     {
         var context = request.InventoryCount ?? throw new ApiException(409, "COUNT_WRITE_NOT_READY", "请重新保存盘点单。");
         var header = new Dictionary<string, object?>
@@ -106,6 +117,8 @@ public static class InventoryCountUploadRules
         };
         var options = new Dictionary<string, object?> { ["countPartialSave"] = true,
             ["countByLocation"] = context.CountByLocation, ["countSource"] = context.Source };
+        var prior = PreviousForUpload(previous ?? [], operation.Lines, context.CountByLocation);
+        options["countPreviousLabels"] = prior;
         options["countLabels"] = operation.Lines.Select(l => new { Code = l.LabelCode,
             l.MaterialCode, l.BatchNo, l.WarehouseCode, l.LocationCode,
             Balance = l.InventoryQtySnapshot, LatestFlowId = l.TraceBackLatestFlowId, ActualQuantity = l.RequestedQty }).ToArray();
@@ -114,25 +127,22 @@ public static class InventoryCountUploadRules
             Location = context.CountByLocation ? l.LocationCode ?? "" : "" });
         foreach (var group in groups)
         {
-            var delta = group.Sum(l => l.RequestedQty - l.InventoryQtySnapshot);
+            var target = group.Sum(l => l.RequestedQty) + prior.Where(p => Same(p.MaterialCode, group.Key.MaterialCode) &&
+                Same(p.BatchNo, group.Key.BatchNo) && (!context.CountByLocation || Same(p.LocationCode, group.Key.Location)))
+                .Sum(p => p.ActualQuantity);
             if (context.Source is { } source)
             {
                 var matches = source.Lines.Where(l => l.MaterialCode == group.Key.MaterialCode &&
                     (l.BatchNo ?? "") == (group.Key.BatchNo ?? "") &&
                     (!context.CountByLocation || l.LocationCode == group.Key.Location)).ToArray();
                 if (matches.Length != 1) throw new ApiException(409, "COUNT_SOURCE_CHANGED", "原单明细需核对。");
-                if (matches[0].ActualQuantity is decimal prior && prior != 0 && prior != matches[0].BookQuantity)
-                    throw new ApiException(409, "COUNT_ROW_ALREADY_COUNTED", "该行已有盘点结果，请核对原单。");
-                var target = matches[0].BookQuantity + delta;
-                if (target < 0) throw new ApiException(409, "COUNT_NEGATIVE_RESULT", "盘点结果小于0，请核对账面数量。");
                 lines.Add(new Dictionary<string, object?> { ["autoid"] = matches[0].Id, ["icvcquantity"] = target });
             }
             else
                 lines.Add(new Dictionary<string, object?> { ["cinvcode"] = group.Key.MaterialCode,
                     ["ccvbatch"] = group.Key.BatchNo ?? "", ["cposition"] = group.Key.Location,
-                    ["icvquantity"] = 0m, ["icvcquantity"] = 0m, ["irowno"] = lines.Count + 1 });
+                    ["icvquantity"] = 0m, ["icvcquantity"] = target, ["irowno"] = lines.Count + 1 });
         }
-        options["countDeltas"] = groups.Select(g => g.Sum(l => l.RequestedQty - l.InventoryQtySnapshot)).ToArray();
         if (context.Source is null)
         {
             header["dcvdate"] = request.Header.DocumentDate.ToString("yyyy-MM-dd");

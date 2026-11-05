@@ -16,7 +16,7 @@ using U8Gateway.U8.TraceBack;
 
 namespace U8Gateway.U8.Documents
 {
-    internal sealed class CountSaveLabel
+    public sealed class CountSaveLabel
     {
         public string Code { get; set; }
         public string MaterialCode { get; set; }
@@ -29,6 +29,24 @@ namespace U8Gateway.U8.Documents
     }
     public static class InventoryCountSaveRules
     {
+        public static decimal AccumulatedActual(IEnumerable<CountSaveLabel> current, IEnumerable<CountSaveLabel> previous)
+        {
+            var quantities = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+            foreach (var label in previous)
+            {
+                if (string.IsNullOrWhiteSpace(label.Code) || label.ActualQuantity < 0 || quantities.ContainsKey(label.Code))
+                    throw new InvalidOperationException("已上传盘点记录需核对。");
+                quantities.Add(label.Code, label.ActualQuantity);
+            }
+            foreach (var label in current)
+            {
+                if (string.IsNullOrWhiteSpace(label.Code) || label.ActualQuantity < 0)
+                    throw new InvalidOperationException("盘点数量无效。");
+                quantities[label.Code] = label.ActualQuantity;
+            }
+            return quantities.Values.Sum();
+        }
+
         public static string Identity(InventoryCountSource source, bool version = true) =>
             JsonConvert.SerializeObject(new {
                 source.AccountId, source.DatabaseName, source.Document.Id, source.Document.DocumentNo,
@@ -60,8 +78,6 @@ namespace U8Gateway.U8.Documents
                 if (!ids.Add(id) || rows.Length != 1 || quantity < 0 || rows[0].RequiresAuxiliaryUnit ||
                     rows[0].FreeItems == null || rows[0].FreeItems.Any(v => !string.IsNullOrWhiteSpace(v)))
                     throw new InvalidOperationException("盘点明细需核对。");
-                if (rows[0].ActualQuantity.HasValue && rows[0].ActualQuantity.Value != 0 && rows[0].ActualQuantity != rows[0].BookQuantity)
-                    throw new InvalidOperationException("该行已有盘点结果，请核对原单。");
                 rows[0].ActualQuantity = quantity;
             }
             object value;
@@ -113,6 +129,17 @@ namespace U8Gateway.U8.Documents
 
         private static bool SameCount(string a, string b) => string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 
+        private static CountSaveLabel[] PreviousCountLabels(DocumentOperationRequest request)
+        {
+            object raw;
+            if (!request.Options.TryGetValue("countPreviousLabels", out raw))
+                throw new InvalidOperationException("盘点累计记录缺失，请更新服务。");
+            var previous = JsonConvert.DeserializeObject<CountSaveLabel[]>(JsonConvert.SerializeObject(raw));
+            if (previous == null) throw new InvalidOperationException("盘点累计记录无效。");
+            InventoryCountSaveRules.AccumulatedActual(new CountSaveLabel[0], previous);
+            return previous;
+        }
+
         private DocumentOperationResult UpdateCount(U8GatewayRuntimeOptions options, U8DocumentExecution execution)
         {
             long id;
@@ -129,6 +156,7 @@ namespace U8Gateway.U8.Documents
                 current = reader.Get(id);
                 InventoryCountSaveRules.CheckSource(source, current);
                 var labels = ValidateCountLabels(options, execution.Request);
+                var previous = PreviousCountLabels(execution.Request);
                 var expectedPatches = labels.GroupBy(l => new { l.MaterialCode, l.BatchNo,
                     Location = source.Document.CountByLocation == true ? l.LocationCode ?? "" : "" }).ToArray();
                 if (expectedPatches.Length != execution.Request.Lines.Count) throw new InvalidOperationException("盘点汇总不一致。");
@@ -139,8 +167,11 @@ namespace U8Gateway.U8.Documents
                     if (matches.Length != 1 || group.Any(l => !SameCount(l.WarehouseCode, current.Document.WarehouseCode)))
                         throw new InvalidOperationException("标签不属于原盘点单。");
                     var patch = execution.Request.Lines.SingleOrDefault(l => Convert.ToInt64(l["autoid"]) == matches[0].Id);
-                    if (patch == null || Convert.ToDecimal(patch["icvcquantity"]) != matches[0].BookQuantity + group.Sum(l => l.ActualQuantity - l.Balance))
-                        throw new InvalidOperationException("盘点差异不一致。");
+                    var prior = previous.Where(l => SameCount(l.MaterialCode, group.Key.MaterialCode) && SameCount(l.BatchNo, group.Key.BatchNo) &&
+                        SameCount(l.WarehouseCode, current.Document.WarehouseCode) &&
+                        (source.Document.CountByLocation != true || SameCount(l.LocationCode, group.Key.Location)));
+                    if (patch == null || Convert.ToDecimal(patch["icvcquantity"]) != InventoryCountSaveRules.AccumulatedActual(group, prior))
+                        throw new InvalidOperationException("盘点累计数量不一致。");
                 }
                 if (source.Document.Version != execution.Request.ExpectedVersion)
                     throw new InvalidOperationException("原盘点单版本不一致。");
@@ -187,10 +218,7 @@ namespace U8Gateway.U8.Documents
         {
             var labels = ValidateCountLabels(options, request);
             bool byLocation = OptionBoolean(request.Options, "countByLocation");
-            object raw;
-            if (!request.Options.TryGetValue("countDeltas", out raw)) throw new InvalidOperationException("盘点差异缺失。");
-            var deltas = JArray.FromObject(raw).Select(v => v.Value<decimal>()).ToArray();
-            if (deltas.Length != request.Lines.Count) throw new InvalidOperationException("盘点差异不完整。");
+            if (PreviousCountLabels(request).Length != 0) throw new InvalidOperationException("新盘点单不能带入历史累计。");
             if (request.Lines.Select(l => Convert.ToString(l["cinvcode"]) + "|" + Convert.ToString(l["ccvbatch"]) + "|" +
                 (byLocation ? Convert.ToString(l["cposition"]) : "")).Distinct(StringComparer.OrdinalIgnoreCase).Count() != request.Lines.Count)
                 throw new InvalidOperationException("盘点汇总重复。");
@@ -216,7 +244,8 @@ namespace U8Gateway.U8.Documents
                     var scoped = labels.Where(l => SameCount(l.MaterialCode, Convert.ToString(line["cinvcode"])) &&
                         SameCount(l.BatchNo, Convert.ToString(line["ccvbatch"])) && SameCount(l.WarehouseCode, warehouse) &&
                         (!byLocation || SameCount(l.LocationCode, Convert.ToString(line["cposition"])))).ToArray();
-                    if (scoped.Length == 0 || scoped.Sum(l => l.ActualQuantity - l.Balance) != deltas[n])
+                    decimal actual = InventoryCountSaveRules.AccumulatedActual(scoped, new CountSaveLabel[0]);
+                    if (scoped.Length == 0 || Convert.ToDecimal(line["icvcquantity"]) != actual)
                         throw new InvalidOperationException("盘点汇总不一致。");
                     string table = byLocation ? "InvPositionSum" : "CurrentStock";
                     string free = string.Join(" or ", Enumerable.Range(1, 10).Select(i => "nullif(ltrim(rtrim(cFree" + i + ")),N'') is not null"));
@@ -234,10 +263,10 @@ namespace U8Gateway.U8.Documents
                             row.Read();
                             if (Convert.ToInt32(row[1]) != 0) throw new InvalidOperationException("该物料自由项需核对。");
                             decimal book = Convert.ToDecimal(row[0]);
-                            if (book < 0 || book + deltas[n] < 0) throw new InvalidOperationException("盘点结果小于0，请核对库存。");
-                            if (verifyOnly && (Convert.ToDecimal(line["icvquantity"]) != book || Convert.ToDecimal(line["icvcquantity"]) != book + deltas[n]))
+                            if (book < 0) throw new InvalidOperationException("库存账面小于0，请核对。");
+                            if (verifyOnly && Convert.ToDecimal(line["icvquantity"]) != book)
                                 throw new InvalidOperationException("U8库存已变化，请重试。");
-                            line["icvquantity"] = book; line["icvcquantity"] = book + deltas[n];
+                            line["icvquantity"] = book; line["icvcquantity"] = actual;
                         }
                     }
                 }

@@ -61,6 +61,10 @@ namespace U8Gateway.U8.TraceBack
         public TraceBackSyncEventResult Apply(TraceBackSyncEventRequest request)
         {
             Validate(request);
+            if (string.Equals(request.EventRole, "COUNT_ADJUSTMENT", StringComparison.OrdinalIgnoreCase) &&
+                (!Same(_database, "UFDATA_888_2021") || !Same(AccountCode(_accountId), "888") ||
+                 !Same(_environment, "test")))
+                throw new TraceBackSyncException("COUNT_UPLOAD_TEST_ONLY", "盘点同步仅开放888测试账套。");
             bool test = string.Equals(_environment, "test", StringComparison.OrdinalIgnoreCase);
             bool production = string.Equals(
                 _environment, "production", StringComparison.OrdinalIgnoreCase);
@@ -155,7 +159,8 @@ namespace U8Gateway.U8.TraceBack
                 !Guid.TryParse(request.OrderUuid, out _) || !Guid.TryParse(request.GoodsUuid, out _) ||
                 request.ExpectedLatestFlowId <= 0 || request.ExpectedBalance < 0)
                 throw new TraceBackSyncException("TRACEBACK_EVENT_INVALID", "追溯同步参数无效。");
-            switch ((request.EventRole ?? string.Empty).Trim().ToUpperInvariant())
+            request.EventRole = (request.EventRole ?? string.Empty).Trim().ToUpperInvariant();
+            switch (request.EventRole)
             {
                 case "MATERIAL_ISSUE":
                 case "PARTIAL_SOURCE":
@@ -171,6 +176,11 @@ namespace U8Gateway.U8.TraceBack
                     if (request.Quantity != 0) throw InvalidQuantity();
                     if (string.IsNullOrWhiteSpace(request.TargetWarehouseCode))
                         throw new TraceBackSyncException("TRACEBACK_TARGET_MISSING", "目标位置缺失。");
+                    break;
+                case "COUNT_ADJUSTMENT":
+                    if (request.ExpectedBalance + request.Quantity < 0) throw InvalidQuantity();
+                    if (request.TargetWarehouseCode != null || request.TargetLocationCode != null)
+                        throw new TraceBackSyncException("TRACEBACK_EVENT_INVALID", "盘点不能修改标签位置。");
                     break;
                 default:
                     throw new TraceBackSyncException("TRACEBACK_EVENT_ROLE_INVALID", "追溯同步类型无效。");
@@ -318,7 +328,8 @@ VALUES(@json,@uuid,@order_type,GETDATE());", connection, transaction))
             JObject json;
             try { json = JObject.Parse(source.Json); }
             catch { throw new TraceBackSyncException("TRACEBACK_GOODS_JSON_INVALID", "标签属性格式无效。"); }
-            decimal quantity = string.Equals(
+            decimal quantity = string.Equals(request.EventRole, "COUNT_ADJUSTMENT", StringComparison.OrdinalIgnoreCase)
+                ? request.ExpectedBalance + request.Quantity : string.Equals(
                 request.EventRole, "FULL_MOVE", StringComparison.OrdinalIgnoreCase)
                 ? request.ExpectedBalance
                 : Math.Abs(request.Quantity);

@@ -1,6 +1,6 @@
 # U8 Gateway API 设计
 
-资料复核：2026-11-05；源码及开发9881/888为0.11.4（实际环境名test），生产9880/008保留0.11.2。888新增盘点未审核保存；合同/构建、原生只读和补丁validate通过，首张实际保存由用户执行，见[本次发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。原有双层写入门禁及精确账套白名单保持。
+资料复核：2026-11-05；开发9881/888为0.11.5（实际test），生产9880/008保留0.11.2。888盘点累计实盘及上传差异已部署，合同/构建通过，新规则实写由用户测试，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。原双层写门禁及精确白名单保持。
 
 ## 盘点现行只读合同（0.11.4）
 
@@ -29,11 +29,13 @@ document除原有单号、日期、仓库、状态、版本/行数外，包含�
 
 0.11.0为原单首批读取，0.11.1补类别，0.11.2补仓库接口和货位状态。11月4日真实888/008原单、启用及未启用货位管理的仓库已有只读GET证据，见[部署记录](../../docs/DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)；11月5日0.11.3已发布开发888并实际验证单位名称；无迁移或业务写入，详见上述本次发布记录。
 
-## 888盘点保存（0.11.4）
+## 888盘点保存与差异（0.11.5）
 
 有原单使用`PATCH /api/v1/documents/inventory-count/{id}`，只允许header.cirdcode、cordcode、ccvmemo及line.autoid匹配的icvcquantity；不允许增删原单行或改料号。无原单使用现有Create路由。两者保留现有操作归档、请求哈希、幂等和恢复。
 
-内部options必须含countPartialSave=true、countByLocation、countSource（有原单的完整基线）、countLabels（每码期望流水/余额/位置及实盘）、countDeltas（汇总差异）。这些由Business API构造，不是客户端SQL或自由字段扩展。有原单在STA队列中复核完整基线、差异计算及旧三表，合并原Load XML再调用USERPCO.Update，回查全部业务明细，未扫行保留。无原单读取CurrentStock/InvPositionSum账面，调用Insert前再次核对库存和标签，再回查新增结果；自由项/辅计量歧义不放行。
+内部options含countPartialSave=true、countByLocation、可选countSource完整原单基线、countLabels当前标签的流水/余额/位置/实盘，以及countPreviousLabels先前成功上传的贡献。由Business API构造并冻结于018，客户端不能提交历史累计。有原单在STA中复核原单、当前标签及按唯一Code累计的实盘，合并原Load XML后USERPCO.Update并回查；账面及未命中行保留。无原单读取U8库存账面，实盘独立取标签实盘汇总，Insert前再次核对库存及标签。自由项/辅计量歧义不放行。旧countDeltas合同已替代。
+
+现有sync-events增加COUNT_ADJUSTMENT，仅test/888/UFDATA_888_2021允许；差异可正、负、0，盘后余额不能负，不接受目标位置。原Code追加差异，Goods.quantity为盘后余额，保留属性/位置，Order关联盘点/PDA/ERP号。稳定Goods UUID防重复事件；生产及非888在连接写库前拒绝。新规则实写由用户测试，见[发布记录](../../docs/DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
 
 保存只保持未审核，不写TraceBack差异事件。真实Create/Update及失败恢复仍待用户首测；本次只读回查PDD26101311的1000行和PATCH字段validate成功，见[验收边界](../../docs/DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。
 

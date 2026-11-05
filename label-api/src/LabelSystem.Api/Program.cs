@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<InventoryCountCollectionService>();
+builder.Services.AddScoped<InventoryCountUploadRepository>();
 
 var externalConfigPath = Environment.GetEnvironmentVariable("LABELSYSTEM_CONFIG_PATH");
 if (!string.IsNullOrWhiteSpace(externalConfigPath))

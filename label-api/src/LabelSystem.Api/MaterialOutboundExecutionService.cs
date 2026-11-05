@@ -14,7 +14,8 @@ public sealed class MaterialOutboundExecutionService(
     UserRepository users,
     TraceBackSnapshotService traceBack,
     TraceBackSyncService traceBackSync,
-    IOptionsMonitor<LabelSystemOptions> options)
+    IOptionsMonitor<LabelSystemOptions> options,
+    InventoryCountUploadRepository? countUploads = null)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -116,8 +117,7 @@ public sealed class MaterialOutboundExecutionService(
                     ? InventoryCountUploadRules.ReadRows(item.Operation, result, item.Request)
                     : ReadErpRows(item.Operation.ErpDocumentType, result.Document);
                 EnsureErpRows(item.Operation, rows);
-                IReadOnlyList<TraceBackSyncTaskDraft> traceBackTasks = item.Operation.ErpDocumentType == "inventory-count"
-                    ? [] : TraceBackSyncPlanner.Build(item.Operation, result, item.RedVoucher, rows,
+                IReadOnlyList<TraceBackSyncTaskDraft> traceBackTasks = TraceBackSyncPlanner.Build(item.Operation, result, item.RedVoucher, rows,
                         item.Request.OperatorName, options.CurrentValue.ErpAccountId);
                 await executionRepository.CompleteAsync(
                     item.Operation, result, item.RedVoucher, request.AutoApprove && item.Operation.ErpDocumentType != "inventory-count",
@@ -275,8 +275,10 @@ public sealed class MaterialOutboundExecutionService(
                 if (operation.ErpDocumentType == "inventory-count")
                 {
                     InventoryCountUploadRules.RequireContext(document, options.CurrentValue);
+                    var previous = await (countUploads ?? throw new InvalidOperationException("盘点累计服务不可用。"))
+                        .GetOrCreateAsync(operation, document.InventoryCount!, cancellationToken);
                     result.Add(new PreparedGatewayOperation(operation,
-                        InventoryCountUploadRules.Build(operation, document, erp), false));
+                        InventoryCountUploadRules.Build(operation, document, erp, previous), false));
                     continue;
                 }
                 result.Add(new PreparedGatewayOperation(

@@ -1,10 +1,10 @@
 # 标签管理系统数据库设计说明
 
-资料复核：2026-11-05；本次盘点上传保存复用既有结构，无新迁移。实际只读确认开发库business_operation_line允许requested_qty=0及对应库存绑定；未执行业务数据SQL写入。迁移执行范围仍沿用Dev/Test/Prod至016、仅Dev至017的既有记录，未重新读取迁移表，见[上传保存发布](../DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。
+资料复核与开发迁移验证：2026-11-05。仅LabelSystem_Dev安装[053 / 018](053_inventory_count_upload_totals.sql)，开发迁移表及校验值已核对；Dev至018，Test/Prod仍至016，本次未迁移正式库。按用户要求清理开发业务测试数据，保留账号/配置/档案及防重号记录，U8由用户处理。见[发布与清理记录](../DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。
 
-正式打印记录继续复用业务操作、明细、库存流水、Code登记及同步任务；本地网页SQLite只存设计稿/素材。候选盘点迁移018仅在后续确需服务端结构时评估，见[盘点方案](../INVENTORY_COUNT_PLAN.md)；目前未创建或执行，此处不预留编号，实施前重新核对仓库与目标库记录。
+正式打印记录沿用业务操作/明细、库存流水、Code登记及同步任务，本地SQLite只放草稿/素材。018新增inventory_count_upload_plan：operation_id主外键、source_document_id可空、previous_labels_json及created_at，原单ID索引。累计来自成功操作明细，首次生成后冻结，未知结果重试载荷不变；同原单未完成上传阻止新计划。traceback_sync_task角色增加COUNT_ADJUSTMENT。
 
-当前盘点dev.92复用标准草稿和009同步，888上传保存复用business_operation、business_operation_line、对象锁、归档、请求哈希及恢复。不新增盘点表；上传保存不产生盘点差异流水或旧三表同步任务，扫码/上传前可刷新本地镜像审计。审核生效、逐标签多轮修订和差异事件仍后置，首批独立IndexedDB仅保留历史导入。
+盘点dev.92沿用标准草稿及009同步，不增加采集任务。888上传按已上传唯一Code实盘累计，ERP确认后本地事务写盘点流水及稳定任务；旧三表追加实盘减实时余额，全部确认后同步本地余额/版本并解锁。U8仍未审核，审核/弃审关闭，后续不能重复落同一差异。旧独立IndexedDB只作历史导入。
 
 11月4日后续已部署008/888，结构不变；用户另外授权恢复正式admin凭据，使用现有凭据列与PASSWORD_RESET审计，没有保存明文密码或执行迁移。见[部署记录](../DEPLOYMENT_2026-11-04_COUNT_COLLECTION.md)。
 

@@ -69,6 +69,28 @@ internal static class Program
     { if (!Equals(expected, actual)) throw new InvalidOperationException("Inventory count read contract mismatch."); }
     private static void UploadSaveContract()
     {
+        foreach (var account in new[] { "008", "888" })
+        foreach (var role in new[] { "COUNT_ADJUSTMENT", " count_adjustment " })
+        {
+            var writer = new U8Gateway.U8.TraceBack.TraceBackSyncWriter("unused", "UFDATA_" + account + "_2021", "unused", "unused",
+                "production", true, account, "UFDATA_" + account + "_2021", account);
+            try
+            {
+                writer.Apply(new U8Gateway.Contracts.TraceBack.TraceBackSyncEventRequest { EventKey = "count-test", EventRole = role,
+                    Code = "TAG", ExpectedLatestFlowId = 1, ExpectedBalance = 49, Quantity = 1,
+                    OrderUuid = Guid.NewGuid().ToString(), GoodsUuid = Guid.NewGuid().ToString() });
+                throw new InvalidOperationException("Production count writes must be rejected.");
+            }
+            catch (U8Gateway.U8.TraceBack.TraceBackSyncException e) { Equal("COUNT_UPLOAD_TEST_ONLY", e.Code); }
+        }
+        var oldCounts = new[] { new CountSaveLabel { Code = "SAME", ActualQuantity = 49 }, new CountSaveLabel { Code = "OTHER", ActualQuantity = 14 } };
+        var currentCounts = new[] { new CountSaveLabel { Code = "SAME", ActualQuantity = 50 }, new CountSaveLabel { Code = "NEW", ActualQuantity = 6 } };
+        Equal(70m, InventoryCountSaveRules.AccumulatedActual(currentCounts, oldCounts));
+        Equal(70m, InventoryCountSaveRules.AccumulatedActual(currentCounts, oldCounts));
+        Equal(20m, InventoryCountSaveRules.AccumulatedActual(new[] { new CountSaveLabel { Code = "A", ActualQuantity = 14 },
+            new CountSaveLabel { Code = "B", ActualQuantity = 6 } }, new CountSaveLabel[0]));
+        Reject(() => InventoryCountSaveRules.AccumulatedActual(new CountSaveLabel[0], new[] {
+            new CountSaveLabel { Code = "A", ActualQuantity = 1 }, new CountSaveLabel { Code = "a", ActualQuantity = 2 } }));
         var source = new InventoryCountSource { AccountId = "888", DatabaseName = "UFDATA_888_2021",
             Document = new InventoryCountHeader { Id = 12, DocumentNo = "COUNT12", WarehouseCode = "W1",
                 Version = "v1", CountByLocation = true, InCategoryCode = "107", OutCategoryCode = "207" },
@@ -83,6 +105,9 @@ internal static class Program
         Equal((decimal?)97m, expected.Lines[0].ActualQuantity); Equal((decimal?)8m, expected.Lines[1].ActualQuantity);
         Equal((decimal?)0m, source.Lines[0].ActualQuantity); // Preparing a patch cannot mutate the saved baseline.
         InventoryCountSaveRules.CheckSource(source, source);
+        source.Lines[0].ActualQuantity = 14;
+        Equal((decimal?)97m, InventoryCountSaveRules.ExpectedAfter(source, request).Lines[0].ActualQuantity);
+        source.Lines[0].ActualQuantity = 0;
         Reject(() => InventoryCountSaveRules.CheckSource(source, expected));
         expected.Lines[0].ActualQuantity = 0; expected.Lines[0].UnitName = "display changed";
         InventoryCountSaveRules.CheckSource(source, expected);

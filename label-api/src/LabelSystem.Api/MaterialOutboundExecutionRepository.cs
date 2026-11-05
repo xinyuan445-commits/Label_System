@@ -243,10 +243,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             }
             else if (operation.ErpDocumentType == "inventory-count")
             {
-                // Upload saves an unapproved U8 count only. Inventory and TraceBack quantities
-                // must not change before the separate approval/posting workflow is implemented.
-                await ReleaseObjectAsync(connection, transaction, operation, line, cancellationToken);
-                await UpdateLineAsync(connection, transaction, line, erp, cancellationToken);
+                await CompleteCountAsync(connection, transaction, operation, line, erp, cancellationToken);
             }
             else
             {
@@ -942,7 +939,7 @@ public sealed class MaterialOutboundExecutionRepository(SqlConnectionFactory con
             ? (after == 0 ? "USED" : "ACTIVE")
             : (after == 0 ? "OUT_OF_STOCK" : "ACTIVE");
         var updateSql = line.ObjectType == "PRODUCT_LABEL"
-            ? "UPDATE dbo.product_label SET current_qty=@qty,status=@status,last_flow_id=@flow_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;"
+            ? "UPDATE dbo.product_label SET current_qty=@qty,status=@status,last_flow_id=@flow_id,traceback_sync_status='PENDING',updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;"
             : "UPDATE dbo.pallet SET current_qty=@qty,status=@status,last_flow_id=@flow_id,last_operation_id=@operation_id,updated_at=DATEADD(HOUR,8,SYSUTCDATETIME()) WHERE id=@id AND locked_operation_id=@root_id;";
         await using var update = new SqlCommand(updateSql, connection, transaction);
         update.Parameters.Add("@qty", SqlDbType.Decimal).ConfigureDecimal(after);
