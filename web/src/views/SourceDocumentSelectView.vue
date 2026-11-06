@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { requireSalesSourceSelection } from '@/services/sales-documents'
 import { computed, onMounted, ref } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
@@ -67,6 +68,7 @@ const mergedResults = computed(() => {
     lineCount: number
     productCount: number
     totalQuantity: number
+    partnerName?: string
   }>()
   const productCodes = new Map<number, Set<string>>()
   results.value.forEach((line) => {
@@ -79,6 +81,7 @@ const mergedResults = computed(() => {
         lineCount: 1,
         productCount: 1,
         totalQuantity: line.orderQuantity,
+        partnerName: line.partnerName || line.partnerCode,
       })
       productCodes.set(line.sourceDocumentId, new Set([line.productCode]))
       return
@@ -199,6 +202,7 @@ async function confirmSelection(): Promise<void> {
           outboundDocumentType.value, sourceType.value, [selectedDocumentId.value!],
         )
       : selectedLines.value
+    requireSalesSourceSelection(outboundDocumentType.value, lines)
     const workingState = readOutboundDocumentWorkingState(outboundDocumentType.value)
     const conflicts = await findPendingSourceLineConflicts(
       outboundDocumentType.value,
@@ -372,6 +376,7 @@ onBeforeRouteLeave((to) => {
             <span class="result-main">
               <strong>{{ result.sourceDocumentNo }}</strong>
               <span>{{ result.lineCount }}条明细 · {{ result.productCount }}个产品</span>
+              <small v-if="result.partnerName">{{ result.partnerName }}</small>
               <small>{{ result.documentDate }} · {{ result.totalQuantity }}</small>
             </span>
             <span class="material-count">{{ result.lineCount }}</span>
@@ -392,6 +397,8 @@ onBeforeRouteLeave((to) => {
               <strong>{{ result.sourceDocumentNo }}</strong>
               <span>{{ result.productCode }} {{ result.productName }}</span>
               <small>行{{ result.sourceLineNo ?? '-' }} · {{ result.orderQuantity }} · {{ result.documentDate }}</small>
+              <small v-if="result.partnerCode">{{ result.partnerName || result.partnerCode }} · {{ result.partnerCode }}</small>
+              <small v-if="result.plannedQuantity != null">{{ outboundDocumentType === 'sales-return' ? '已发' : '订单' }} {{ result.plannedQuantity }} · {{ outboundDocumentType === 'sales-return' ? '已退' : '已发' }} {{ result.processedQuantity }} · {{ outboundDocumentType === 'sales-return' ? '可退' : '可发' }} {{ result.remainingQuantity }}</small>
             </span>
             <span class="material-count">{{ result.materialCount }}</span>
           </button>

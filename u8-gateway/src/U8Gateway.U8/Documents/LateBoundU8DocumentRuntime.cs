@@ -496,7 +496,7 @@ namespace U8Gateway.U8.Documents
                     return Failure("U8_WRITE_NOT_CONFIRMED",
                         Empty(saveMessage, "U8 新增后回查未确认。"), voucherCode, false);
                 VoucherState state = ReadVoucherState(options, execution.Profile, confirmedId.Value);
-                U8XmlPacket saved = QuerySales(options.U8, confirmedId.Value);
+                U8XmlPacket saved = QuerySales(options.U8, confirmedId.Value, login);
                 return new DocumentOperationResult
                 {
                     Confirmed = state.Exists,
@@ -1247,13 +1247,16 @@ namespace U8Gateway.U8.Documents
                 commonLogin.Load(ref source);
                 connection = ConvertConnection(commonLogin.AccountConnection);
                 voucher = new ClsVoucherCO_SAClass();
-                if (!voucher.InitSys(ref login, VoucherTypeSA.DispatchBlue, ref system))
+                string returnFlag = Convert.ToString(FirstAttribute(Xml(head), "breturnflag"));
+                VoucherTypeSA voucherType = returnFlag == "1" || string.Equals(returnFlag, "true", StringComparison.OrdinalIgnoreCase)
+                    ? VoucherTypeSA.DispatchRed : VoucherTypeSA.DispatchBlue;
+                if (!voucher.InitSys(ref login, voucherType, ref system))
                 {
                     throw new InvalidOperationException("销售 CO 初始化失败。");
                 }
                 string userMode = "CS";
                 voucher.Init(
-                    VoucherTypeSA.DispatchBlue,
+                    voucherType,
                     ref login,
                     ref connection,
                     ref userMode,
@@ -1428,7 +1431,8 @@ namespace U8Gateway.U8.Documents
 
         private static U8XmlPacket QuerySales(
             U8ConnectionOptions options,
-            long voucherId)
+            long voucherId,
+            U8Login.clsLogin existingLogin = null)
         {
             U8Login.clsLogin login = null;
             object common = null;
@@ -1439,7 +1443,7 @@ namespace U8Gateway.U8.Documents
             object body = null;
             try
             {
-                login = Login(options);
+                login = existingLogin ?? Login(options);
                 common = Create("USCOMMON.Login");
                 dynamic commonLogin = common;
                 U8Login.clsLogin source = login;
@@ -1481,14 +1485,14 @@ namespace U8Gateway.U8.Documents
             }
             finally
             {
-                Shutdown(login);
+                if (existingLogin == null) Shutdown(login);
                 Release(body);
                 Release(head);
                 Release(voucher);
                 Release(system);
                 Release(connection);
                 Release(common);
-                Release(login);
+                if (existingLogin == null) Release(login);
             }
         }
 

@@ -2,7 +2,7 @@
 
 2026-11-05后续：盘点CountContext进入既有traceback_sync_task.payload_json，无新迁移；159已完成任务原载荷/哈希保留。已有旧表JSON通过受控工具修复，新增一条操作审计、不新增数量流水或改ERP，见[修复记录](../DEPLOYMENT_2026-11-05_COUNT_JSON_SWITCHES.md)。
 
-资料复核与开发迁移验证：2026-11-05。仅开发库安装[054 / 019](054_merge_inventory_count_baseline_into_events.sql)，Dev至019、Test/Prod仍至016。原基线完整迁入通用事件、原专表删除，无单据/数量/旧表改动，见[发布记录](../DEPLOYMENT_2026-11-05_GENERIC_UPLOAD_BASELINE.md)。
+资料复核与开发迁移验证：2026-11-06。Dev已安装[055 / 020](055_sales_return_function.sql)，仅登记独立退货功能和三个默认关闭的通用设置，不新增表、复制权限或改变业务数量。Test/Prod沿用016已记录基线，未安装本次迁移，见[发布记录](../DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。019归并盘点基线、删除专表的历史结论保持。
 
 正式打印记录及各类业务继续沿用操作/明细、库存流水、Code登记和同步任务。盘点上传基线用business_operation_event的UPLOAD_BASELINE事件，event_data_json保存documentType/sourceDocumentId/previousLabels；首次固定后重试复用。原单ID/单号存business_operation来源字段，不再有inventory_count_upload_plan专表。018历史迁移保留、019负责归并移除。
 
@@ -794,3 +794,8 @@ API0.12.10沿用019及通用业务结构。business_operation_line来源仓库/�
 ## 2026-11-05：移除托盘功能、盘点自动审核（无迁移）
 
 全系统仅产品标签参与业务。pallet_material、pallet、pallet_label_relation及通用明细/流水中的旧字段、外键、记录保留作历史，不删旧迁移。新业务托盘关联为空，读镜像/制单不查询有效装托关系，打印新流水不复制旧归属；取消历史业务仍可释放原锁。盘点审核沿用business_operation.approval_status和原操作事件，差异仍只执行原COUNT_ADJUSTMENT任务。开发库只读核查托盘/有效关系/未完成托盘操作均0，不需数据迁移。见[发布记录](../DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。
+
+
+## 2026-11-06：独立退货（020）
+
+055/020已在LabelSystem_Dev安装：仅向system_function和system_setting插入退货功能及三个默认关闭的设置，不复制权限。业务沿用business_operation（SALES_RETURN/SALES_DELIVERY）、明细、事件和草稿；原单价格等快照进入原归档salesSourceLines。发/退货不生成TraceBack数量任务，不新增专表、数量流水或直接写U8；扫码镜像初始化仍来源旧表。实际U8保存审核尚受许可阻塞，不能据迁移成功认定业务验收。见[发布记录](../DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。

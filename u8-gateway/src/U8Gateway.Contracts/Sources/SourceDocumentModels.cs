@@ -12,6 +12,8 @@ namespace U8Gateway.Contracts.Sources
         public const string PurchaseArrival = "purchase-arrival";
         public const string SalesOrder = "sales-order";
         public const string SalesDelivery = "sales-delivery";
+        public const string SalesOrderReturn = "sales-order-return";
+        public const string SalesDeliveryReturn = "sales-delivery-return";
     }
 
     public sealed class SourceDocumentLine
@@ -27,6 +29,20 @@ namespace U8Gateway.Contracts.Sources
         public decimal OrderQuantity { get; set; }
         public string DepartmentCode { get; set; }
         public int MaterialCount { get; set; }
+        public decimal? PlannedQuantity { get; set; }
+        public decimal? ProcessedQuantity { get; set; }
+        public decimal? RemainingQuantity { get; set; }
+        public string PartnerCode { get; set; }
+        public string PartnerName { get; set; }
+        public string SalesTypeCode { get; set; }
+        public string CurrencyName { get; set; }
+        public decimal? ExchangeRate { get; set; }
+        public decimal? TaxRate { get; set; }
+        public decimal? UnitPrice { get; set; }
+        public decimal? TaxUnitPrice { get; set; }
+        public int? SalesOrderLineId { get; set; }
+        public string SalesOrderNo { get; set; }
+        public decimal? SalesOrderAvailableQuantity { get; set; }
     }
 
     public sealed class SourceDocumentSearchResult

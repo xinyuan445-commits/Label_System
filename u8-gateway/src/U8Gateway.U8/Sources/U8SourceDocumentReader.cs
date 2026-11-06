@@ -29,6 +29,8 @@ namespace U8Gateway.U8.Sources
             public string BusinessTypeColumn { get; set; }
             public string BusinessTypeValue { get; set; }
             public bool ExcludeBusinessType { get; set; }
+            public bool Sales { get; set; }
+            public bool ReturnOrder { get; set; }
         }
 
         private static readonly string[] SupportedSourceTypes =
@@ -38,6 +40,8 @@ namespace U8Gateway.U8.Sources
             SourceDocumentTypeCodes.PurchaseArrival,
             SourceDocumentTypeCodes.SalesOrder,
             SourceDocumentTypeCodes.SalesDelivery,
+            SourceDocumentTypeCodes.SalesOrderReturn,
+            SourceDocumentTypeCodes.SalesDeliveryReturn,
             SourceDocumentTypeCodes.OutsourcingOrder,
             SourceDocumentTypeCodes.SubcontractOrder
         };
@@ -184,10 +188,26 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                 string remaining = profile.UsedQuantity == null
                     ? "isnull(d." + Q(profile.Quantity) + ",0)"
                     : "isnull(d." + Q(profile.Quantity) + ",0)-isnull(d." + Q(profile.UsedQuantity) + ",0)";
+                string planned = "isnull(d." + Q(profile.Quantity) + ",0)";
+                string processed = profile.UsedQuantity == null ? "0" : "isnull(d." + Q(profile.UsedQuantity) + ",0)";
+                if (profile.ReturnOrder)
+                {
+                    // iFHQuantity already includes returns: subtracting fretquantity again would understate availability.
+                    remaining = "isnull(d.[iFHQuantity],0)";
+                    processed = "isnull(d.[fretquantity],0)";
+                    planned = remaining + "+" + processed;
+                }
+                string orderAvailable = profile.ReturnOrder ? "isnull(d.[iFHQuantity],0)" :
+                    profile.Sales && profile.HeaderTable == "DispatchList" ?
+                    "(select s.iFHQuantity from dbo.SO_SODetails s where s.iSOsID=d.iSOsID)" : "cast(null as decimal(28,6))";
+                if (profile.Sales && profile.HeaderTable == "DispatchList")
+                    remaining = "case when " + orderAvailable + "<" + remaining + " then " + orderAvailable + " else " + remaining + " end";
                 var filters = new List<string>
                 {
                     remaining + " > 0"
                 };
+                if (profile.Sales && profile.HeaderTable == "DispatchList")
+                    filters.Add("isnull(h.bReturnFlag,0)=0 and d.iQuantity>0");
                 if (profile.AuditColumn != null)
                     filters.Add("nullif(ltrim(rtrim(convert(nvarchar(100),h." + Q(profile.AuditColumn) + "))),N'') is not null");
                 if (profile.HeaderCloseColumn != null)
@@ -220,6 +240,11 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                     "d." + Q(profile.InventoryCode) + " ProductCode," +
                     "isnull(i.cInvName,N'') ProductName," + remaining + " OrderQuantity," +
                     (profile.DepartmentCode == null ? "N''" : "isnull(h." + Q(profile.DepartmentCode) + ",N'')") + " DepartmentCode " +
+                    (profile.Sales ? "," + planned + " PlannedQuantity," + processed + " ProcessedQuantity," + remaining + " RemainingQuantity," +
+                        "h.cCusCode PartnerCode,isnull((select top(1) c.cCusName from dbo.Customer c where c.cCusCode=h.cCusCode),N'') PartnerName," +
+                        "h.cSTCode SalesTypeCode,h.cexch_name CurrencyName,h.iExchRate ExchangeRate," +
+                        "d.iTaxRate TaxRate,d.iUnitPrice UnitPrice,d.iTaxUnitPrice TaxUnitPrice,d.iSOsID SalesOrderLineId," +
+                        (profile.HeaderTable == "SO_SOMain" ? "h.cSOCode" : "d.cSOCode") + " SalesOrderNo," + orderAvailable + " SalesOrderAvailableQuantity " : "") +
                     "from dbo." + Q(profile.HeaderTable) + " h " +
                     "join dbo." + Q(profile.LineTable) + " d on d." + Q(profile.HeaderId) + "=h." + Q(profile.HeaderId) + " " +
                     "left join dbo.Inventory i on i.cInvCode=d." + Q(profile.InventoryCode) + " " +
@@ -256,7 +281,21 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                                 ProductName = Convert.ToString(reader["ProductName"]),
                                 OrderQuantity = Math.Max(0m, Convert.ToDecimal(reader["OrderQuantity"])),
                                 DepartmentCode = Convert.ToString(reader["DepartmentCode"]),
-                                MaterialCount = 1
+                                MaterialCount = 1,
+                                PlannedQuantity = profile.Sales ? NullableDecimal(reader["PlannedQuantity"]) : null,
+                                ProcessedQuantity = profile.Sales ? NullableDecimal(reader["ProcessedQuantity"]) : null,
+                                RemainingQuantity = profile.Sales ? NullableDecimal(reader["RemainingQuantity"]) : null,
+                                PartnerCode = profile.Sales ? Convert.ToString(reader["PartnerCode"]) : null,
+                                PartnerName = profile.Sales ? Convert.ToString(reader["PartnerName"]) : null,
+                                SalesTypeCode = profile.Sales ? Convert.ToString(reader["SalesTypeCode"]) : null,
+                                CurrencyName = profile.Sales ? Convert.ToString(reader["CurrencyName"]) : null,
+                                ExchangeRate = profile.Sales ? NullableDecimal(reader["ExchangeRate"]) : null,
+                                TaxRate = profile.Sales ? NullableDecimal(reader["TaxRate"]) : null,
+                                UnitPrice = profile.Sales ? NullableDecimal(reader["UnitPrice"]) : null,
+                                TaxUnitPrice = profile.Sales ? NullableDecimal(reader["TaxUnitPrice"]) : null,
+                                SalesOrderLineId = profile.Sales && reader["SalesOrderLineId"] != DBNull.Value ? (int?)Convert.ToInt32(reader["SalesOrderLineId"]) : null,
+                                SalesOrderNo = profile.Sales ? Convert.ToString(reader["SalesOrderNo"]) : null,
+                                SalesOrderAvailableQuantity = profile.Sales ? NullableDecimal(reader["SalesOrderAvailableQuantity"]) : null
                             });
                         }
                     }
@@ -274,29 +313,40 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                 profile = new SourceProfile { SourceType=sourceType, HeaderTable="PO_Pomain", LineTable="PO_Podetails", HeaderId="POID", DocumentCode="cPOID", DocumentDate="dPODate", LineId="ID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iArrQTY", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cbCloser" };
             else if (string.Equals(sourceType, SourceDocumentTypeCodes.PurchaseArrival, StringComparison.OrdinalIgnoreCase))
                 profile = new SourceProfile { SourceType=sourceType, HeaderTable="PU_ArrivalVouch", LineTable="PU_ArrivalVouchs", HeaderId="ID", DocumentCode="cCode", DocumentDate="dDate", LineId="Autoid", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="fValidInQuan", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cCloser", BusinessTypeColumn="cBusType", BusinessTypeValue="委外加工", ExcludeBusinessType=true };
-            else if (string.Equals(sourceType, SourceDocumentTypeCodes.SalesOrder, StringComparison.OrdinalIgnoreCase))
-                profile = new SourceProfile { SourceType=sourceType, HeaderTable="SO_SOMain", LineTable="SO_SODetails", HeaderId="ID", DocumentCode="cSOCode", DocumentDate="dDate", LineId="AutoID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iFHQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cSCloser" };
+            else if (string.Equals(sourceType, SourceDocumentTypeCodes.SalesOrder, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(sourceType, SourceDocumentTypeCodes.SalesOrderReturn, StringComparison.OrdinalIgnoreCase))
+                profile = new SourceProfile { SourceType=sourceType, HeaderTable="SO_SOMain", LineTable="SO_SODetails", HeaderId="ID", DocumentCode="cSOCode", DocumentDate="dDate", LineId="iSOsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iFHQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cSCloser", Sales=true, ReturnOrder=string.Equals(sourceType,SourceDocumentTypeCodes.SalesOrderReturn,StringComparison.OrdinalIgnoreCase) };
             else if (string.Equals(sourceType, SourceDocumentTypeCodes.SalesDelivery, StringComparison.OrdinalIgnoreCase))
                 profile = new SourceProfile { SourceType=sourceType, HeaderTable="DispatchList", LineTable="DispatchLists", HeaderId="DLID", DocumentCode="cDLCode", DocumentDate="dDate", LineId="iDLsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iSOutQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cSCloser", BusinessTypeColumn="cBusType", BusinessTypeValue="普通销售" };
+            else if (string.Equals(sourceType, SourceDocumentTypeCodes.SalesDeliveryReturn, StringComparison.OrdinalIgnoreCase))
+                profile = new SourceProfile { SourceType=sourceType, HeaderTable="DispatchList", LineTable="DispatchLists", HeaderId="DLID", DocumentCode="cDLCode", DocumentDate="dDate", LineId="iDLsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iRetQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", BusinessTypeColumn="cBusType", BusinessTypeValue="普通销售", Sales=true };
             else if (string.Equals(sourceType, SourceDocumentTypeCodes.OutsourcingOrder, StringComparison.OrdinalIgnoreCase) || string.Equals(sourceType, SourceDocumentTypeCodes.SubcontractOrder, StringComparison.OrdinalIgnoreCase))
                 profile = new SourceProfile { SourceType=SourceDocumentTypeCodes.OutsourcingOrder, HeaderTable="OM_MOMain", LineTable="OM_MODetails", HeaderId="MOID", DocumentCode="cCode", DocumentDate="dDate", LineId="MODetailsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iReceivedQTY", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="bClose" };
             else
                 throw new InvalidOperationException("不支持的源单类型。");
 
             EnsureTable(connection, profile.HeaderTable);
+            if (profile.ReturnOrder)
+            {
+                RequireColumn(connection, profile.LineTable, "fretquantity");
+                RequireColumn(connection, profile.LineTable, "iFHQuantity");
+            }
             EnsureTable(connection, profile.LineTable);
             profile.HeaderId = RequireColumn(connection, profile.HeaderTable, profile.HeaderId);
             profile.DocumentCode = RequireColumn(connection, profile.HeaderTable, profile.DocumentCode);
             profile.DocumentDate = RequireColumn(connection, profile.HeaderTable, profile.DocumentDate);
-            profile.LineId = RequireColumn(connection, profile.LineTable, profile.LineId, "AutoID", "ID");
+            profile.LineId = profile.Sales ? RequireColumn(connection, profile.LineTable, profile.LineId) :
+                RequireColumn(connection, profile.LineTable, profile.LineId, "AutoID", "ID");
             profile.LineNo = OptionalColumn(connection, profile.LineTable, profile.LineNo, "iRowNo");
             profile.InventoryCode = RequireColumn(connection, profile.LineTable, profile.InventoryCode);
             profile.Quantity = RequireColumn(connection, profile.LineTable, profile.Quantity, "iQuantity", "fValidInQuan");
-            profile.UsedQuantity = OptionalColumn(connection, profile.LineTable, profile.UsedQuantity, "iArrQTY", "iReceivedQTY", "iFHQuantity", "iSOutQuantity");
+            profile.UsedQuantity = profile.Sales ? RequireColumn(connection, profile.LineTable, profile.UsedQuantity) :
+                OptionalColumn(connection, profile.LineTable, profile.UsedQuantity, "iArrQTY", "iReceivedQTY", "iFHQuantity", "iSOutQuantity");
             profile.DepartmentCode = OptionalColumn(connection, profile.HeaderTable, profile.DepartmentCode, "cDepCode");
             profile.AuditColumn = OptionalColumn(connection, profile.HeaderTable, profile.AuditColumn, "cVerifier", "cAuditor");
-            profile.HeaderCloseColumn = OptionalColumn(connection, profile.HeaderTable, profile.HeaderCloseColumn, "cCloser");
-            profile.LineCloseColumn = OptionalColumn(connection, profile.LineTable, profile.LineCloseColumn, "cbCloser", "cSCloser", "cCloser", "bClose");
+            bool returnView = profile.ReturnOrder || profile.Sales && profile.HeaderTable == "DispatchList";
+            profile.HeaderCloseColumn = returnView ? null : OptionalColumn(connection, profile.HeaderTable, profile.HeaderCloseColumn, "cCloser");
+            profile.LineCloseColumn = returnView ? null : OptionalColumn(connection, profile.LineTable, profile.LineCloseColumn, "cbCloser", "cSCloser", "cCloser", "bClose");
             profile.BusinessTypeColumn = OptionalColumn(connection, profile.HeaderTable, profile.BusinessTypeColumn, "cBusType");
             return profile;
         }
@@ -346,6 +396,7 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
         {
             return "[" + identifier.Replace("]", "]]" ) + "]";
         }
+        private static decimal? NullableDecimal(object value) => value == DBNull.Value ? (decimal?)null : Convert.ToDecimal(value);
 
         public IList<SourceDocumentLine> GetProductionOrderLines(
             IEnumerable<int> sourceDocumentIds)

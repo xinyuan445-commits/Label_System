@@ -1062,16 +1062,16 @@ static async Task ValidateDocumentReferenceDataAsync(
             throw new ApiException(StatusCodes.Status400BadRequest,
                 "PURCHASE_TYPE_INVALID", "请选择有效采购类型。");
     }
-    if (documentType is "delivery-note" or "sales-outbound")
+    if (documentType is "delivery-note" or "sales-return" or "sales-outbound")
     {
-        salesType ??= documentType == "delivery-note" ? header.CategoryCode : null;
+        salesType ??= documentType is "delivery-note" or "sales-return" ? header.CategoryCode : null;
         if (string.IsNullOrWhiteSpace(salesType) ||
             !await referenceData.DocumentTypeExistsAsync("SALES", salesType, cancellationToken))
             throw new ApiException(StatusCodes.Status400BadRequest,
                 "SALES_TYPE_INVALID", "请选择有效销售类型。");
     }
 
-    if (documentType is "purchase-arrival" or "outsourcing-arrival" or "purchase-inbound" or "delivery-note")
+    if (documentType is "purchase-arrival" or "outsourcing-arrival" or "purchase-inbound" or "delivery-note" or "sales-return")
     {
         var currency = AdditionalText(header.AdditionalFields, "currencyCode");
         if (string.IsNullOrWhiteSpace(currency) ||
@@ -1081,7 +1081,7 @@ static async Task ValidateDocumentReferenceDataAsync(
     }
 
     if (documentType == "location-adjustment" ||
-        documentType is "purchase-arrival" or "outsourcing-arrival" or "delivery-note") return;
+        documentType is "purchase-arrival" or "outsourcing-arrival" or "delivery-note" or "sales-return") return;
 
     if (documentType is "transfer-order" or "inventory-count")
     {
@@ -1185,6 +1185,7 @@ static string ApprovalDocumentType(string? documentType) => documentType?.Trim()
     "outsourcing-arrival" => "subcontract-arrival",
     "purchase-inbound" => "purchase-receipt",
     "delivery-note" => "sales-delivery",
+    "sales-return" => "sales-delivery",
     "sales-outbound" => "sales-outbound",
     "material-outbound" => "material-outbound",
     "transfer-order" => "transfer",
@@ -1200,6 +1201,7 @@ static string DocumentFunctionCode(string? documentType) => documentType?.Trim()
     "outsourcing-arrival" => "outsourcing-arrival",
     "purchase-inbound" => "purchase-inbound",
     "delivery-note" => "delivery-note",
+    "sales-return" => "sales-return",
     "sales-outbound" => "sales-outbound",
     "material-outbound" => "material-outbound",
     "transfer-order" => "transfer-order",

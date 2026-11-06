@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/U8Gateway.U8/U8Gateway.U8.csproj" />
+    <ProjectReference Include="../../src/U8Gateway.Metadata/U8Gateway.Metadata.csproj" />
+    <ProjectReference Include="../../src/U8Gateway.Persistence/U8Gateway.Persistence.csproj" />
+  </ItemGroup>
+</Project>

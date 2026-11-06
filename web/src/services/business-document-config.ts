@@ -3,6 +3,7 @@ export const businessDocumentTypes = [
   'outsourcing-arrival',
   'purchase-inbound',
   'delivery-note',
+  'sales-return',
   'sales-outbound',
   'material-outbound',
   'transfer-order',
@@ -39,6 +40,7 @@ export interface BusinessDocumentConfig {
   detailTitle: string
   quantityLabel: string
   supportsRedBlue?: boolean
+  fixedDirection?: 'BLUE' | 'RED'
 }
 
 const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
@@ -98,7 +100,13 @@ const configs: Record<BusinessDocumentType, BusinessDocumentConfig> = {
     productionBatch: false,
     detailTitle: '发货明细',
     quantityLabel: '发货数量',
-    supportsRedBlue: true,
+    fixedDirection: 'BLUE',
+  },
+  'sales-return': {
+    title: '退货单', draftKey: 'label-system:draft:sales-return',
+    sourceTypes: [{ value: 'sales-delivery-return', label: '发货单' }, { value: 'sales-order-return', label: '销售订单' }],
+    partnerLabel: '客户', partnerRequired: true, warehouseLabel: '仓库', warehouseRequired: true,
+    departmentRequired: true, productionBatch: false, detailTitle: '退货明细', quantityLabel: '退货数量', fixedDirection: 'RED',
   },
   'sales-outbound': {
     title: '销售出库单',

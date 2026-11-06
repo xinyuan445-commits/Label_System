@@ -22,6 +22,7 @@ public sealed class UserDataScopeService(
             ["outsourcing-arrival"] = "IN",
             ["purchase-inbound"] = "IN",
             ["delivery-note"] = "OUT",
+            ["sales-return"] = "IN",
             ["sales-outbound"] = "OUT",
             ["material-outbound"] = "OUT",
             ["transfer-order"] = null,

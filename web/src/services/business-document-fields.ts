@@ -116,7 +116,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
       field('header.taxRate', '税率', 'header', 'number'),
     )
   }
-  if (documentType === 'delivery-note') {
+  if ((documentType === 'delivery-note' || documentType === 'sales-return')) {
     fields.push(
       field('header.salesTypeCode', '销售类型', 'header', 'text', true, true),
       field('header.paymentCode', '收款条件', 'header', 'text'),
@@ -160,7 +160,7 @@ function standardHeaderFields(documentType: BusinessDocumentType): DocumentField
 }
 
 function longCustomCount(documentType: BusinessDocumentType): number {
-  if (['purchase-arrival', 'outsourcing-arrival', 'purchase-inbound', 'delivery-note']
+  if (['purchase-arrival', 'outsourcing-arrival', 'purchase-inbound', 'delivery-note', 'sales-return']
     .includes(documentType)) return 3
   if (['material-outbound', 'sales-outbound', 'transfer-order'].includes(documentType)) return 2
   return 0
@@ -232,8 +232,8 @@ function bodyBasicGroup(documentType: BusinessDocumentType): DocumentFieldGroup 
 
 function bodyCustomGroups(documentType: BusinessDocumentType): DocumentFieldGroup[] {
   const textNumbers = [22, 23, 24, 25, 28, 29, 30, 31, 32, 33]
-  const dateNumbers = documentType === 'delivery-note' ? [] : [36, 37]
-  if (documentType === 'delivery-note') textNumbers.push(36, 37)
+  const dateNumbers = (documentType === 'delivery-note' || documentType === 'sales-return') ? [] : [36, 37]
+  if ((documentType === 'delivery-note' || documentType === 'sales-return')) textNumbers.push(36, 37)
   const groups: DocumentFieldGroup[] = [
     {
       key: 'body-text-custom', label: '文本字段', area: 'body', valueType: 'text',

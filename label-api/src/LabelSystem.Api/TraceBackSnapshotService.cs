@@ -68,7 +68,7 @@ public sealed class TraceBackSnapshotService(
     TraceBackMirrorRepository mirrors)
 {
     private static readonly HashSet<string> TraceBackDocuments = new(
-        ["material-outbound", "transfer-order", "location-adjustment", "inventory-count"],
+        ["material-outbound", "transfer-order", "location-adjustment", "inventory-count", "delivery-note", "sales-return"],
         StringComparer.OrdinalIgnoreCase);
 
     public async Task<InventoryLookupResult> LookupAsync(
@@ -99,7 +99,7 @@ public sealed class TraceBackSnapshotService(
         foreach (var batch in products.Select(line => line.Code).Distinct(StringComparer.OrdinalIgnoreCase).Chunk(100))
             snapshots.AddRange(await gateway.GetTraceBackSnapshotsAsync(batch, cancellationToken));
         var byCode = snapshots.ToDictionary(item => item.Code, StringComparer.OrdinalIgnoreCase);
-        var redReturn = documentType.Equals("material-outbound", StringComparison.OrdinalIgnoreCase) &&
+        var redReturn = documentType == "sales-return" || documentType.Equals("material-outbound", StringComparison.OrdinalIgnoreCase) &&
                         direction.Equals("RED", StringComparison.OrdinalIgnoreCase);
         foreach (var line in products)
         {
@@ -119,7 +119,7 @@ public sealed class TraceBackSnapshotService(
         bool redVoucher,
         CancellationToken cancellationToken)
     {
-        if (erpDocumentType is not "material-outbound" and not "transfer" and not "location-adjustment" and not "inventory-count")
+        if (erpDocumentType is not "material-outbound" and not "transfer" and not "location-adjustment" and not "inventory-count" and not "sales-delivery")
             return;
         var products = lines.Where(line => line.ObjectType == "PRODUCT_LABEL").ToArray();
         if (products.Length == 0) return;
@@ -127,7 +127,7 @@ public sealed class TraceBackSnapshotService(
         foreach (var batch in products.Select(line => line.LabelCode).Distinct(StringComparer.OrdinalIgnoreCase).Chunk(100))
             snapshots.AddRange(await gateway.GetTraceBackSnapshotsAsync(batch, cancellationToken));
         var byCode = snapshots.ToDictionary(item => item.Code, StringComparer.OrdinalIgnoreCase);
-        var redReturn = erpDocumentType == "material-outbound" && redVoucher;
+        var redReturn = erpDocumentType is "material-outbound" or "sales-delivery" && redVoucher;
         foreach (var line in products)
         {
             if (!byCode.TryGetValue(line.LabelCode, out var snapshot))

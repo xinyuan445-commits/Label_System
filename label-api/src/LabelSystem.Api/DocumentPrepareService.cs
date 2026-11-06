@@ -65,6 +65,9 @@ public sealed class DocumentPrepareService(
             ["delivery-note"] = new(
                 "delivery-note", "发货单", "SALES_DELIVERY", "sales-delivery", "SD",
                 true, false, false, true, false, false, true, false, true),
+            ["sales-return"] = new(
+                "sales-return", "退货单", "SALES_RETURN", "sales-delivery", "SR",
+                true, false, false, true, false, false, true, false, false),
             ["sales-outbound"] = new(
                 "sales-outbound", "销售出库单", "SALES_OUTBOUND", "sales-outbound", "SO",
                 true, false, false, true, true, false, true, false, true),
@@ -89,13 +92,14 @@ public sealed class DocumentPrepareService(
 
         var payloadJson = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var payloadHash = Hashing.Sha256(payloadJson);
-        if (count)
+        if (SalesDocumentRules.Applies(documentType)) SalesDocumentRules.RequireDirection(documentType, request.Header.DocumentDirection);
+        if (count || SalesDocumentRules.Applies(documentType))
         {
-            InventoryCountUploadRules.RequireContext(request, options.CurrentValue);
+            if (count) InventoryCountUploadRules.RequireContext(request, options.CurrentValue);
             var existing = await operations.FindExistingAsync(request.ClientRequestId, payloadHash,
                 options.CurrentValue.U8WritesEnabled, cancellationToken);
             if (existing is not null) return existing;
-            await InventoryCountUploadRules.ValidateAsync(request,
+            if (count) await InventoryCountUploadRules.ValidateAsync(request,
                 inventoryCounts ?? throw new InvalidOperationException("盘点服务不可用。"), cancellationToken);
         }
         var hasSource = !count && HasSource(request);
@@ -105,7 +109,7 @@ public sealed class DocumentPrepareService(
         await ValidateManualReturnLinesAsync(request, definition, cancellationToken);
 
         if (hasSource)
-            await ValidateSourceLinesAsync(request.Lines, cancellationToken);
+            await ValidateSourceLinesAsync(request, definition.DocumentType, cancellationToken);
 
         var archiveResult = await archive.CreateAsync(
             definition.DocumentType, definition.Title, "prepare", requestId, request, cancellationToken);
@@ -116,9 +120,11 @@ public sealed class DocumentPrepareService(
     }
 
     private async Task ValidateSourceLinesAsync(
-        IReadOnlyList<DocumentPrepareLine> lines,
+        DocumentPrepareRequest request,
+        string documentType,
         CancellationToken cancellationToken)
     {
+        var lines = request.Lines;
         if (lines.Any(line => string.IsNullOrWhiteSpace(line.SourceType) ||
                               !line.SourceDocumentId.HasValue || !line.SourceLineId.HasValue ||
                               string.IsNullOrWhiteSpace(line.SourceDocumentNo) ||
@@ -135,6 +141,8 @@ public sealed class DocumentPrepareService(
                          .Chunk(20))
                 current.AddRange(await u8.GetSourceDocumentLinesAsync(
                     sourceGroup.Key, documentIds, cancellationToken));
+            if (SalesDocumentRules.Applies(documentType))
+                SalesDocumentRules.ValidateSources(documentType, request, current);
             var byLine = current.ToDictionary(line => line.SourceLineId);
             foreach (var requestGroup in sourceGroup.GroupBy(line => line.SourceLineId!.Value))
             {
@@ -307,7 +315,12 @@ public sealed class DocumentPrepareService(
 
     private static bool RequiresPartner(string documentType) => documentType is
         "purchase-arrival" or "outsourcing-arrival" or "purchase-inbound" or
-        "delivery-note" or "sales-outbound";
+        "delivery-note" or "sales-return" or "sales-outbound";
+
+    public Task<MaterialOutboundPrepareResult?> FindExistingSalesAsync(string type, DocumentPrepareRequest request, CancellationToken ct) =>
+        SalesDocumentRules.Applies(type) ? operations.FindExistingAsync(request.ClientRequestId,
+            Hashing.Sha256(JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web))),
+            options.CurrentValue.U8WritesEnabled, ct) : Task.FromResult<MaterialOutboundPrepareResult?>(null);
 
     private static void ValidateDocumentDirection(string? value)
     {

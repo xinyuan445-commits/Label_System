@@ -25,6 +25,19 @@ export interface SourceDocumentLine {
   sourceCreatedBy?: string | null
   sourceStatus?: string
   locationCode?: string
+  plannedQuantity?: number | null
+  processedQuantity?: number | null
+  remainingQuantity?: number | null
+  partnerCode?: string
+  partnerName?: string
+  salesTypeCode?: string
+  currencyName?: string
+  exchangeRate?: number | null
+  taxRate?: number | null
+  unitPrice?: number | null
+  taxUnitPrice?: number | null
+  salesOrderLineId?: number | null
+  salesOrderNo?: string
 }
 
 export interface MaterialRequirementLine {

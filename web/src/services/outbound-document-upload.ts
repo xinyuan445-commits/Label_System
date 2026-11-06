@@ -236,6 +236,8 @@ async function submitInventoryDocument(
         reason: payload.remark || null,
         ...(count ? { inventoryCount: { ...payload.inventoryCountContext,
           countByLocation: flag === '1', source: payload.inventoryCountSource ?? null } } : {}),
+        ...(['delivery-note', 'sales-return'].includes(document.documentType)
+          ? { salesSourceLines: payload.selectedSourceLines ?? [] } : {}),
         header: {
           documentDate: payload.documentDate,
           documentDirection: payload.documentDirection || 'BLUE',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isSalesDocument, salesSourceProgress } from '@/services/sales-documents'
 import { computed } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
@@ -25,6 +26,8 @@ const router = useRouter()
 let allowDocumentReturn = false
 
 interface WorkingDetailLine {
+  materialCode?: string
+  requestedQty?: number
   sourceAllocations?: SourceQuantityAllocation[]
 }
 
@@ -94,6 +97,7 @@ const overPickedByRequirement = computed(() => {
 function pickedQuantity(line: MaterialRequirementLine): number {
   return pickedByRequirement.value.get(line.requirementId) ?? 0
 }
+const salesProgress = computed(() => salesSourceProgress(selectedSourceLines.value, workingPayload.value.lines ?? []))
 
 function isIssueComplete(line: MaterialRequirementLine): boolean {
   return Number(line.remainingQuantity) <= 0.000001
@@ -201,6 +205,8 @@ onBeforeRouteLeave((to) => {
             <b>{{ documentType === 'inventory-count' ? '账面 ' : '' }}{{ line.orderQuantity }}</b>
           </div>
           <p>{{ line.sourceDocumentNo }} · 行{{ line.sourceLineNo ?? '-' }}</p>
+            <p v-if="isSalesDocument(documentType)">{{ documentType === 'sales-return' ? '已发' : '订单' }} {{ line.plannedQuantity }} · {{ documentType === 'sales-return' ? '已退' : '已发' }} {{ line.processedQuantity }} · {{ documentType === 'sales-return' ? '可退' : '可发' }} {{ line.remainingQuantity }}</p>
+            <p v-if="isSalesDocument(documentType)">本单 {{ salesProgress.get(line.sourceLineId)?.picked ?? 0 }} · 待扫 {{ salesProgress.get(line.sourceLineId)?.pending ?? 0 }}<span v-if="salesProgress.get(line.sourceLineId)?.complete"> · 已拣足</span></p>
           <p v-if="documentType === 'inventory-count'">{{ line.batchNo || '无批号' }} · {{ line.warehouseCode }} · {{ line.locationCode || '无货位' }}</p>
         </article>
       </section>

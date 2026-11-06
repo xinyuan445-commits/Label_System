@@ -108,10 +108,10 @@ internal static class DocumentGatewayRequestBuilder
                 header["cshipaddress"] = AdditionalText(value.AdditionalFields, "deliveryAddress");
                 header["ccontactname"] = AdditionalText(value.AdditionalFields, "contactName");
                 header["cmobilephone"] = AdditionalText(value.AdditionalFields, "contactPhone");
-                header["csocode"] = operation.SourceDocumentType == "sales-order" ? Empty(operation.SourceDocumentNo) : null;
+                header["csocode"] = operation.SourceDocumentType is "sales-order" or "sales-order-return" ? Empty(operation.SourceDocumentNo) : null;
                 header["cmemo"] = Empty(request.Reason);
                 header["cbustype"] = "普通销售";
-                header["breturnflag"] = red;
+                header["breturnflag"] = red ? 1 : 0;
                 break;
             case "sales-outbound":
                 header["ddate"] = date;
@@ -211,6 +211,7 @@ internal static class DocumentGatewayRequestBuilder
                 break;
             case "sales-delivery":
                 row["cwhcode"] = line.WarehouseCode;
+                row["cposition"] = Empty(line.LocationCode);
                 row["cinvcode"] = line.MaterialCode;
                 row["cbatch"] = Empty(line.BatchNo);
                 row["iquantity"] = quantity;
@@ -220,6 +221,20 @@ internal static class DocumentGatewayRequestBuilder
                 {
                     row["isosid"] = line.SourceLineId;
                     row["csocode"] = Empty(operation.SourceDocumentNo);
+                }
+                if (operation.SourceDocumentType is "sales-order-return" or "sales-delivery-return")
+                {
+                    var salesSource = request.SalesSourceLines?.Single(s => s.SourceType == operation.SourceDocumentType && s.SourceLineId == line.SourceLineId)
+                        ?? throw new ApiException(409, "SALES_SOURCE_CHANGED", "请重选退货原单。");
+                    row["isosid"] = salesSource.SalesOrderLineId;
+                    row["csocode"] = salesSource.SalesOrderNo;
+                    if (operation.SourceDocumentType == "sales-delivery-return")
+                    { row["icorid"] = line.SourceLineId; row["ccorcode"] = operation.SourceDocumentNo; }
+                }
+                if (request.SalesSourceLines?.SingleOrDefault(s => s.SourceType == operation.SourceDocumentType && s.SourceLineId == line.SourceLineId) is { } price)
+                {
+                    row["iunitprice"] = price.UnitPrice ?? 0m; row["itaxunitprice"] = price.TaxUnitPrice ?? 0m;
+                    row["itaxrate"] = price.TaxRate ?? 0m;
                 }
                 break;
             case "sales-outbound":

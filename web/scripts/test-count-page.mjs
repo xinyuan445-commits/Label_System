@@ -747,3 +747,46 @@ test('盘点自动添加不猜跨仓货位、离线数量或零实盘，缺值�
     assert.equal(v.lines.value.length,0,mode);assert.ok(v.editingLine.value,mode)
   }
 })
+
+test('销售独立入口初次打开即为正确固定方向', async t => {
+  for (const [type, direction] of [['delivery-note', 'BLUE'], ['sales-return', 'RED']]) {
+    const f = fixture(t, type), v = await f.mount()
+    assert.equal(v.documentDirection.value, direction)
+    assert.ok(!v.pageConfig.value.supportsRedBlue)
+  }
+})
+
+test('旧红字发货记录保留方向并在进入扫码前提示改用退货单', async t => {
+  const f=fixture(t,'delivery-note'),v=await f.mount()
+  v.documentDirection.value='RED'
+  assert.match(v.validateHeader(),/旧红字记录/)
+  v.goToScanStep();assert.equal(v.currentStep.value,1)
+  assert.equal(v.documentDirection.value,'RED')
+})
+
+test('发货选销售订单带入客户部门销售类型和原币汇率', async t => {
+  const f=fixture(t,'delivery-note')
+  const selected={sourceType:'sales-order',sourceDocumentId:12,sourceDocumentNo:'SO12',sourceLineId:1000016857,
+    sourceLineNo:1,documentDate:'2026-11-06',productCode:'M1',productName:'物料',orderQuantity:17,
+    plannedQuantity:20,processedQuantity:3,remainingQuantity:17,departmentCode:'D1',materialCount:1,
+    partnerCode:'C1',partnerName:'客户',salesTypeCode:'01',currencyName:'人民币',exchangeRate:1}
+  f.load('@/services/source-document-selection').saveSourceDocumentSelection({outboundDocumentType:'delivery-note',
+    sourceType:'sales-order',sourceTypeLabel:'销售订单',documentNo:'SO12',documentDate:'2026-11-06',selectedLines:[selected],requirements:[]})
+  const v=await f.mount()
+  assert.equal(v.customerCode.value,'C1');assert.equal(v.departmentCode.value,'D1')
+  assert.equal(v.headerFieldValues.value['header.salesTypeCode'],'01')
+  assert.equal(v.headerFieldValues.value['header.currencyName'],'人民币')
+  assert.equal(v.headerFieldValues.value['header.exchangeRate'],1)
+  assert.equal(v.selectedSourceLines.value[0].sourceLineId,1000016857)
+})
+
+test('退货可扫码已用完标签并手填正数，不用当前零余额拦退货', async t => {
+  const f=fixture(t,'sales-return'),v=await f.mount()
+  v.customerCode.value='C1';v.departmentCode.value='D1';v.warehouseCode.value='W1'
+  Object.assign(v.headerFieldValues.value,{'header.salesTypeCode':'01','header.currencyCode':'RMB','header.currencyName':'人民币','header.exchangeRate':1})
+  f.api.lookup=async()=>({pallet:null,lines:[{...label(),availableQty:0,status:'USED'}]})
+  v.goToScanStep();await v.addBarcode(code)
+  assert.ok(v.editingLine.value);assert.equal(v.editingLine.value.requestedQty,0)
+  v.editingLine.value.requestedQty=5
+  assert.equal(v.lineEditError(v.editingLine.value),'')
+})

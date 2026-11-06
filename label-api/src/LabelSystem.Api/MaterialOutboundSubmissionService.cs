@@ -46,6 +46,13 @@ public sealed class MaterialOutboundSubmissionService(
         CancellationToken cancellationToken)
     {
         documentType = documentType.Trim().ToLowerInvariant();
+        if (SalesDocumentRules.Applies(documentType))
+        {
+            SalesDocumentRules.RequireDirection(documentType, request.Header.DocumentDirection);
+            EnsureSubmissionAllowed();
+            var existing = await documents.FindExistingSalesAsync(documentType, request, cancellationToken);
+            if (existing is not null) return await ExecutePreparedAsync(existing, user, requestId, autoApprove);
+        }
         if (documentType == "inventory-count") InventoryCountUploadRules.RequireContext(request, options.CurrentValue);
         EnsureSubmissionAllowed();
         MaterialOutboundPrepareResult? prepared = null;

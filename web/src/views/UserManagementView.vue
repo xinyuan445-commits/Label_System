@@ -61,6 +61,7 @@ const categoryScopeDirections: Record<string, 'IN' | 'OUT' | undefined> = {
   'outsourcing-arrival': 'IN',
   'purchase-inbound': 'IN',
   'delivery-note': 'OUT',
+  'sales-return': 'IN',
   'sales-outbound': 'OUT',
   'material-outbound': 'OUT',
   'transfer-order': undefined,

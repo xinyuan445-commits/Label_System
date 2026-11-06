@@ -62,7 +62,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             await ReserveSourceLinesAsync(connection, transaction, request, cancellationToken);
 
         var products = new Dictionary<string, ProductLabelSnapshot>(StringComparer.OrdinalIgnoreCase);
-        var allowUsedProductReturn = definition.DocumentType == "inventory-count" ||
+        var allowUsedProductReturn = definition.DocumentType is "inventory-count" or "sales-return" ||
             definition.DocumentType == "material-outbound" && request.Header.DocumentDirection == "RED";
         foreach (var code in request.Lines
                      .Where(line => line.ObjectType == "PRODUCT_LABEL")
@@ -193,9 +193,9 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
                 EnsureIdentity(line, product.MaterialCode,
                     definition.DocumentType == "inventory-count" ? line.UnitCode : product.UnitCode);
                 EnsurePosition(request, definition, product.WarehouseCode, product.LocationCode, line.LabelCode);
-                var isRedMaterialReturn = definition.DocumentType == "material-outbound" &&
+                var isRedMaterialReturn = definition.DocumentType == "sales-return" || definition.DocumentType == "material-outbound" &&
                                           request.Header.DocumentDirection == "RED";
-                var warehouseCode = isRedMaterialReturn
+                var warehouseCode = definition.DocumentType == "sales-return" ? request.Header.WarehouseCode!.Trim() : isRedMaterialReturn
                     ? line.WarehouseCode?.Trim() ?? string.Empty
                     : product.WarehouseCode;
                 var locationCode = isRedMaterialReturn
@@ -231,7 +231,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             if (group.Key.ObjectType == "UNLABELED_MATERIAL") continue;
             var total = group.Sum(line => line.Request.RequestedQty);
             var available = group.First().InventoryQty ?? 0m;
-            var isRedMaterialReturn = definition.DocumentType == "material-outbound" &&
+            var isRedMaterialReturn = definition.DocumentType == "sales-return" || definition.DocumentType == "material-outbound" &&
                                       request.Header.DocumentDirection == "RED";
             if (!isRedMaterialReturn && !definition.AllowZeroQuantity && total > available)
                 throw new ApiException(StatusCodes.Status409Conflict,
@@ -273,7 +273,7 @@ public sealed class DocumentPrepareRepository(SqlConnectionFactory connections)
             (string.IsNullOrWhiteSpace(actualWarehouse) ||
              !string.Equals(actualWarehouse, request.Header.WarehouseCode?.Trim(), StringComparison.OrdinalIgnoreCase)))
             throw new ApiException(StatusCodes.Status409Conflict, "WAREHOUSE_CHANGED", $"当前仓库不一致：{code}");
-        if (definition.DocumentType == "inventory-count") return;
+        if (definition.DocumentType is "inventory-count" or "sales-return") return;
         if (!string.IsNullOrWhiteSpace(request.Header.SourceLocationCode) &&
             !string.Equals(actualLocation, request.Header.SourceLocationCode.Trim(), StringComparison.OrdinalIgnoreCase))
             throw new ApiException(StatusCodes.Status409Conflict, "LOCATION_CHANGED", $"当前货位不一致：{code}");

@@ -377,7 +377,9 @@ public sealed record DocumentPrepareRequest(
     DocumentPrepareHeader Header,
     IReadOnlyList<DocumentPrepareLine> Lines,
     [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
-    InventoryCountUploadContext? InventoryCount = null);
+    InventoryCountUploadContext? InventoryCount = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<SourceDocumentLine>? SalesSourceLines = null);
 
 public sealed record DocumentPrepareHeader(
     DateOnly DocumentDate,
@@ -428,7 +430,21 @@ public sealed record SourceDocumentLine(
     string ProductName,
     decimal OrderQuantity,
     string DepartmentCode,
-    int MaterialCount);
+    int MaterialCount,
+    decimal? PlannedQuantity = null,
+    decimal? ProcessedQuantity = null,
+    decimal? RemainingQuantity = null,
+    string? PartnerCode = null,
+    string? PartnerName = null,
+    string? SalesTypeCode = null,
+    string? CurrencyName = null,
+    decimal? ExchangeRate = null,
+    decimal? TaxRate = null,
+    decimal? UnitPrice = null,
+    decimal? TaxUnitPrice = null,
+    int? SalesOrderLineId = null,
+    string? SalesOrderNo = null,
+    decimal? SalesOrderAvailableQuantity = null);
 
 public sealed record OperationGroupResult(
     string SubmissionGroupId,

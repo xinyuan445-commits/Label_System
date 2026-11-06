@@ -278,6 +278,21 @@ public sealed class MaterialOutboundExecutionService(
                 var document = payload.Deserialize<DocumentPrepareRequest>(JsonOptions)
                     ?? throw InvalidArchive();
                 if (document.Header.DocumentDirection is not ("BLUE" or "RED")) throw InvalidArchive();
+                if (operation.ErpDocumentType == "sales-delivery")
+                {
+                    var type = operation.OperationType == "SALES_RETURN" ? "sales-return" : "delivery-note";
+                    SalesDocumentRules.RequireDirection(type, document.Header.DocumentDirection);
+                    if (operation.Status == "PENDING")
+                    {
+                        var sourceIds = operation.Lines.Select(l => l.SourceLineId).ToHashSet();
+                        var pendingRequest = document with { Lines = document.Lines.Where(l => sourceIds.Contains(l.SourceLineId)).ToArray() };
+                        var sources = new List<SourceDocumentLine>();
+                        foreach (var source in pendingRequest.Lines.Where(l => l.SourceDocumentId.HasValue).GroupBy(l => l.SourceType!))
+                            sources.AddRange(await gateway.GetSourceDocumentLinesAsync(source.Key,
+                                source.Select(l => l.SourceDocumentId!.Value).Distinct().ToArray(), cancellationToken));
+                        SalesDocumentRules.ValidateSources(type, pendingRequest, sources);
+                    }
+                }
                 if (operation.ErpDocumentType == "inventory-count")
                 {
                     InventoryCountUploadRules.RequireContext(document, options.CurrentValue);
@@ -477,7 +492,8 @@ public sealed class MaterialOutboundExecutionService(
             var rowName = documentType is "purchase-arrival" or "subcontract-arrival"
                 ? "ivouchrowno" : "irowno";
             if (!TryInt(line, rowName, out var lineNo)) continue;
-            var lineId = Text(line, "autoid");
+            var lineId = documentType == "sales-delivery" ? Text(line, "idlsid") : null;
+            if (string.IsNullOrWhiteSpace(lineId) || lineId == "0") lineId = Text(line, "autoid");
             result[lineNo] = (lineId, null);
             if (!string.IsNullOrWhiteSpace(lineId)) lineIdToNo[lineId] = lineNo;
         }

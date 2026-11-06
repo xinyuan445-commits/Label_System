@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isSalesDocument, requireSalesSourceSelection } from '@/services/sales-documents'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
@@ -165,7 +166,7 @@ const bridge = getPdaBridge()
 const draftId = ref<string | null>(null)
 const currentStep = ref<1 | 2>(1)
 const documentDate = ref(beijingDate())
-const documentDirection = ref<'BLUE' | 'RED'>('BLUE')
+const documentDirection = ref<'BLUE' | 'RED'>(getBusinessDocumentConfig(props.documentType).fixedDirection ?? 'BLUE')
 const sourceDocumentType = ref('')
 const sourceDocumentTypeLabel = ref('')
 const sourceDocumentNo = ref('')
@@ -266,6 +267,7 @@ const returnPositionFieldKeys = new Set([
 ])
 
 const pageConfig = computed(() => getBusinessDocumentConfig(props.documentType))
+const hasSalesSource = computed(() => isSalesDocument(props.documentType) && selectedSourceLines.value.length > 0)
 const hasFixedMaterialOutboundCategory = computed(() =>
   props.documentType === 'material-outbound' && selectedSourceLines.value.length > 0,
 )
@@ -284,7 +286,7 @@ const headerExtraFields = computed(() => documentFields.value.filter(
   (field) => field.area === 'header' && fieldVisible(field.key) && !handledHeaderFieldKeys.has(field.key),
 ))
 const editingRedProductReturn = computed(() =>
-  props.documentType === 'material-outbound' &&
+  (props.documentType === 'material-outbound' || props.documentType === 'sales-return') &&
   documentDirection.value === 'RED' &&
   editingLine.value?.returnByLabel === true,
 )
@@ -812,7 +814,7 @@ function lineEditError(line: OutboundLine): string {
   if (line.requiresBatch && !line.batchNo.trim()) return '请输入批号'
   if (
     line.availableQty !== null && props.documentType !== 'inventory-count' &&
-    !(props.documentType === 'material-outbound' && documentDirection.value === 'RED') &&
+    !(props.documentType === 'sales-return' || props.documentType === 'material-outbound' && documentDirection.value === 'RED') &&
     quantity > line.availableQty
   ) {
     return '本次处理数量不能超过标签当前数量'
@@ -982,6 +984,10 @@ async function loadReferenceData(): Promise<void> {
     purchaseTypeOptions.value = purchaseTypes
     salesTypeOptions.value = salesTypes
     currencyOptions.value = currencies
+    if (isSalesDocument(props.documentType) && selectedSourceLines.value[0]?.currencyName) {
+      const currency = currencies.find(item => item.name === selectedSourceLines.value[0]?.currencyName)
+      if (currency) headerFieldValues.value['header.currencyCode'] = currency.code
+    }
     applyReferenceDefaults()
   } catch (error) {
     notify(error instanceof Error ? error.message : '基础资料加载失败', 'error')
@@ -1106,6 +1112,12 @@ function materialKey(value: string): string {
 
 function remainingDemandByMaterial(): Map<string, number> {
   const remaining = new Map<string, number>()
+  if (isSalesDocument(props.documentType)) {
+    for (const source of selectedSourceLines.value) {
+      const key = materialKey(source.productCode)
+      remaining.set(key, normalizeQty((remaining.get(key) ?? 0) + (source.remainingQuantity ?? source.orderQuantity)))
+    }
+  }
   for (const requirement of materialRequirements.value) {
     const key = materialKey(requirement.materialCode)
     const available = documentDirection.value === 'RED'
@@ -1139,7 +1151,7 @@ async function addBarcode(rawCode: string): Promise<void> {
     const lookup = await lookupInventoryObject(barcode, props.documentType)
     const found = lookup.lines
     if (lookup.pallet || found.length !== 1 || found[0]?.objectType !== 'PRODUCT_LABEL') throw new Error('请扫描产品标签')
-    const allowUsedReturnLabel = props.documentType === 'material-outbound' && documentDirection.value === 'RED'
+    const allowUsedReturnLabel = props.documentType === 'sales-return' || props.documentType === 'material-outbound' && documentDirection.value === 'RED'
     if (found.some((item) => item.status !== 'ACTIVE' && !(
       allowUsedReturnLabel && item.objectType === 'PRODUCT_LABEL' && item.status === 'USED'
     ))) {
@@ -1179,9 +1191,9 @@ async function addBarcode(rawCode: string): Promise<void> {
       return
     }
     const sourceRemaining = remainingDemandByMaterial()
-    const useSourceRemainder = props.documentType === 'material-outbound' &&
+    const useSourceRemainder = (props.documentType === 'material-outbound' || isSalesDocument(props.documentType)) &&
       selectedSourceLines.value.length > 0
-    const allowOverIssue = useSourceRemainder && documentDirection.value === 'BLUE' &&
+    const allowOverIssue = props.documentType === 'material-outbound' && useSourceRemainder && documentDirection.value === 'BLUE' &&
       documentPolicy.value.allowOverIssue
     const additions: OutboundLine[] = []
     let skippedSatisfied = 0
@@ -1193,7 +1205,7 @@ async function addBarcode(rawCode: string): Promise<void> {
         skippedSatisfied += 1
         continue
       }
-      const returnByLabel = props.documentType === 'material-outbound' &&
+      const returnByLabel = (props.documentType === 'material-outbound' || props.documentType === 'sales-return') &&
         documentDirection.value === 'RED' && item.objectType === 'PRODUCT_LABEL'
       const requestedQty = returnByLabel
         ? 0
@@ -1215,10 +1227,10 @@ async function addBarcode(rawCode: string): Promise<void> {
         batchNo: item.batchNo,
         unitCode: item.unitCode,
         unitName: item.unitName,
-        warehouseCode: item.warehouseCode,
-        warehouseName: item.warehouseName || warehouseNameFor(item.warehouseCode),
-        locationCode: item.locationCode,
-        locationName: item.locationName || locationNameFor(
+        warehouseCode: props.documentType === 'sales-return' ? warehouseCode.value : item.warehouseCode,
+        warehouseName: props.documentType === 'sales-return' ? warehouseNameFor(warehouseCode.value) : item.warehouseName || warehouseNameFor(item.warehouseCode),
+        locationCode: props.documentType === 'sales-return' && item.warehouseCode !== warehouseCode.value ? '' : item.locationCode,
+        locationName: props.documentType === 'sales-return' && item.warehouseCode !== warehouseCode.value ? '' : item.locationName || locationNameFor(
           item.warehouseCode, item.locationCode,
         ),
         availableQty: item.availableQty,
@@ -1634,7 +1646,8 @@ function applyDraft(draft: Partial<OutboundDraft>): void {
     ? { accountId: inventoryCountSource.value.accountId, databaseName: inventoryCountSource.value.databaseName } : null)
   currentStep.value = 1
   documentDate.value = draft.documentDate || beijingDate()
-  documentDirection.value = draft.documentDirection === 'RED' ? 'RED' : 'BLUE'
+  documentDirection.value = draft.documentDirection === 'RED' ? 'RED' :
+    draft.documentDirection === 'BLUE' ? 'BLUE' : pageConfig.value.fixedDirection ?? 'BLUE'
   sourceDocumentType.value = draft.sourceDocumentType || ''
   sourceDocumentTypeLabel.value = draft.sourceDocumentTypeLabel || ''
   sourceDocumentNo.value = draft.sourceDocumentNo || ''
@@ -1838,6 +1851,8 @@ async function openScanDetailAction(): Promise<void> {
 }
 
 function validateHeader(): string {
+  if (props.documentType === 'delivery-note' && documentDirection.value !== 'BLUE') return '旧红字记录请改用退货单重新录入'
+  if (props.documentType === 'sales-return' && documentDirection.value !== 'RED') return '退货单方向无效，请重新打开'
   if (props.documentType === 'inventory-count') {
     const source = inventoryCountSource.value
     if (!source && sourceDocumentNo.value) return '请重新选择源单'
@@ -1896,7 +1911,7 @@ function validate(): string {
   ) return `${pageConfig.value.quantityLabel}不能小于0`
   if (
     props.documentType !== 'inventory-count' &&
-    !(props.documentType === 'material-outbound' && documentDirection.value === 'RED') &&
+    !(props.documentType === 'sales-return' || props.documentType === 'material-outbound' && documentDirection.value === 'RED') &&
     lines.value.some(
       (line) => line.availableQty !== null && normalizeQty(line.requestedQty) > line.availableQty,
     )
@@ -2135,6 +2150,18 @@ onMounted(async () => {
     sourceDocumentNo.value = sourceSelection.documentNo
     selectedSourceLines.value = props.documentType === 'inventory-count' && inventoryCountSource.value
       ? countSourceLines(inventoryCountSource.value) : sourceSelection.selectedLines
+    if (isSalesDocument(props.documentType)) {
+      try {
+        requireSalesSourceSelection(props.documentType, selectedSourceLines.value)
+        const source = selectedSourceLines.value[0]!
+        customerCode.value = source.partnerCode ?? ''
+        departmentCode.value = source.departmentCode
+        headerFieldValues.value['header.salesTypeCode'] = source.salesTypeCode ?? ''
+        headerFieldValues.value['header.currencyName'] = source.currencyName ?? ''
+        headerFieldValues.value['header.exchangeRate'] = source.exchangeRate ?? ''
+        if (source.taxRate !== null && source.taxRate !== undefined) headerFieldValues.value['header.taxRate'] = source.taxRate
+      } catch (error) { notify(error instanceof Error ? error.message : '原单资料需核对', 'error') }
+    }
     materialRequirements.value = sourceSelection.requirements
     overIssueTargets.value = {}
     if (props.documentType === 'material-outbound') {
@@ -2262,7 +2289,9 @@ onBeforeRouteLeave((to) => {
 
           <label v-if="pageConfig.partnerLabel && fieldVisible('header.partnerCode')" class="field">
             <span><i v-if="fieldRequired('header.partnerCode')">*</i>{{ pageConfig.partnerLabel }}</span>
-            <input v-model="customerCode" autocomplete="off" placeholder="编码或名称" />
+            <input v-if="isSalesDocument(documentType) && selectedSourceLines.length"
+              :value="`${selectedSourceLines[0]?.partnerName || customerCode}（${customerCode}）`" readonly />
+            <input v-else v-model="customerCode" autocomplete="off" :placeholder="isSalesDocument(documentType) ? '客户编码' : '编码或名称'" />
           </label>
 
           <label v-if="pageConfig.warehouseLabel && fieldVisible('header.warehouseCode')" class="field">
@@ -2374,7 +2403,7 @@ onBeforeRouteLeave((to) => {
               v-else-if="field.key === 'header.salesTypeCode'"
               :model-value="String(headerFieldValues[field.key] ?? '')"
               :options="salesTypeSelectOptions"
-              :disabled="referenceDataLoading"
+              :disabled="referenceDataLoading || hasSalesSource"
               placeholder="编号或名称"
               @update:model-value="handleSalesTypeChange"
             />
@@ -2382,7 +2411,7 @@ onBeforeRouteLeave((to) => {
               v-else-if="field.key === 'header.currencyCode'"
               :model-value="String(headerFieldValues[field.key] ?? '')"
               :options="currencySelectOptions"
-              :disabled="referenceDataLoading"
+              :disabled="referenceDataLoading || hasSalesSource"
               placeholder="编号或名称"
               @update:model-value="handleCurrencyChange"
             />
@@ -2407,6 +2436,7 @@ onBeforeRouteLeave((to) => {
               v-model="headerFieldValues[field.key]"
               :type="fieldInputType(field)"
               :inputmode="field.valueType === 'number' ? 'decimal' : undefined"
+              :readonly="hasSalesSource && field.key === 'header.exchangeRate'"
               autocomplete="off"
             />
           </label>
@@ -2567,7 +2597,7 @@ onBeforeRouteLeave((to) => {
 
       <div class="line-editor-content">
         <div v-if="editingLine.requiresOverIssueQuantity || editingLine.returnByLabel" class="over-issue-editor-notice">
-          {{ editingLine.returnByLabel ? '退料 · 输入本次数量' : '超领 · 输入本次数量' }}
+          {{ editingLine.returnByLabel ? documentType === 'sales-return' ? '退货 · 输入本次数量' : '退料 · 输入本次数量' : '超领 · 输入本次数量' }}
         </div>
         <dl v-if="readonlyEditorFields.length" class="editor-readonly-grid">
           <div v-for="field in readonlyEditorFields" :key="field.key">

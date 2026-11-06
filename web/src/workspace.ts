@@ -42,6 +42,7 @@ const businessGroups: WorkspaceGroup[] = [
     tone: 'green',
     entries: [
       { code: 'delivery-note', label: '发货单', icon: 'document' },
+      { code: 'sales-return', label: '退货单', icon: 'document' },
       { code: 'sales-outbound', label: '销售出库单', icon: 'dispatch' },
     ],
   },
