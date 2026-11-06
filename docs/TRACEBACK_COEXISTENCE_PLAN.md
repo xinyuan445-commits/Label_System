@@ -225,3 +225,5 @@ Gateway 用独立 initial-registrations 新建 Code，不能从旧来源 Goods �
 017保留于LabelSystem_Dev，9891为API、9881为888 Gateway；原React/Flask应用18003及助手9110在电脑本地，复用账号权限。017模板/任务/回执适配已完成，开发888/PDF第一阶段及重点三表故障恢复已验收。旧打印旁路和998直写链关闭；生产008打印未发布，实体机及完整历史故障矩阵未验收。当前范围见[项目状态](PROJECT_STATUS.md)和[正常打印记录](../New_Label_Print_System/docs/LabelSystem正常打印与数据清理.md)。
 
 2026-11-05：盘点自动审核复用既有U8状态操作，COUNT_ADJUSTMENT仍只在上传确认后同步一次，审核与重试不得生成第二笔差异。全系统停止托盘执行与查询回退，历史字段保留，新明细不写托盘关联，见[发布记录](DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。
+
+2026-11-06：[888真实盘点测试](test-builds/2026-11-06-inventory-count-real-888.md)验证11个稳定差异事件及5码余额/位置/JSON，重复请求不重写；盘点本单审核成功不代表生成的其他出入库已审，现存量闭环仍需处理关联单审核。所有测试数据保留，生产/索引/退出切换未动。

@@ -446,3 +446,5 @@ Gateway 不可用或结构不兼容时分别映射为 `U8_GATEWAY_UNAVAILABLE`�
 inventory-objects/lookup只返回产品标签；保留的pallet/palletCode兼容字段固定为空，不读托盘表/装托关系。Prepare不接受PALLET或来源托盘；历史含pallet_id/source_pallet_id的业务组不能继续执行/追溯恢复。旧托盘设置从GET settings过滤，PUT返回SETTING_RETIRED；托盘规则不返回且不能创建、保存/激活。
 
 盘点submit的autoApprove按实际请求执行：ERP确认→原差异同步→U8 verify。关闭则未审核；失败沿PENDING_APPROVAL/NEEDS_RECONCILIATION恢复，审核不新增差异事件。groups validate/execute按业务组真实DocumentType校验功能权限。独立手工审核/弃审入口保持关闭，用户从原单据管理恢复失败审核；只开放原888范围。
+
+2026-11-06：按用户授权执行888真实接口测试，新增/回填、累计修订、零余额恢复、跨仓位置、盘盈/盘亏本单审核及重复提交已验证。保留4张盘点单、生成的1张其他入库/1张其他出库、8次成功操作及1次失败、9份草稿、11条旧数量事件。备注均codex test。盘点本单已审不表示关联出入库已审：0000005823/0000006569仍未审，U8现存量尚有对应差异；PDA实机与故障注入未验。本轮无程序/结构/配置变更，不是再次部署，生产008未动。 详见[实测报告](../../docs/test-builds/2026-11-06-inventory-count-real-888.md)。

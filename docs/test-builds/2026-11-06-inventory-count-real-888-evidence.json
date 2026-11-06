@@ -1,0 +1,708 @@
+{
+  "date": "2026-11-06",
+  "environment": "development",
+  "labelDatabase": "LabelSystem_Dev",
+  "erpAccount": "888",
+  "erpDatabase": "UFDATA_888_2021",
+  "version": {
+    "h5": "0.2.0-dev.95",
+    "businessApi": "0.12.11-count-dev",
+    "gateway": "0.11.8.0"
+  },
+  "operations": [
+    {
+      "id": 165,
+      "operation_no": "IC-261106090739-98f07d51bfd84011",
+      "status": "FAILED",
+      "erp_status": "FAILED",
+      "approval_status": "NOT_REQUIRED",
+      "erp_document_no": null,
+      "reason": "codex test",
+      "error_code": "U8_CREATE_REJECTED"
+    },
+    {
+      "id": 166,
+      "operation_no": "IC-261106091343-91393b4b38074d2d",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "NOT_REQUIRED",
+      "erp_document_no": "PDD26111318",
+      "reason": "codex test",
+      "error_code": null
+    },
+    {
+      "id": 167,
+      "operation_no": "IC-261106091705-1effff2ddbad4651",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "NOT_REQUIRED",
+      "erp_document_no": "PDD26111318",
+      "reason": "codex test",
+      "error_code": null
+    },
+    {
+      "id": 168,
+      "operation_no": "IC-261106091729-c809eca9e8094ff5",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "SUCCESS",
+      "erp_document_no": "PDD26111318",
+      "reason": "codex test",
+      "error_code": null
+    },
+    {
+      "id": 171,
+      "operation_no": "IC-261106091931-349087f45c3b4630",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "NOT_REQUIRED",
+      "erp_document_no": "PDD26111319",
+      "reason": "codex test",
+      "error_code": null
+    },
+    {
+      "id": 172,
+      "operation_no": "IC-261106091957-047242d271924568",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "NOT_REQUIRED",
+      "erp_document_no": "PDD26111319",
+      "reason": "codex test",
+      "error_code": null
+    },
+    {
+      "id": 173,
+      "operation_no": "IC-261106092018-aa428b2f047e41e4",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "SUCCESS",
+      "erp_document_no": "PDD26111319",
+      "reason": "codex test",
+      "error_code": null
+    },
+    {
+      "id": 174,
+      "operation_no": "IC-261106092117-49c84e89b8a64703",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "NOT_REQUIRED",
+      "erp_document_no": "PDD26111320",
+      "reason": "codex test",
+      "error_code": null
+    },
+    {
+      "id": 175,
+      "operation_no": "IC-261106093248-e7b396398f9742aa",
+      "status": "SUCCESS",
+      "erp_status": "SUCCESS",
+      "approval_status": "SUCCESS",
+      "erp_document_no": "PDD26111321",
+      "reason": "codex test",
+      "error_code": null
+    }
+  ],
+  "nativeHeaders": [
+    {
+      "ID": 1000012708,
+      "cCVCode": "PDD26111318",
+      "cWhCode": "KML_KSW",
+      "cAccounter": "yuanxin",
+      "cCVMemo": "codex test"
+    },
+    {
+      "ID": 1000012709,
+      "cCVCode": "PDD26111319",
+      "cWhCode": "KML_WST",
+      "cAccounter": "yuanxin",
+      "cCVMemo": "codex test"
+    },
+    {
+      "ID": 1000012710,
+      "cCVCode": "PDD26111320",
+      "cWhCode": "KML_KSW",
+      "cAccounter": null,
+      "cCVMemo": "codex test"
+    },
+    {
+      "ID": 1000012711,
+      "cCVCode": "PDD26111321",
+      "cWhCode": "KML_KSW",
+      "cAccounter": "yuanxin",
+      "cCVMemo": "codex test"
+    }
+  ],
+  "nativeRows": [
+    {
+      "ID": 1000012708,
+      "cInvCode": "27-PB-F4-4918-ELCY3-1070",
+      "cCVBatch": "20260820QF",
+      "cPosition": "446",
+      "iCVQuantity": 5,
+      "iCVCQuantity": 5
+    },
+    {
+      "ID": 1000012708,
+      "cInvCode": "27-PB-F4-4918-WOCR7-1073",
+      "cCVBatch": "20260820QF",
+      "cPosition": "446",
+      "iCVQuantity": 3,
+      "iCVCQuantity": 4
+    },
+    {
+      "ID": 1000012709,
+      "cInvCode": "32-02-XG-1004",
+      "cCVBatch": "20260519",
+      "cPosition": null,
+      "iCVQuantity": 40,
+      "iCVCQuantity": 40
+    },
+    {
+      "ID": 1000012710,
+      "cInvCode": "1313ZS-HPL-B1-49007-ELCR7-9011",
+      "cCVBatch": "20260313BD",
+      "cPosition": "446",
+      "iCVQuantity": 0,
+      "iCVCQuantity": 3
+    },
+    {
+      "ID": 1000012711,
+      "cInvCode": "27-PB-F4-4918-ELCY3-1070",
+      "cCVBatch": "20260820QF",
+      "cPosition": "446",
+      "iCVQuantity": 5,
+      "iCVCQuantity": 4
+    }
+  ],
+  "verification": {
+    "Labels": [
+      {
+        "id": 66,
+        "label_code": "008|27-PB-F4-4918-ELCY3-1070|20260820QF|5.00|2609270157",
+        "current_qty": 4.0,
+        "status": "ACTIVE",
+        "traceback_balance": 4.0,
+        "traceback_latest_flow_id": 54057,
+        "traceback_sync_status": "SYNCED",
+        "locked_operation_id": null,
+        "to_warehouse_code": "KML_KSW",
+        "to_location_code": "446",
+        "old_balance": 4.0,
+        "old_latest": 54057,
+        "old_wh": "KML_KSW",
+        "old_location": "446",
+        "goods_quantity": "4.000000",
+        "goods_quantity2": "4.000000",
+        "attribute_quantity": "4.000000",
+        "inventory_wh": "KML_KSW",
+        "inventory_location": "446"
+      },
+      {
+        "id": 67,
+        "label_code": "008|27-PB-F4-4918-WOCR7-1073|20260820QF|3.00|2609270033",
+        "current_qty": 4.0,
+        "status": "ACTIVE",
+        "traceback_balance": 4.0,
+        "traceback_latest_flow_id": 54050,
+        "traceback_sync_status": "SYNCED",
+        "locked_operation_id": null,
+        "to_warehouse_code": "KML_KSW",
+        "to_location_code": "446",
+        "old_balance": 4.0,
+        "old_latest": 54050,
+        "old_wh": "KML_KSW",
+        "old_location": "446",
+        "goods_quantity": "4.000000",
+        "goods_quantity2": "4.000000",
+        "attribute_quantity": "4.000000",
+        "inventory_wh": "KML_KSW",
+        "inventory_location": "446"
+      },
+      {
+        "id": 68,
+        "label_code": "008|1313ZS-HPL-B1-49007-ELCR7-9011|20260313BD|3.00|2609270153",
+        "current_qty": 3.0,
+        "status": "ACTIVE",
+        "traceback_balance": 3.0,
+        "traceback_latest_flow_id": 54056,
+        "traceback_sync_status": "SYNCED",
+        "locked_operation_id": null,
+        "to_warehouse_code": "KML_KSW",
+        "to_location_code": "446",
+        "old_balance": 3.0,
+        "old_latest": 54056,
+        "old_wh": "KML_KSW",
+        "old_location": "446",
+        "goods_quantity": "3.0",
+        "goods_quantity2": "3.000000",
+        "attribute_quantity": "3.000000",
+        "inventory_wh": "KML_KSW",
+        "inventory_location": "446"
+      },
+      {
+        "id": 69,
+        "label_code": "008|32-02-XG-1004|20260519|20.00|2609270132",
+        "current_qty": 20.0,
+        "status": "ACTIVE",
+        "traceback_balance": 20.0,
+        "traceback_latest_flow_id": 54055,
+        "traceback_sync_status": "SYNCED",
+        "locked_operation_id": null,
+        "to_warehouse_code": "KML_WST",
+        "to_location_code": null,
+        "old_balance": 20.0,
+        "old_latest": 54055,
+        "old_wh": "KML_WST",
+        "old_location": "",
+        "goods_quantity": "20.000000",
+        "goods_quantity2": "20.000000",
+        "attribute_quantity": "20.000000",
+        "inventory_wh": "KML_WST",
+        "inventory_location": ""
+      },
+      {
+        "id": 70,
+        "label_code": "008|32-02-XG-1004|20260519|20.00|2609270131",
+        "current_qty": 20.0,
+        "status": "ACTIVE",
+        "traceback_balance": 20.0,
+        "traceback_latest_flow_id": 54053,
+        "traceback_sync_status": "SYNCED",
+        "locked_operation_id": null,
+        "to_warehouse_code": "KML_WST",
+        "to_location_code": null,
+        "old_balance": 20.0,
+        "old_latest": 54053,
+        "old_wh": "KML_WST",
+        "old_location": "",
+        "goods_quantity": "20.000000",
+        "goods_quantity2": "20.000000",
+        "attribute_quantity": "20.000000",
+        "inventory_wh": "KML_WST",
+        "inventory_location": ""
+      }
+    ],
+    "LegacyEvents": [
+      {
+        "operation_id": 166,
+        "task_id": 37,
+        "event_key": "tb:888:166:220:COUNT_ADJUSTMENT:PDD26111318",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54047,
+        "delta": "0",
+        "goods_actual": "5.0",
+        "goods_before": "5.0",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091343-91393b4b38074d2d",
+        "erp_document": "PDD26111318",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 166,
+        "task_id": 38,
+        "event_key": "tb:888:166:221:COUNT_ADJUSTMENT:PDD26111318",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54048,
+        "delta": "0",
+        "goods_actual": "3.0",
+        "goods_before": "3.0",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091343-91393b4b38074d2d",
+        "erp_document": "PDD26111318",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 167,
+        "task_id": 39,
+        "event_key": "tb:888:167:222:COUNT_ADJUSTMENT:PDD26111318",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54049,
+        "delta": "-1",
+        "goods_actual": "4.000000",
+        "goods_before": "5.0",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091705-1effff2ddbad4651",
+        "erp_document": "PDD26111318",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 167,
+        "task_id": 40,
+        "event_key": "tb:888:167:223:COUNT_ADJUSTMENT:PDD26111318",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54050,
+        "delta": "1",
+        "goods_actual": "4.000000",
+        "goods_before": "3.0",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091705-1effff2ddbad4651",
+        "erp_document": "PDD26111318",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 168,
+        "task_id": 41,
+        "event_key": "tb:888:168:224:COUNT_ADJUSTMENT:PDD26111318",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54051,
+        "delta": "1",
+        "goods_actual": "5.000000",
+        "goods_before": "4.000000",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091729-c809eca9e8094ff5",
+        "erp_document": "PDD26111318",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 171,
+        "task_id": 42,
+        "event_key": "tb:888:171:227:COUNT_ADJUSTMENT:PDD26111319",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54052,
+        "delta": "0",
+        "goods_actual": "20.000000",
+        "goods_before": "20.000000",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091931-349087f45c3b4630",
+        "erp_document": "PDD26111319",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 171,
+        "task_id": 43,
+        "event_key": "tb:888:171:228:COUNT_ADJUSTMENT:PDD26111319",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54053,
+        "delta": "0",
+        "goods_actual": "20.000000",
+        "goods_before": "20.000000",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091931-349087f45c3b4630",
+        "erp_document": "PDD26111319",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 172,
+        "task_id": 44,
+        "event_key": "tb:888:172:229:COUNT_ADJUSTMENT:PDD26111319",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54054,
+        "delta": "-20",
+        "goods_actual": "0.000000",
+        "goods_before": "20.0",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106091957-047242d271924568",
+        "erp_document": "PDD26111319",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 173,
+        "task_id": 45,
+        "event_key": "tb:888:173:230:COUNT_ADJUSTMENT:PDD26111319",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54055,
+        "delta": "20",
+        "goods_actual": "20.000000",
+        "goods_before": "0.000000",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106092018-aa428b2f047e41e4",
+        "erp_document": "PDD26111319",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 174,
+        "task_id": 46,
+        "event_key": "tb:888:174:231:COUNT_ADJUSTMENT:PDD26111320",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54056,
+        "delta": "0",
+        "goods_actual": "3.0",
+        "goods_before": "3.000000",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106092117-49c84e89b8a64703",
+        "erp_document": "PDD26111320",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      },
+      {
+        "operation_id": 175,
+        "task_id": 47,
+        "event_key": "tb:888:175:232:COUNT_ADJUSTMENT:PDD26111321",
+        "status": "COMPLETED",
+        "attempt_count": 1,
+        "old_flow_id": 54057,
+        "delta": "-1",
+        "goods_actual": "4.000000",
+        "goods_before": "5.000000",
+        "order_type": "盘点单",
+        "pda_document": "IC-261106093248-e7b396398f9742aa",
+        "erp_document": "PDD26111321",
+        "remark": "codex test",
+        "valid_json": 1,
+        "showlist_array": 1
+      }
+    ],
+    "Drafts": [
+      {
+        "draft_id": "codex-count-261106-a-131e881bfcac4ebf98d54fd3506bcd74",
+        "business_status": "DRAFT",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-a-131e881bfcac4ebf98d54fd3506bcd74",
+        "remark": "codex test",
+        "warehouse_name": "科米龙昆山"
+      },
+      {
+        "draft_id": "codex-count-261106-a2-2d3c8b1e6f544ef18813db3e9c6e2f08",
+        "business_status": "COMPLETED",
+        "client_revision": 3,
+        "operation_group_id": "codex-count-261106-a2-2d3c8b1e6f544ef18813db3e9c6e2f08",
+        "remark": "codex test",
+        "warehouse_name": "科米龙昆山"
+      },
+      {
+        "draft_id": "codex-count-261106-b-36aa6256ae06403381484fa8492d6258",
+        "business_status": "COMPLETED",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-b-36aa6256ae06403381484fa8492d6258",
+        "remark": "codex test",
+        "warehouse_name": "科米龙昆山"
+      },
+      {
+        "draft_id": "codex-count-261106-c-ecafdc9c99db4616860eb48e0f50b8c0",
+        "business_status": "COMPLETED",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-c-ecafdc9c99db4616860eb48e0f50b8c0",
+        "remark": "codex test",
+        "warehouse_name": "科米龙昆山"
+      },
+      {
+        "draft_id": "codex-count-261106-d-fe1b253e39ae445c851a683069dd0aff",
+        "business_status": "COMPLETED",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-d-fe1b253e39ae445c851a683069dd0aff",
+        "remark": "codex test",
+        "warehouse_name": "危废仓"
+      },
+      {
+        "draft_id": "codex-count-261106-dz-4817c57e601445e38f72c177a3d3550a",
+        "business_status": "COMPLETED",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-dz-4817c57e601445e38f72c177a3d3550a",
+        "remark": "codex test",
+        "warehouse_name": "危废仓"
+      },
+      {
+        "draft_id": "codex-count-261106-dr-da4a3b3f0f744c7696caf3ee8eb21ee4",
+        "business_status": "COMPLETED",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-dr-da4a3b3f0f744c7696caf3ee8eb21ee4",
+        "remark": "codex test",
+        "warehouse_name": "危废仓"
+      },
+      {
+        "draft_id": "codex-count-261106-e-3965c77ff854431ebd81ff314ba2e84f",
+        "business_status": "COMPLETED",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-e-3965c77ff854431ebd81ff314ba2e84f",
+        "remark": "codex test",
+        "warehouse_name": "科米龙昆山"
+      },
+      {
+        "draft_id": "codex-count-261106-f-10425e3980294b7f85c3b5abb691e6b0",
+        "business_status": "COMPLETED",
+        "client_revision": 2,
+        "operation_group_id": "codex-count-261106-f-10425e3980294b7f85c3b5abb691e6b0",
+        "remark": "codex test",
+        "warehouse_name": "科米龙昆山"
+      }
+    ],
+    "Stock": [
+      {
+        "cWhCode": "JML_B1_FBX",
+        "cInvCode": "1313ZS-HPL-B1-49007-ELCR7-9011",
+        "cBatch": "20260313BD",
+        "stock_quantity": 3.0
+      },
+      {
+        "cWhCode": "KML_KSW",
+        "cInvCode": "1313ZS-HPL-B1-49007-ELCR7-9011",
+        "cBatch": "20250107BD",
+        "stock_quantity": 0.0
+      },
+      {
+        "cWhCode": "KML_KSW",
+        "cInvCode": "1313ZS-HPL-B1-49007-ELCR7-9011",
+        "cBatch": "20260313BD",
+        "stock_quantity": 16.0
+      },
+      {
+        "cWhCode": "KML_KSW",
+        "cInvCode": "27-PB-F4-4918-ELCY3-1070",
+        "cBatch": "20260820QF",
+        "stock_quantity": 5.0
+      },
+      {
+        "cWhCode": "KML_KSW",
+        "cInvCode": "27-PB-F4-4918-WOCR7-1073",
+        "cBatch": "20260820QF",
+        "stock_quantity": 3.0
+      },
+      {
+        "cWhCode": "KML_WST",
+        "cInvCode": "32-02-XG-1004",
+        "cBatch": "20260519",
+        "stock_quantity": 40.0
+      }
+    ],
+    "GeneratedIn": [
+      {
+        "ID": 1000048150,
+        "cCode": "0000005823",
+        "cMemo": "codex test",
+        "cHandler": null,
+        "cInvCode": "27-PB-F4-4918-WOCR7-1073",
+        "cBatch": "20260820QF",
+        "iQuantity": 1.0
+      }
+    ],
+    "GeneratedOut": [
+      {
+        "ID": 1000048151,
+        "cCode": "0000006569",
+        "cMemo": "codex test",
+        "cHandler": null,
+        "cInvCode": "27-PB-F4-4918-ELCY3-1070",
+        "cBatch": "20260820QF",
+        "iQuantity": 1.0
+      }
+    ]
+  },
+  "liveLookup": [
+    {
+      "quantity": 4.0,
+      "code": "008|27-PB-F4-4918-ELCY3-1070|20260820QF|5.00|2609270157",
+      "warehouseName": "科米龙昆山",
+      "locationName": "1139",
+      "location": "446",
+      "warehouse": "KML_KSW"
+    },
+    {
+      "quantity": 4.0,
+      "code": "008|27-PB-F4-4918-WOCR7-1073|20260820QF|3.00|2609270033",
+      "warehouseName": "科米龙昆山",
+      "locationName": "1139",
+      "location": "446",
+      "warehouse": "KML_KSW"
+    },
+    {
+      "quantity": 3.0,
+      "code": "008|1313ZS-HPL-B1-49007-ELCR7-9011|20260313BD|3.00|2609270153",
+      "warehouseName": "科米龙昆山",
+      "locationName": "1139",
+      "location": "446",
+      "warehouse": "KML_KSW"
+    },
+    {
+      "quantity": 20.0,
+      "code": "008|32-02-XG-1004|20260519|20.00|2609270132",
+      "warehouseName": "危废仓",
+      "locationName": "",
+      "location": "",
+      "warehouse": "KML_WST"
+    },
+    {
+      "quantity": 20.0,
+      "code": "008|32-02-XG-1004|20260519|20.00|2609270131",
+      "warehouseName": "危废仓",
+      "locationName": "",
+      "location": "",
+      "warehouse": "KML_WST"
+    }
+  ],
+  "crossWarehouseValidation": [
+    {
+      "OriginalLocation": null,
+      "Status": "LOCATION_REQUIRED",
+      "OriginalWarehouse": null,
+      "CanSubmit": false,
+      "TargetLocation": ""
+    },
+    {
+      "OriginalLocation": "",
+      "Status": "MATCHED",
+      "OriginalWarehouse": "JML_B1_FBX",
+      "CanSubmit": false,
+      "TargetLocation": "446"
+    }
+  ],
+  "duplicateValidation": {
+    "Response": {
+      "success": false,
+      "code": "COUNT_OBSERVATIONS_INVALID",
+      "message": "盘点标签为空、重复或数量过多。",
+      "data": null,
+      "requestId": "5826373c29fe436c91e6adb104f1f811",
+      "serverTime": "2026-11-06T09:23:24.6429416+08:00"
+    },
+    "HTTP": 400
+  },
+  "repeat": {
+    "operationId": 168,
+    "before": {
+      "operations": 1,
+      "flows": 1,
+      "tasks": 1,
+      "legacyEvents": 1,
+      "nativeVouchers": 1
+    },
+    "after": {
+      "operations": 1,
+      "flows": 1,
+      "tasks": 1,
+      "legacyEvents": 1,
+      "nativeVouchers": 1
+    },
+    "resultStatus": "SUCCESS",
+    "afterLaterCountLabelBalance": 4
+  },
+  "frontendTests": {
+    "date": "2026-11-06",
+    "passed": 49
+  },
+  "assertions": {
+    "labelMismatches": 0,
+    "eventMismatches": 0,
+    "duplicateEventKeys": 0,
+    "unexpectedLocks": 0,
+    "activeWrites": 0
+  },
+  "scope": "Real API/U8/TraceBack integration; no physical PDA or network fault injection; all records retained. Count audit does not audit generated stock vouchers."
+}

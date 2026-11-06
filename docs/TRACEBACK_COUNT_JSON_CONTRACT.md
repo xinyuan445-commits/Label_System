@@ -37,3 +37,5 @@ CurrencyOrderData.uniquekeyGuid在抽样中等于pdaOrderUuid；CurrencyGoodsDat
 盘点不以标签原仓库/货位限制扫码。有原单以原单仓库为准，无原单以制单表头为准；目标仓库启用货位管理时在数量确认中选择有效“盘点货位”，原单盘货位时限匹配料号/批号的原单货位。跨仓不猜货位，未启用货位管理时清空目标货位。上传ERP确认后，新旧标签余额按实盘同步、当前位置按本次目标更新；扫码和草稿不改变标签。原位置留作实时复核和审计，未扫标签不变。
 
 Goods同时更新根warehouseCode/name、locationCode、storageLocationCode/name及inventory仓库/货位字段；存在的wareHouseCode/cWhCode/positionCode/cPosCode等别名同步，避免旧别名优先读取产生错误位置。目标不管理货位时清空相关位置值。Order仓库取本次盘点表头，不取标签原仓库。盘前位置仍在本地明细/库存流水中，数量字段及幂等合同不变。历史159不追溯改位置，本次没有新增旧表流水。见[发布记录](DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
+
+2026-11-06真实888：11个新盘点事件的Goods三处实盘/盘前数量及OnlyCode差异、Order业务/ERP号/备注和showList均核对通过，5码最新位置一致；原历史JSON未改。备注codex test，详情见[实测报告](test-builds/2026-11-06-inventory-count-real-888.md)。

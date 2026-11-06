@@ -64,3 +64,5 @@
 2026-11-05：盘点888上传保存与审核/差异边界更新，真实首单由用户操作、尚未验收，见[本次发布](../DEPLOYMENT_2026-11-05_COUNT_UPLOAD.md)。
 
 2026-11-05位置补充：Gateway0.11.7/API0.12.10已部署888，COUNT_ADJUSTMENT同步本次盘点仓库/货位，零差异也保存位置。Goods根/inventory及既有别名同步更新；物料身份保持。自动合同通过，跨仓实写待用户测试，见[发布记录](../DEPLOYMENT_2026-11-05_COUNT_POSITION.md)。
+
+2026-11-06真实888：5码新旧余额/最新流水/位置一致，11个COUNT_ADJUSTMENT事件均COMPLETED且attempt_count=1，JSON及稳定事件键无重复；重复成功请求不重写。这里只证明标签及盘点实盘同步，生成的其他入库/出库未审，ERP现存量不等同标签余额。生产/其他业务证据不扩大，见[实测报告](../test-builds/2026-11-06-inventory-count-real-888.md)。
