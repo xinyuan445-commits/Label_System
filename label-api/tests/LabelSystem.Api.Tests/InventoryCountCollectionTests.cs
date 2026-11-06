@@ -194,14 +194,19 @@ public sealed class InventoryCountCollectionTests
         Assert.Equal("MATCHED", InventoryCountRules.MatchDirect("W1", Observation(), old, false).Status);
     }
 
-    [Fact]
-    public async Task DirectCountUsesBatchesWithoutRequiringOrCreatingNativeSource()
+    [Theory]
+    [InlineData(101, 2)]
+    [InlineData(500, 5)]
+    [InlineData(501, 6)]
+    [InlineData(1000, 10)]
+    public async Task DirectCountUsesBatchesWithoutRequiringOrCreatingNativeSource(int size, int batches)
     {
         var fake = new ReadOnlyHandler();
-        var observations = Enumerable.Range(0, 101).Select(n => new InventoryCountObservation("TAG" + n, "1")).ToArray();
+        var observations = Enumerable.Range(0, size).Select(n => new InventoryCountObservation("TAG" + n, "1")).ToArray();
         var result = await Service(fake).ValidateDirectAsync(new("888", "UFDATA_888_2021", "W1", observations, true), default);
-        Assert.Equal(2, fake.SnapshotCalls);
-        Assert.Equal(101, result.Items.Count);
+        Assert.Equal(batches, fake.SnapshotCalls);
+        Assert.Equal(size, result.Items.Count);
+        Assert.Equal(observations.Select(row => row.Code), result.Items.Select(row => row.Code));
         Assert.All(result.Items, row => { Assert.Equal("MATCHED", row.Status); Assert.Equal(10m, row.Label!.AvailableQty); });
         Assert.False(result.CanSubmit);
     }

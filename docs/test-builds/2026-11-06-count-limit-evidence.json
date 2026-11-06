@@ -1,0 +1,77 @@
+{
+    "after":  {
+                  "operations":  22,
+                  "labels":  10,
+                  "flows":  28,
+                  "tasks":  18,
+                  "drafts":  15,
+                  "oldFlows":  52425
+              },
+    "businessCountsUnchanged":  true,
+    "physicalPdaTested":  false,
+    "full1000LabelWriteTested":  false,
+    "timings":  [
+                    {
+                        "returned":  500,
+                        "statusCounts":  [
+                                             {
+                                                 "count":  244,
+                                                 "status":  "MATCHED"
+                                             },
+                                             {
+                                                 "count":  256,
+                                                 "status":  "LABEL_INVALID"
+                                             }
+                                         ],
+                        "size":  500,
+                        "elapsedMs":  5168
+                    },
+                    {
+                        "returned":  501,
+                        "statusCounts":  [
+                                             {
+                                                 "count":  244,
+                                                 "status":  "MATCHED"
+                                             },
+                                             {
+                                                 "count":  257,
+                                                 "status":  "LABEL_INVALID"
+                                             }
+                                         ],
+                        "size":  501,
+                        "elapsedMs":  5256
+                    },
+                    {
+                        "returned":  1000,
+                        "statusCounts":  [
+                                             {
+                                                 "count":  366,
+                                                 "status":  "MATCHED"
+                                             },
+                                             {
+                                                 "count":  634,
+                                                 "status":  "LABEL_INVALID"
+                                             }
+                                         ],
+                        "size":  1000,
+                        "elapsedMs":  11069
+                    }
+                ],
+    "apiVersion":  "0.12.13-count-dev",
+    "date":  "2026-11-06",
+    "before":  {
+                   "operations":  22,
+                   "labels":  10,
+                   "flows":  28,
+                   "tasks":  18,
+                   "drafts":  15,
+                   "oldFlows":  52425
+               },
+    "accountId":  "888",
+    "rejection":  {
+                      "httpStatus":  400,
+                      "code":  "COUNT_OBSERVATIONS_INVALID",
+                      "size":  1001
+                  },
+    "readOnly":  true
+}

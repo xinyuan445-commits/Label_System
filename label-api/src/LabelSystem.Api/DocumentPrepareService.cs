@@ -184,7 +184,8 @@ public sealed class DocumentPrepareService(
         if (request.Header is null)
             throw new ApiException(StatusCodes.Status400BadRequest, "HEADER_REQUIRED", "单据表头不能为空。");
         ValidateDocumentDirection(request.Header.DocumentDirection);
-        if (request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > 500)
+        var maximumLines = definition.DocumentType == "inventory-count" ? InventoryCountRules.MaximumObservations : 500;
+        if (request.Lines is null || request.Lines.Count == 0 || request.Lines.Count > maximumLines)
             throw new ApiException(StatusCodes.Status400BadRequest, "LINES_INVALID", "明细数量无效。");
 
         if (IsRequired(requiredFields, "header.documentDate", true) && request.Header.DocumentDate == default)
