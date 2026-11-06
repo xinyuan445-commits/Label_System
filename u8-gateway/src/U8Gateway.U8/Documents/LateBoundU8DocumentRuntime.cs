@@ -460,10 +460,12 @@ namespace U8Gateway.U8.Documents
             object system = null;
             string voucherCode = string.Empty;
             string saveMessage = string.Empty;
+            string salesStage = "读取请求";
+            bool saveStarted = false;
             try
             {
-                head = ParseXml(packet.HeaderXml, "销售单表头");
-                body = ParseXml(packet.BodyXml, "销售单表体");
+                head = ParseXml(SetFirstRowAttribute(packet.HeaderXml, "cvouchtype", "05"), "销售单表头");
+                body = ParseXml(PrepareSalesBody(options, packet.BodyXml, Convert.ToDecimal(execution.Request.Header["iexchrate"])), "销售单表体");
                 login = Login(options.U8);
                 common = Create("USCOMMON.Login");
                 dynamic commonLogin = common;
@@ -471,30 +473,39 @@ namespace U8Gateway.U8.Documents
                 commonLogin.Load(ref source);
                 connection = ConvertConnection(commonLogin.AccountConnection);
 
+                salesStage = "初始化销售系统";
+                system = Create("USSAServer.clsSystem");
+                dynamic salesSystem = system;
+                string systemError = string.Empty;
+                if (!salesSystem.Init(ref login, ref systemError))
+                    throw new InvalidOperationException(Empty(systemError, "销售系统初始化失败。"));
                 bool red = OptionBoolean(execution.Request.Options, "redVoucher");
                 VoucherTypeSA voucherType = red ? VoucherTypeSA.DispatchRed : VoucherTypeSA.DispatchBlue;
                 voucher = new ClsVoucherCO_SAClass();
-                if (!voucher.InitSys(ref login, voucherType, ref system))
-                    throw new InvalidOperationException("销售 CO 初始化失败。");
+                salesStage = "初始化销售单据";
                 string userMode = "CS";
                 voucher.Init(voucherType, ref login, ref connection, ref userMode, ref system);
 
                 string error = string.Empty;
                 bool getFormatOnly = false;
                 bool selfFormat = false;
+                salesStage = "生成单据号";
                 bool numbered = voucher.GetVoucherNO(
                     ref head, ref voucherCode, ref error, ref format,
                     ref getFormatOnly, ref selfFormat);
                 if (!numbered || string.IsNullOrWhiteSpace(voucherCode))
                     return Failure("U8_CREATE_REJECTED", Empty(error, "U8 未生成单据号。"), voucherCode);
 
+                head.loadXML(SetFirstRowAttribute(head.xml, "cdlcode", voucherCode.Trim()));
                 object currentId = null;
-                config = new DOMDocument26Class();
+                salesStage = "保存";
+                saveStarted = true;
                 saveMessage = voucher.Save(head, body, 0, ref currentId, ref config);
                 long? confirmedId = WaitForVoucherId(options, execution.Profile, voucherCode);
                 if (!confirmedId.HasValue)
-                    return Failure("U8_WRITE_NOT_CONFIRMED",
-                        Empty(saveMessage, "U8 新增后回查未确认。"), voucherCode, false);
+                    return string.IsNullOrWhiteSpace(saveMessage)
+                        ? Failure("U8_WRITE_NOT_CONFIRMED", "U8 新增后回查未确认。", voucherCode, false)
+                        : Failure("U8_CREATE_REJECTED", saveMessage, voucherCode);
                 VoucherState state = ReadVoucherState(options, execution.Profile, confirmedId.Value);
                 U8XmlPacket saved = QuerySales(options.U8, confirmedId.Value, login);
                 return new DocumentOperationResult
@@ -508,6 +519,14 @@ namespace U8Gateway.U8.Documents
                     Version = state.Version,
                     Document = _codec.Decode(definition, saved)
                 };
+            }
+            catch (Exception error) when (!saveStarted)
+            {
+                return Failure("U8_CREATE_REJECTED", "销售新增（" + salesStage + "）：" + error.Message, voucherCode);
+            }
+            catch (System.Runtime.InteropServices.COMException error)
+            {
+                throw new InvalidOperationException("销售新增（" + salesStage + "）：" + error.Message, error);
             }
             finally
             {
@@ -1250,10 +1269,11 @@ namespace U8Gateway.U8.Documents
                 string returnFlag = Convert.ToString(FirstAttribute(Xml(head), "breturnflag"));
                 VoucherTypeSA voucherType = returnFlag == "1" || string.Equals(returnFlag, "true", StringComparison.OrdinalIgnoreCase)
                     ? VoucherTypeSA.DispatchRed : VoucherTypeSA.DispatchBlue;
-                if (!voucher.InitSys(ref login, voucherType, ref system))
-                {
-                    throw new InvalidOperationException("销售 CO 初始化失败。");
-                }
+                system = Create("USSAServer.clsSystem");
+                dynamic salesSystem = system;
+                string systemError = string.Empty;
+                if (!salesSystem.Init(ref login, ref systemError))
+                    throw new InvalidOperationException(Empty(systemError, "销售系统初始化失败。"));
                 string userMode = "CS";
                 voucher.Init(
                     voucherType,
@@ -1296,6 +1316,81 @@ namespace U8Gateway.U8.Documents
                     label + " XML 无效：" + Empty(reason, "内容为空。"));
             }
             return document;
+        }
+
+        private static string PrepareSalesBody(U8GatewayRuntimeOptions options, string xml, decimal exchangeRate)
+        {
+            XDocument document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            var rows = document.Descendants().Where(x => x.Name.LocalName == "row").ToArray();
+            var codes = rows.Select(x => (string)x.Attribute("cinvcode")).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var units = new Dictionary<string, Tuple<string, string, int>>(StringComparer.OrdinalIgnoreCase);
+            var returns = new Dictionary<long, decimal>();
+            using (var connection = new SqlConnection(ConnectionString(options)))
+            using (var command = connection.CreateCommand())
+            {
+                var parameters = codes.Select((code, index) => "@code" + index).ToArray();
+                command.CommandTimeout = 20;
+                command.CommandText = "select cInvCode,cGroupCode,cComUnitCode,iGroupType from dbo.Inventory where cInvCode in (" + string.Join(",", parameters) + ")";
+                for (int i = 0; i < codes.Length; i++) command.Parameters.AddWithValue(parameters[i], codes[i]);
+                connection.Open();
+                using (var reader = command.ExecuteReader())
+                    while (reader.Read()) units.Add(Convert.ToString(reader[0]), Tuple.Create(Convert.ToString(reader[1]), Convert.ToString(reader[2]), Convert.ToInt32(reader[3])));
+                var originalIds = rows.Where(x => x.Attribute("icorid") != null).Select(x => (long)x.Attribute("icorid")).Where(x => x > 0).Distinct().ToArray();
+                if (originalIds.Length > 0)
+                {
+                    command.Parameters.Clear();
+                    var ids = originalIds.Select((id, index) => "@original" + index).ToArray();
+                    command.CommandText = "select d.iDLsID,abs(isnull(d.iQuantity,0)),abs(isnull(d.iSettleQuantity,0)),abs(isnull(d.fretqtywkp,0))+(select isnull(sum(abs(r.iQuantity)),0) from dbo.DispatchLists r join dbo.DispatchList h on h.DLID=r.DLID where h.bReturnFlag=1 and r.iCorIdlsID=d.iDLsID and isnull(r.iCorID,0)=0) from dbo.DispatchLists d where d.iDLsID in (" + string.Join(",", ids) + ")";
+                    for (int i = 0; i < originalIds.Length; i++) command.Parameters.AddWithValue(ids[i], originalIds[i]);
+                    using (var reader = command.ExecuteReader())
+                        while (reader.Read())
+                        {
+                            returns.Add(Convert.ToInt64(reader[0]), Math.Max(0, Convert.ToDecimal(reader[1]) - Convert.ToDecimal(reader[2]) - Convert.ToDecimal(reader[3])));
+                        }
+                }
+            }
+            foreach (XElement row in rows)
+            {
+                Tuple<string, string, int> unit;
+                if (!units.TryGetValue((string)row.Attribute("cinvcode"), out unit) || string.IsNullOrWhiteSpace(unit.Item2))
+                    throw new InvalidOperationException("存货计量单位资料不完整。");
+                CompleteSalesRow(row, unit.Item1, unit.Item2, unit.Item3, exchangeRate);
+                if (row.Attribute("icorid") != null && (long)row.Attribute("icorid") > 0)
+                {
+                    decimal unbilledAvailable;
+                    if (!returns.TryGetValue((long)row.Attribute("icorid"), out unbilledAvailable))
+                        throw new InvalidOperationException("退货原单已变化。");
+                    CompleteSalesReturnReference(row, unbilledAvailable);
+                }
+            }
+            return document.ToString(SaveOptions.DisableFormatting);
+        }
+
+        private static void CompleteSalesReturnReference(XElement row, decimal unbilledAvailable)
+        {
+            if (Math.Abs((decimal)row.Attribute("iquantity")) > unbilledAvailable) return;
+            row.SetAttributeValue("icoridlsid", (long)row.Attribute("icorid"));
+            row.Attribute("icorid").Remove();
+        }
+
+        private static void CompleteSalesRow(XElement row, string groupCode, string unitCode, int groupType, decimal exchangeRate)
+        {
+            row.SetAttributeValue("editprop", "A");
+            row.SetAttributeValue("cgroupcode", groupCode);
+            row.SetAttributeValue("ccomunitcode", unitCode);
+            row.SetAttributeValue("igrouptype", groupType);
+            row.SetAttributeValue("iinvexchrate", 1);
+            row.SetAttributeValue("iretquantity", 0);
+            if (row.Attribute("imoney") != null)
+            {
+                decimal money = decimal.Parse((string)row.Attribute("imoney"), System.Globalization.CultureInfo.InvariantCulture);
+                decimal total = decimal.Parse((string)row.Attribute("isum"), System.Globalization.CultureInfo.InvariantCulture);
+                decimal nativeMoney = decimal.Round(money * exchangeRate, 2, MidpointRounding.AwayFromZero);
+                decimal nativeTotal = decimal.Round(total * exchangeRate, 2, MidpointRounding.AwayFromZero);
+                row.SetAttributeValue("inatmoney", nativeMoney);
+                row.SetAttributeValue("inatsum", nativeTotal);
+                row.SetAttributeValue("inattax", nativeTotal - nativeMoney);
+            }
         }
 
         private static string SetFirstRowAttribute(

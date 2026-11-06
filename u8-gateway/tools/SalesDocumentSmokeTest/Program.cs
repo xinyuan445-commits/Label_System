@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Reflection;
+using System.Xml.Linq;
 using Newtonsoft.Json;
 using U8Gateway.Core.Documents;
 using U8Gateway.Metadata;
@@ -35,6 +37,27 @@ internal static class Program
             var decoded = new AdoPersistedXmlCodec().Decode(definition, packet);
             if (Convert.ToDecimal(decoded.Lines[0]["iquantity"]) != -2m || Convert.ToInt64(decoded.Lines[0]["icorid"]) != 1000031711)
                 throw new Exception("Return quantity/link XML round trip failed.");
+            foreach (var sign in new[] { 1m, -1m }) foreach (var rate in new[] { 1m, 7.125m })
+            {
+                var row = new XElement("row", new XAttribute("imoney", sign * 176.99m), new XAttribute("isum", sign * 200m));
+                typeof(LateBoundU8DocumentRuntime).GetMethod("CompleteSalesRow", BindingFlags.NonPublic | BindingFlags.Static)
+                    .Invoke(null, new object[] { row, "G1", "U1", 0, rate });
+                var amount = decimal.Round(sign * 176.99m * rate, 2, MidpointRounding.AwayFromZero);
+                var total = decimal.Round(sign * 200m * rate, 2, MidpointRounding.AwayFromZero);
+                if ((string)row.Attribute("editprop") != "A" || (string)row.Attribute("ccomunitcode") != "U1" ||
+                    (decimal)row.Attribute("inatmoney") != amount || (decimal)row.Attribute("inatsum") != total ||
+                    (decimal)row.Attribute("inattax") != total - amount)
+                    throw new Exception("Native sales units/base-currency amounts failed.");
+            }
+            foreach (var available in new[] { 1m, 3m })
+            {
+                var row = new XElement("row", new XAttribute("icorid", 41), new XAttribute("iquantity", -2));
+                typeof(LateBoundU8DocumentRuntime).GetMethod("CompleteSalesReturnReference", BindingFlags.NonPublic | BindingFlags.Static)
+                    .Invoke(null, new object[] { row, available });
+                if (available == 3m ? row.Attribute("icorid") != null || (long)row.Attribute("icoridlsid") != 41 :
+                    row.Attribute("icoridlsid") != null || (long)row.Attribute("icorid") != 41)
+                    throw new Exception("Invoiced/uninvoiced original dispatch linkage failed.");
+            }
             if (args.Length == 0) { Console.WriteLine("sales source type contracts passed (no SQL/COM)"); return 0; }
             if (args.Length != 2) throw new Exception("Expected settings path and existing voucher code.");
             settings = new ProtectedSettingsStore(args[0]).Current;

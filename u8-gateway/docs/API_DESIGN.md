@@ -1,14 +1,14 @@
 # U8 Gateway API 设计
 
-资料复核：2026-11-06；开发9881/888为0.12.0（test），销售原单/退货视角、原生字段及回读已补齐，合同和真实来源SQL通过；保存审核受U8许可饱和阻塞。生产不变，见[现行发布](../../docs/DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。盘点保留既有实单证据。
+资料与部署/实测：2026-11-06；开发9881/888为0.12.1（test），销售有原单基础实写/审核及合同通过；原单已退量包含未开票关联累计，生产不变。见[发布记录](../../docs/DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。
 
-## 销售来源与退货（0.12.0）
+## 销售来源与退货（0.12.1）
 
 既有GET /source-documents与POST /source-documents/lines新增sourceType=sales-order-return、sales-delivery-return，不新增写入接口。sales-order改用SO_SODetails.iSOsID；返回兼容orderQuantity（本次可用量），另有plannedQuantity、processedQuantity、remainingQuantity、partnerCode/Name、salesTypeCode、currencyName、exchangeRate、taxRate、unitPrice、taxUnitPrice、salesOrderLineId/No、salesOrderAvailableQuantity。
 
 蓝字订单剩余=iQuantity-iFHQuantity；订单退货直接使用净iFHQuantity，累计发货=iFHQuantity+fretquantity，已退=fretquantity。原发货退货只读已审核蓝字，剩余=iQuantity-iRetQuantity，并取对应订单净可退量较小值（有关联时）。退货不按蓝字已关闭/未发完规则过滤；已关闭且有可退量的真实订单已读取验证。
 
-写入继续使用sales-delivery原接口，options.redVoucher选择组件，header.breturnflag是整数0/1（不是bool），退货数量为负。原发货关联line.icorid、ccorcode已加入创建白名单，订单关联isosid。审核按真实原生标志初始化组件；保存后回读复用同一登录，避免额外并发占许可。U8调用/字段合同不代表本轮实写已验收，业务写入范围和认证不扩大。发货/退货不调用TraceBack数量事件写入。
+写入继续使用sales-delivery原接口，options.redVoucher选择组件，header.breturnflag是整数0/1（不是bool），退货数量为负。原发货关联line.icorid、ccorcode已加入创建白名单，订单关联isosid。审核按真实原生标志初始化组件；保存后回读复用同一登录，避免额外并发占许可。订单发货/退货及未开票原发货实写已验证，已开票和混合开票尚未实测，业务写入范围和认证不扩大。发货/退货不调用TraceBack数量事件写入。
 
 ## 0.11.9：盘点关联审核
 
@@ -311,3 +311,5 @@ COUNT_ADJUSTMENT接受TargetWarehouseCode/TargetLocationCode，并在写事务�
 严格888测试账套及原写入门禁。盘点verify使用通用版本/操作归档和USERPCO状态操作，读取真实状态确认成功；若已审核，返回当前成功状态，不重调原生组件。Add/Edit必须countPartialSave，Unverify/Delete拒绝。审核不调用TraceBack数量同步；差异已在保存确认后执行。Business API使用原业务组恢复审核失败，不能新建盘点单解决。
 
 2026-11-06：按用户授权执行888真实接口测试，新增/回填、累计修订、零余额恢复、跨仓位置、盘盈/盘亏本单审核及重复提交已验证。保留4张盘点单、生成的1张其他入库/1张其他出库、8次成功操作及1次失败、9份草稿、11条旧数量事件。备注均codex test。盘点本单已审不表示关联出入库已审：0000005823/0000006569仍未审，U8现存量尚有对应差异；PDA实机与故障注入未验。本轮无程序/结构/配置变更，不是再次部署，生产008未动。 详见[实测报告](../../docs/test-builds/2026-11-06-inventory-count-real-888.md)。
+
+销售新增先创建USSAServer.clsSystem并Init，再VoucherCO_SA.Init；补cvouchtype/取号cdlcode、editprop=A、物料主单位/组及本币金额。API仍传真实iDLsID；未开票关联使用iCorIdlsID，已开票使用iCorID，不用AutoID或iTB退补替代。来源已退量追加未开票关联累计。保存未调用的失败为明确拒绝；Save明确错误且回查无单时同样明确失败，空结果或保存后异常仍待核对。

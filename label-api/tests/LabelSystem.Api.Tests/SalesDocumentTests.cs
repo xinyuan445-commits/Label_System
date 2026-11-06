@@ -86,13 +86,24 @@ public sealed class SalesDocumentTests
         Assert.Equal(2m, blue.Lines[0]["iquantity"]);
         Assert.Equal(1000016857, blue.Lines[0]["isosid"]);
         Assert.Equal(12m, blue.Lines[0]["iunitprice"]);
+        Assert.Equal(24m, blue.Lines[0]["imoney"]);
+        Assert.Equal(3.12m, blue.Lines[0]["itax"]);
+        Assert.Equal(27.12m, blue.Lines[0]["isum"]);
         Assert.Equal("L1", blue.Lines[0]["cposition"]);
+        Assert.False(blue.Header.ContainsKey("cpaycode"));
         var returned = Build(Request("sales-delivery-return"));
         Assert.Equal(1, returned.Header["breturnflag"]);
         Assert.Equal(-2m, returned.Lines[0]["iquantity"]);
         Assert.Equal(1000016857, returned.Lines[0]["icorid"]);
         Assert.Equal("SO12", returned.Lines[0]["ccorcode"]);
         Assert.Equal(13.56m, returned.Lines[0]["itaxunitprice"]);
+        Assert.Equal(-24m, returned.Lines[0]["imoney"]);
+        Assert.Equal(-27.12m, returned.Lines[0]["isum"]);
+        var withoutOrder = Request("sales-delivery-return") with
+        { SalesSourceLines = [Source("sales-delivery-return") with { SalesOrderLineId = null, SalesOrderNo = null }] };
+        var originalOnly = Build(withoutOrder);
+        Assert.False(originalOnly.Lines[0].ContainsKey("isosid"));
+        Assert.False(originalOnly.Lines[0].ContainsKey("csocode"));
     }
 
     [Fact]

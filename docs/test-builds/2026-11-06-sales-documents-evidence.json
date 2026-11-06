@@ -1,109 +1,146 @@
 {
-    "databaseName":  "UFDATA_888_2021",
-    "gatewayPath":  "D:\\LabelSystem\\DevPrinting\\releases\\20261106_sales_0130_r2\\gateway",
-    "date":  "2026-11-06",
-    "returnSettings":  [
-                           {
-                               "setting_key":  "auto_add_scanned_detail",
-                               "value_json":  "false"
-                           },
-                           {
-                               "setting_key":  "auto_upload_on_complete",
-                               "value_json":  "false"
-                           },
-                           {
-                               "setting_key":  "auto_approve_after_upload",
-                               "value_json":  "false"
-                           }
-                       ],
-    "apiVersion":  "0.13.0-sales-dev",
-    "gatewayVersion":  "0.12.0.0",
-    "physicalPdaTested":  false,
-    "productionChanged":  false,
-    "migration":  "020",
-    "gatewayHash":  "4939D692121AE765C165D2473455CE845C11838996D632586AE2D313DEB10543",
-    "nativeRead":  "LICENSE_SATURATED",
-    "sourceReads":  [
-                        {
-                            "sourceType":  "sales-order",
-                            "rows":  [
-                                         {
-                                             "hasPriceFields":  true,
-                                             "sourceLineId":  1000016857,
-                                             "sourceDocumentId":  1000002833,
-                                             "remainingQuantity":  243.0000000000,
-                                             "hasCurrency":  true,
-                                             "hasCustomer":  true,
-                                             "processedQuantity":  157.0000000000,
-                                             "plannedQuantity":  400.0000000000
-                                         }
-                                     ]
-                        },
-                        {
-                            "sourceType":  "sales-order-return",
-                            "rows":  [
-                                         {
-                                             "hasPriceFields":  true,
-                                             "sourceLineId":  1000016857,
-                                             "sourceDocumentId":  1000002833,
-                                             "remainingQuantity":  157.0000000000,
-                                             "hasCurrency":  true,
-                                             "hasCustomer":  true,
-                                             "processedQuantity":  0.000000,
-                                             "plannedQuantity":  157.0000000000
-                                         }
-                                     ]
-                        },
-                        {
-                            "sourceType":  "sales-delivery-return",
-                            "rows":  [
-                                         {
-                                             "hasPriceFields":  true,
-                                             "sourceLineId":  1000031711,
-                                             "sourceDocumentId":  1000005834,
-                                             "remainingQuantity":  45.0000000000,
-                                             "hasCurrency":  true,
-                                             "hasCustomer":  true,
-                                             "processedQuantity":  0.000000,
-                                             "plannedQuantity":  45.0000000000
-                                         },
-                                         {
-                                             "hasPriceFields":  false,
-                                             "sourceLineId":  1000031712,
-                                             "sourceDocumentId":  1000005834,
-                                             "remainingQuantity":  1.0000000000,
-                                             "hasCurrency":  true,
-                                             "hasCustomer":  true,
-                                             "processedQuantity":  0.000000,
-                                             "plannedQuantity":  1.0000000000
-                                         }
-                                     ]
-                        }
-                    ],
-    "accountId":  "888",
-    "closedOrderProof":  {
-                             "value":  [
-                                           {
-                                               "code":  "SOURCE_LINES_NOT_FOUND",
-                                               "rows":  0,
-                                               "type":  "sales-order"
-                                           },
-                                           {
-                                               "type":  "sales-order-return",
-                                               "rows":  1
-                                           }
-                                       ],
-                             "Count":  2
-                         },
-    "activeOperations":  0,
-    "tests":  {
-                  "apiSkipped":  1,
-                  "gatewayContractPassed":  true,
-                  "apiPassed":  136,
-                  "frontendPassed":  56
-              },
-    "apiPath":  "D:\\LabelSystem\\DevPrinting\\releases\\20261106_sales_0130_r2\\api",
-    "nativeWriteTested":  false,
-    "apiHash":  "C0D94801753DEA45BD37BAF2265CDDD59115BBBCE61B3104A20D12E63DC814A7",
-    "h5Version":  "0.2.0-dev.96"
+  "databaseName": "UFDATA_888_2021",
+  "gatewayPath": "D:\\LabelSystem\\DevPrinting\\releases\\20261106_sales_verified_0131_r2\\gateway",
+  "date": "2026-11-06",
+  "returnSettings": [
+    {
+      "setting_key": "auto_add_scanned_detail",
+      "value_json": "false"
+    },
+    {
+      "setting_key": "auto_upload_on_complete",
+      "value_json": "false"
+    },
+    {
+      "setting_key": "auto_approve_after_upload",
+      "value_json": "false"
+    }
+  ],
+  "apiVersion": "0.13.1-sales-dev",
+  "gatewayVersion": "0.12.1.0",
+  "physicalPdaTested": false,
+  "productionChanged": false,
+  "migration": "020",
+  "gatewayHash": "89506A1694E21C19B5D6DF8D9BE39EE512977681BE988BD3ABC2716054CFF606",
+  "nativeRead": "PASSED_AFTER_LICENSE_RELEASE",
+  "sourceReads": [
+    {
+      "sourceType": "sales-order",
+      "rows": [
+        {
+          "hasPriceFields": true,
+          "sourceLineId": 1000016857,
+          "sourceDocumentId": 1000002833,
+          "remainingQuantity": 243.0,
+          "hasCurrency": true,
+          "hasCustomer": true,
+          "processedQuantity": 157.0,
+          "plannedQuantity": 400.0
+        }
+      ]
+    },
+    {
+      "sourceType": "sales-order-return",
+      "rows": [
+        {
+          "hasPriceFields": true,
+          "sourceLineId": 1000016857,
+          "sourceDocumentId": 1000002833,
+          "remainingQuantity": 157.0,
+          "hasCurrency": true,
+          "hasCustomer": true,
+          "processedQuantity": 0.0,
+          "plannedQuantity": 157.0
+        }
+      ]
+    },
+    {
+      "sourceType": "sales-delivery-return",
+      "rows": [
+        {
+          "hasPriceFields": true,
+          "sourceLineId": 1000031711,
+          "sourceDocumentId": 1000005834,
+          "remainingQuantity": 45.0,
+          "hasCurrency": true,
+          "hasCustomer": true,
+          "processedQuantity": 0.0,
+          "plannedQuantity": 45.0
+        },
+        {
+          "hasPriceFields": false,
+          "sourceLineId": 1000031712,
+          "sourceDocumentId": 1000005834,
+          "remainingQuantity": 1.0,
+          "hasCurrency": true,
+          "hasCustomer": true,
+          "processedQuantity": 0.0,
+          "plannedQuantity": 1.0
+        }
+      ]
+    }
+  ],
+  "accountId": "888",
+  "closedOrderProof": {
+    "value": [
+      {
+        "code": "SOURCE_LINES_NOT_FOUND",
+        "rows": 0,
+        "type": "sales-order"
+      },
+      {
+        "type": "sales-order-return",
+        "rows": 1
+      }
+    ],
+    "Count": 2
+  },
+  "activeOperations": 0,
+  "tests": {
+    "apiSkipped": 1,
+    "gatewayContractPassed": true,
+    "apiPassed": 136,
+    "frontendPassed": 56
+  },
+  "apiPath": "D:\\LabelSystem\\DevPrinting\\releases\\20261106_sales_verified_0131_r2\\api",
+  "nativeWriteTested": true,
+  "apiHash": "B541FB71056D5B9438E185166E9F72883E5363F21B0D8DADA58B5CA6A012B997",
+  "h5Version": "0.2.0-dev.96",
+  "nativeEvidence": {
+    "saved": 8,
+    "audited": 8,
+    "financialChecksPassed": 6,
+    "earlyZeroAmountProbes": [
+      "XSFH26113254",
+      "XSFH26113255"
+    ],
+    "vouchers": [
+      "XSFH26113256",
+      "XSFH26113257",
+      "XSFH26113258",
+      "XSFH26113259",
+      "XSFH26113260",
+      "XSFH26113261"
+    ],
+    "localFailedRetained": 20,
+    "localCancelledRetained": 2,
+    "localFlows": 29,
+    "syncTasks": 18,
+    "legacyFlows": 52425,
+    "mirrorBalance": 800,
+    "legacyBalance": 800,
+    "legacyLatestFlowId": 53819,
+    "erpStock": 800,
+    "orderNetDispatched": 157,
+    "orderReturns": 4,
+    "exhaustedSourceRead": "SOURCE_LINES_NOT_FOUND",
+    "exhaustedSourceNewSubmit": "SOURCE_LINES_NOT_FOUND",
+    "replayPassed": true,
+    "noSourceAccepted": false,
+    "mustOrderRulesRetainedByUser": true,
+    "paidOriginalReturnRealWriteTested": false,
+    "mixedInvoiceRowSplittingImplemented": false,
+    "foreignCurrencyRealWriteTested": false,
+    "temporarySqlTraceRemoved": true
+  }
 }

@@ -201,7 +201,12 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                     profile.Sales && profile.HeaderTable == "DispatchList" ?
                     "(select s.iFHQuantity from dbo.SO_SODetails s where s.iSOsID=d.iSOsID)" : "cast(null as decimal(28,6))";
                 if (profile.Sales && profile.HeaderTable == "DispatchList")
+                {
+                    // Uninvoiced returns use iCorIdlsID and do not increment iRetQuantity.
+                    processed += "+(select isnull(sum(abs(r.iQuantity)),0) from dbo.DispatchLists r join dbo.DispatchList rh on rh.DLID=r.DLID where rh.bReturnFlag=1 and r.iCorIdlsID=d.iDLsID and isnull(r.iCorID,0)=0)";
+                    remaining = planned + "-(" + processed + ")";
                     remaining = "case when " + orderAvailable + "<" + remaining + " then " + orderAvailable + " else " + remaining + " end";
+                }
                 var filters = new List<string>
                 {
                     remaining + " > 0"

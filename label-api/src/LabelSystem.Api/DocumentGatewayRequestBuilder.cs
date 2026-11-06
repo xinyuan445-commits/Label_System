@@ -104,7 +104,8 @@ internal static class DocumentGatewayRequestBuilder
                 header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyName") ?? "人民币";
                 header["iexchrate"] = AdditionalDecimal(value.AdditionalFields, "exchangeRate") ?? 1m;
                 header["itaxrate"] = AdditionalDecimal(value.AdditionalFields, "taxRate");
-                header["cpaycode"] = AdditionalText(value.AdditionalFields, "paymentCode");
+                if (AdditionalText(value.AdditionalFields, "paymentCode") is { } salesPayment)
+                    header["cpaycode"] = salesPayment;
                 header["cshipaddress"] = AdditionalText(value.AdditionalFields, "deliveryAddress");
                 header["ccontactname"] = AdditionalText(value.AdditionalFields, "contactName");
                 header["cmobilephone"] = AdditionalText(value.AdditionalFields, "contactPhone");
@@ -226,8 +227,11 @@ internal static class DocumentGatewayRequestBuilder
                 {
                     var salesSource = request.SalesSourceLines?.Single(s => s.SourceType == operation.SourceDocumentType && s.SourceLineId == line.SourceLineId)
                         ?? throw new ApiException(409, "SALES_SOURCE_CHANGED", "请重选退货原单。");
-                    row["isosid"] = salesSource.SalesOrderLineId;
-                    row["csocode"] = salesSource.SalesOrderNo;
+                    if (salesSource.SalesOrderLineId is > 0)
+                    {
+                        row["isosid"] = salesSource.SalesOrderLineId;
+                        row["csocode"] = salesSource.SalesOrderNo;
+                    }
                     if (operation.SourceDocumentType == "sales-delivery-return")
                     { row["icorid"] = line.SourceLineId; row["ccorcode"] = operation.SourceDocumentNo; }
                 }
@@ -235,6 +239,11 @@ internal static class DocumentGatewayRequestBuilder
                 {
                     row["iunitprice"] = price.UnitPrice ?? 0m; row["itaxunitprice"] = price.TaxUnitPrice ?? 0m;
                     row["itaxrate"] = price.TaxRate ?? 0m;
+                    var money = decimal.Round(quantity * (price.UnitPrice ?? 0m), 2, MidpointRounding.AwayFromZero);
+                    var total = decimal.Round(quantity * (price.TaxUnitPrice ?? 0m), 2, MidpointRounding.AwayFromZero);
+                    row["imoney"] = money;
+                    row["itax"] = total - money;
+                    row["isum"] = total;
                 }
                 break;
             case "sales-outbound":
