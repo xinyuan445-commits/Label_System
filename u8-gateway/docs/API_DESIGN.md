@@ -1,6 +1,12 @@
 # U8 Gateway API 设计
 
-资料复核：2026-11-05；开发9881/888为0.11.8（test），盘点verify已接通，合同/构建通过，真实审核待用户验收；生产不变，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。
+资料复核：2026-11-06；开发9881/888为0.11.9（test），盘点verify包含关联其他出入库审核及部分失败续审，888补审/新混合盈亏已实测；生产不变，见[现行发布](../../docs/DEPLOYMENT_2026-11-06_COUNT_LINKED_APPROVAL.md)。
+
+## 0.11.9：盘点关联审核
+
+既有`POST /api/v1/documents/inventory-count/{code}/verify`先审核盘点，再审核其生成的全部其他出库、其他入库，最终重新读取主单和完整关联集合确认。关联条件为cSource=盘点、cBusCode=盘点单号、同仓库；依据盘点明细正/负差异要求对应方向，零差异不强制生成单。不得套用调拨的“必须同时存在两类”规则。
+
+缺少应有方向返回U8_COUNT_LINKED_NOT_READY，原生关联审核拒绝返回U8_COUNT_LINKED_VERIFY_REJECTED，最终未全部确认返回U8_COUNT_STATE_NOT_CONFIRMED且OutcomeKnown=false。主单已审或部分子单已审时只补未完成项。内部countApprovalRecovery仅在verify且父单已审时免旧父单版本检查，仍须完成关联审核；普通请求版本校验保持。审核不写TraceBack数量事件，不开放弃审或008盘点。无新接口/迁移。
 
 ## 盘点现行只读合同（0.11.4）
 

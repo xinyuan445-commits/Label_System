@@ -598,12 +598,12 @@ namespace U8Gateway.U8.Documents
                 options,
                 execution.Profile,
                 voucherId.Value);
-            if (execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount &&
+            // Recovery may skip the old parent version, but must still finish its linked vouchers.
+            bool countRecovery = execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount &&
                 InventoryCountSaveRules.AuditAlreadyConfirmed(execution.Operation, before.Verified,
-                    OptionBoolean(execution.Request?.Options, "countApprovalRecovery")))
-                return Success(execution, voucherId, before.Version, "单据已审核。");
+                    OptionBoolean(execution.Request?.Options, "countApprovalRecovery"));
             string expectedVersion = execution.Request?.ExpectedVersion;
-            if (!string.IsNullOrWhiteSpace(expectedVersion) &&
+            if (!countRecovery && !string.IsNullOrWhiteSpace(expectedVersion) &&
                 !string.Equals(
                     expectedVersion.Trim(),
                     before.Version,
@@ -623,6 +623,8 @@ namespace U8Gateway.U8.Documents
                 execution.Operation,
                 DocumentOperationCodes.Unverify,
                 StringComparison.OrdinalIgnoreCase);
+            if (verifying && execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount)
+                return VerifyInventoryCount(options, execution, voucherId.Value);
             if ((verifying || unverifying) &&
                 string.Equals(execution.Profile.DocumentType, DocumentTypeCodes.Transfer,
                     StringComparison.OrdinalIgnoreCase))

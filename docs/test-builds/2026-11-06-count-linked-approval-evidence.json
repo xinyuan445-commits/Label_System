@@ -1,0 +1,241 @@
+{
+  "date": "2026-11-06",
+  "environment": "development",
+  "accountId": "888",
+  "database": "UFDATA_888_2021",
+  "apiVersion": "0.12.12-count-dev",
+  "gatewayVersion": "0.11.9.0",
+  "repair": {
+    "before": {
+      "stock": [
+        {
+          "cInvCode": "27-PB-F4-4918-ELCY3-1070",
+          "cBatch": "20260820QF",
+          "cWhCode": "KML_KSW",
+          "quantity": 5.0
+        },
+        {
+          "cInvCode": "27-PB-F4-4918-WOCR7-1073",
+          "cBatch": "20260820QF",
+          "cWhCode": "KML_KSW",
+          "quantity": 3.0
+        }
+      ],
+      "metrics": [
+        {
+          "localFlows": 26,
+          "tasks": 16,
+          "legacyFlows": 52423
+        }
+      ],
+      "vouchers": [
+        {
+          "type": "08",
+          "ID": 1000048150,
+          "cCode": "0000005823",
+          "cBusCode": "PDD26111318",
+          "cHandler": null
+        },
+        {
+          "type": "09",
+          "ID": 1000048151,
+          "cCode": "0000006569",
+          "cBusCode": "PDD26111321",
+          "cHandler": null
+        }
+      ]
+    },
+    "results": {
+      "value": [
+        {
+          "confirmed": true,
+          "outcomeKnown": true,
+          "code": "OK",
+          "message": "盘点及关联出入库单审核成功。",
+          "voucherId": "1000012708",
+          "voucherCode": "PDD26111318",
+          "version": "0x000000000afdccaa"
+        },
+        {
+          "confirmed": true,
+          "outcomeKnown": true,
+          "code": "OK",
+          "message": "盘点及关联出入库单审核成功。",
+          "voucherId": "1000012711",
+          "voucherCode": "PDD26111321",
+          "version": "0x000000000afdcd81"
+        }
+      ],
+      "Count": 2
+    },
+    "after": {
+      "stock": [
+        {
+          "cInvCode": "27-PB-F4-4918-ELCY3-1070",
+          "cBatch": "20260820QF",
+          "cWhCode": "KML_KSW",
+          "quantity": 4.0
+        },
+        {
+          "cInvCode": "27-PB-F4-4918-WOCR7-1073",
+          "cBatch": "20260820QF",
+          "cWhCode": "KML_KSW",
+          "quantity": 4.0
+        }
+      ],
+      "metrics": [
+        {
+          "localFlows": 26,
+          "tasks": 16,
+          "legacyFlows": 52423
+        }
+      ],
+      "vouchers": [
+        {
+          "type": "08",
+          "ID": 1000048150,
+          "cCode": "0000005823",
+          "cBusCode": "PDD26111318",
+          "cHandler": "yuanxin"
+        },
+        {
+          "type": "09",
+          "ID": 1000048151,
+          "cCode": "0000006569",
+          "cBusCode": "PDD26111321",
+          "cHandler": "yuanxin"
+        }
+      ]
+    }
+  },
+  "final": {
+    "untouchedUnapprovedCount": [
+      {
+        "ID": 1000012710,
+        "cCVCode": "PDD26111320",
+        "cAccounter": null
+      }
+    ],
+    "vouchers": [
+      {
+        "kind": "COUNT",
+        "ID": 1000012712,
+        "code": "PDD26111322",
+        "auditor": "yuanxin",
+        "remark": "codex test"
+      },
+      {
+        "kind": "IN",
+        "ID": 1000048150,
+        "code": "0000005823",
+        "auditor": "yuanxin",
+        "remark": "codex test"
+      },
+      {
+        "kind": "IN",
+        "ID": 1000048152,
+        "code": "0000005824",
+        "auditor": "yuanxin",
+        "remark": "codex test"
+      },
+      {
+        "kind": "OUT",
+        "ID": 1000048151,
+        "code": "0000006569",
+        "auditor": "yuanxin",
+        "remark": "codex test"
+      },
+      {
+        "kind": "OUT",
+        "ID": 1000048153,
+        "code": "0000006570",
+        "auditor": "yuanxin",
+        "remark": "codex test"
+      }
+    ],
+    "metrics": [
+      {
+        "local_flows": 2,
+        "tasks": 2,
+        "completed_tasks": 2,
+        "operations": 1,
+        "all_local_flows": 28,
+        "all_tasks": 18,
+        "all_legacy_flows": 52425
+      }
+    ],
+    "events": [
+      {
+        "event_key": "tb:888:176:233:COUNT_ADJUSTMENT:PDD26111322",
+        "status": "COMPLETED",
+        "legacy_flow_id": 54058,
+        "delta": "-1"
+      },
+      {
+        "event_key": "tb:888:176:234:COUNT_ADJUSTMENT:PDD26111322",
+        "status": "COMPLETED",
+        "legacy_flow_id": 54059,
+        "delta": "1"
+      }
+    ],
+    "operation": [
+      {
+        "id": 176,
+        "status": "SUCCESS",
+        "erp_status": "SUCCESS",
+        "approval_status": "SUCCESS",
+        "erp_document_no": "PDD26111322",
+        "reason": "codex test"
+      }
+    ],
+    "labels": [
+      {
+        "label_code": "008|27-PB-F4-4918-ELCY3-1070|20260820QF|5.00|2609270157",
+        "current_qty": 3.0,
+        "traceback_balance": 3.0,
+        "traceback_latest_flow_id": 54058,
+        "locked_operation_id": null,
+        "traceback_sync_status": "SYNCED",
+        "to_warehouse_code": "KML_KSW",
+        "to_location_code": "446",
+        "balance": 3.0,
+        "latest": 54058,
+        "goods_actual": "3.000000",
+        "stock_quantity": 3.0
+      },
+      {
+        "label_code": "008|27-PB-F4-4918-WOCR7-1073|20260820QF|3.00|2609270033",
+        "current_qty": 5.0,
+        "traceback_balance": 5.0,
+        "traceback_latest_flow_id": 54059,
+        "locked_operation_id": null,
+        "traceback_sync_status": "SYNCED",
+        "to_warehouse_code": "KML_KSW",
+        "to_location_code": "446",
+        "balance": 5.0,
+        "latest": 54059,
+        "goods_actual": "5.000000",
+        "stock_quantity": 5.0
+      }
+    ]
+  },
+  "interfaceTestOnly": true,
+  "physicalPdaTested": false,
+  "productionChanged": false,
+  "nativeCountLines": [
+    {
+      "autoID": 1000077112,
+      "cInvCode": "27-PB-F4-4918-ELCY3-1070",
+      "iCVQuantity": 4,
+      "iCVCQuantity": 3,
+      "cPosition": "446"
+    },
+    {
+      "autoID": 1000077113,
+      "cInvCode": "27-PB-F4-4918-WOCR7-1073",
+      "iCVQuantity": 4,
+      "iCVCQuantity": 5,
+      "cPosition": "446"
+    }
+  ]
+}

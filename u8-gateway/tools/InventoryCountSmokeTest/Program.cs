@@ -61,6 +61,7 @@ internal static class Program
             Reject(() => U8InventoryCountReader.RequirePending(null));
             SharedMutexContract();
             UploadSaveContract();
+            CountApprovalTests.Run();
             Equal(true, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Verify, false));
             Equal(true, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Add, true));
             Equal(false, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Add, false));

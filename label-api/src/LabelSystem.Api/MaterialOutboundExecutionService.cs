@@ -188,7 +188,8 @@ public sealed class MaterialOutboundExecutionService(
             item.Operation.ClientRequestId, approvalAttempt);
         var approvalOptions = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
         if (item.Operation.ErpDocumentType == "inventory-count" &&
-            item.Operation.Status == "NEEDS_RECONCILIATION" && item.Operation.ApprovalStatus == "FAILED")
+            item.Operation.Status is ("NEEDS_RECONCILIATION" or "PENDING_APPROVAL") &&
+            item.Operation.ApprovalStatus == "FAILED")
             approvalOptions["countApprovalRecovery"] = true;
         var approvalRequest = new GatewayDocumentRequest(
             approvalRequestId,

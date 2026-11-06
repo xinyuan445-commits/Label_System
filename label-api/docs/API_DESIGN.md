@@ -1,6 +1,8 @@
 # Label System API
 
-资料复核：2026-11-05；API0.12.11 / 019已部署开发888，113项通过/1跳过。托盘路径移除，盘点上传支持autoApprove；生产未更新，见[现行发布](../../docs/DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。
+资料复核：2026-11-06；API0.12.12 / 019已部署开发888，113项通过/1跳过。盘点上传autoApprove包含本单及生成的其他出入库审核，888真实补审/新单联动通过；生产未更新，见[现行发布](../../docs/DEPLOYMENT_2026-11-06_COUNT_LINKED_APPROVAL.md)。
+
+0.12.12沿用现有上传/业务组执行接口：盘点及全部关联出入库回查成功才完成审核。Gateway明确拒绝保留PENDING_APPROVAL/FAILED，结果未知保留NEEDS_RECONCILIATION/FAILED；两种失败沿原业务组重试时，由服务端增加内部countApprovalRecovery，父单已审则只补关联审核，不重做新增/差异。普通上传继续检查原版本，前端不提供跳过版本开关。独立手工审核/弃审、008及原页面开关范围不变。
 
 材料出库、调拨、货位调整及888盘点已接TraceBack；不能推广到其他单据。盘点标准草稿/核验不改余额，上传ERP确认后追加差异。盘点上传自动审核及失败重试已接通，独立手工审核/弃审及008盘点上传保持关闭。旧请求缺inventoryCount上下文在镜像/建操作前拒绝，核验canSubmit=false与上传uploadSaveEnabled分开。
 
