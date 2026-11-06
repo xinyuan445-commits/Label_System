@@ -704,5 +704,11 @@
     "unexpectedLocks": 0,
     "activeWrites": 0
   },
-  "scope": "Real API/U8/TraceBack integration; no physical PDA or network fault injection; all records retained. Count audit does not audit generated stock vouchers."
+  "scope": "Real API/U8/TraceBack integration; no physical PDA or network fault injection; all records retained. Count audit does not audit generated stock vouchers.",
+  "observedSettingsAtEnd": {
+    "autoAddScannedDetail": false,
+    "autoUploadOnComplete": false,
+    "autoApproveAfterUpload": false,
+    "settingsWrittenByTest": false
+  }
 }

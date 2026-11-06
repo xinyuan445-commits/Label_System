@@ -7,7 +7,7 @@
 - 实际配置为development / LabelSystem_Dev / 888 / UFDATA_888_2021；API9891为0.12.11-count-dev，Gateway9881为0.11.8.0，H5源码dev.95。程序和数据库结构没有变更，没有新部署。
 - 使用admin应用账号，通过真实Business API→Gateway→U8组件执行，ERP映射用户为yuanxin。标准服务端草稿同时保留，用户可在admin的盘点单据管理中同步查看。
 - 49项前端隔离测试于11月6日重新执行通过，覆盖自动添加/上传/审核传参、缺货位/离线未知量/零数量确认和重复提示。实际PDA扫码、物理声音、键盘及断网未验收；未查看页面截图。
-- 不改用户保存的三个开关：自动添加false、自动审核false、自动上传true。真实请求分别传autoApprove=false/true验证上传端行为，不把API测试说成PDA点击验收。
+- 不改用户保存的三个开关。测试结束只读查询：自动添加false、自动审核false、自动上传false；不据11月5日的旧配置推断本日当前值。真实请求分别传autoApprove=false/true验证上传端行为，不把API测试说成PDA点击验收。
 
 ## 保留单据
 
