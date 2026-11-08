@@ -1,5 +1,9 @@
 # Label System API
 
+## 销售单据手工审核（0.13.3）
+
+沿用审核列表、详情及审核/弃审接口。发货、退货和销售出库分别校验 approval-delivery-note、approval-sales-return、approval-sales-outbound。列表和详情按红蓝字区分发货和退货，写入时由 Business API 根据入口向 Gateway 指定目标方向并传递单据版本。审核和弃审不重复提交制单，也不执行标签同步任务。
+
 ## 销售出库（0.13.2）
 
 `POST /api/v1/operations/documents/sales-outbound/submit?autoApprove=...` 复用共用单据合同。发货原单通过 `sales-delivery` 查询，`orderQuantity` 和 `remainingQuantity` 为可出量。上传前重新查询原单和旧表标签，按原单行合计数量，检查客户、流水版本、余额和位置。相同完整标签码仅允许出现一次。

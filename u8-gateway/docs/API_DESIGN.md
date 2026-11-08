@@ -1,5 +1,9 @@
 # U8 Gateway API 设计
 
+## 销售单据手工审核（0.12.3）
+
+审核列表和详情中，sales-delivery 只返回蓝字发货单，sales-return 只返回红字退货单。写操作复用 sales-delivery 的 U8 适配器，手工审核请求通过 options.approvalRedVoucher 携带预期方向。Gateway 回查 U8 单据方向与版本，方向不符返回 APPROVAL_DOCUMENT_TYPE_MISMATCH，再按实际原生方向调用 U8。原自动审核仍由原业务组发起。
+
 ## 销售出库来源（0.12.2）
 
 `sales-delivery` 返回已审核、未关闭的正数量发货行。`plannedQuantity` 取 `DispatchLists.iQuantity`，`processedQuantity` 取 `fOutQuantity`，余量为两者之差。`orderQuantity` 保持可用量兼容字段。余量为零的行不返回。

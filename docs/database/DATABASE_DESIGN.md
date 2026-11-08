@@ -805,3 +805,7 @@ API0.12.10沿用019及通用业务结构。business_operation_line来源仓库/�
 ### 021 销售出库追溯事件
 
 [056迁移](056_sales_outbound_traceback_roles.sql)复用 `traceback_sync_task`，扩展 `CK_traceback_sync_task_role` 支持 `SALES_OUTBOUND_ISSUE` 和 `SALES_OUTBOUND_RETURN`。稳定事件键、尝试次数、错误和完成时间沿用既有任务字段。2026-11-08已在 `LabelSystem_Dev` 安装并实测蓝字扣量。见[发布记录](../DEPLOYMENT_2026-11-08_SALES_OUTBOUND.md)。
+
+### 022 退货单审核权限
+
+[057迁移](057_sales_return_approval_function.sql)在 `system_function` 登记独立退货单审核功能，关联 `sales-return`。沿用现有管理员默认权限和普通账号授权规则，不复制发货审核权限。仅 `LabelSystem_Dev` 已安装。

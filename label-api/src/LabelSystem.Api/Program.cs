@@ -854,11 +854,14 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
         request.H5Version,
         request.BridgeVersion,
         request.Reason,
-        request.ExpectedVersion
+        request.ExpectedVersion,
+        Options = functionCode is "delivery-note" or "sales-return"
+            ? new { approvalRedVoucher = functionCode == "sales-return" }
+            : null
     });
     var gatewayAction = operation == "audit" ? "verify" : "unverify";
     var proxy = await gateway.ForwardPostAsync(
-        $"/api/v1/documents/{ApprovalDocumentType(functionCode)}/{Uri.EscapeDataString(voucherCode)}/{gatewayAction}",
+        $"/api/v1/documents/{(functionCode == "sales-return" ? "sales-delivery" : ApprovalDocumentType(functionCode))}/{Uri.EscapeDataString(voucherCode)}/{gatewayAction}",
         payload, cancellationToken);
     return Results.Content(proxy.Content, proxy.ContentType, Encoding.UTF8, proxy.StatusCode);
 });
@@ -1185,7 +1188,7 @@ static string ApprovalDocumentType(string? documentType) => documentType?.Trim()
     "outsourcing-arrival" => "subcontract-arrival",
     "purchase-inbound" => "purchase-receipt",
     "delivery-note" => "sales-delivery",
-    "sales-return" => "sales-delivery",
+    "sales-return" => "sales-return",
     "sales-outbound" => "sales-outbound",
     "material-outbound" => "material-outbound",
     "transfer-order" => "transfer",

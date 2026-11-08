@@ -99,7 +99,8 @@ namespace U8Gateway.U8.Approvals
                 "from dbo." + Q(p.Header) + " h " +
                 "outer apply (select count(*) LineCount,sum(isnull(d." + Q(p.Quantity) + ",0)) TotalQuantity " +
                 "from dbo." + Q(p.Line) + " d where d." + Q(p.LineHeaderId) + "=h." + Q(p.HeaderId) + ") x " +
-                "where h." + Q(p.HeaderId) + "=@id";
+                "where h." + Q(p.HeaderId) + "=@id" +
+                (string.IsNullOrWhiteSpace(p.BusinessFilter) ? "" : " and " + p.BusinessFilter);
             string lineSql = "select d." + Q(p.LineId) + " LineId," +
                 Expr("d", p.LineNo, "cast(null as int)") + " [LineNo]," +
                 "isnull(d." + Q(p.Inventory) + ",N'') MaterialCode,isnull(i.cInvName,N'') MaterialName," +
@@ -258,7 +259,20 @@ namespace U8Gateway.U8.Approvals
             if (Eq(type, DocumentTypeCodes.PurchaseArrival) || Eq(type, DocumentTypeCodes.SubcontractArrival))
                 return new Profile { Type=Eq(type, DocumentTypeCodes.PurchaseArrival)?DocumentTypeCodes.PurchaseArrival:DocumentTypeCodes.SubcontractArrival, Header="PU_ArrivalVouch",Line="PU_ArrivalVouchs",HeaderId="ID",LineHeaderId="ID",Code="cCode",Date="dDate",Verifier="cVerifier",VerifyDate=null,Maker="cMaker",Warehouse=null,LineId="Autoid",LineNo="irowno",Inventory="cInvCode",Quantity="iQuantity",Batch="cBatch",LineWarehouse="cWhCode",PartnerLabel="供应商",PartnerExpression="isnull((select top (1) v.cVenName from dbo.Vendor v where v.cVenCode=h.cVenCode),isnull(h.cVenCode,N''))",BusinessFilter=Eq(type, DocumentTypeCodes.PurchaseArrival)?"isnull(h.cBusType,N'')<>N'委外加工'":"isnull(h.cBusType,N'')=N'委外加工'" };
             if (Eq(type, DocumentTypeCodes.PurchaseReceipt)) return Rd(type,"RdRecord01","RdRecords01","供应商","isnull((select top (1) v.cVenName from dbo.Vendor v where v.cVenCode=h.cVenCode),isnull(h.cVenCode,N''))");
-            if (Eq(type, DocumentTypeCodes.SalesDelivery)) return new Profile { Type=DocumentTypeCodes.SalesDelivery,Header="DispatchList",Line="DispatchLists",HeaderId="DLID",LineHeaderId="DLID",Code="cDLCode",Date="dDate",Verifier="cVerifier",VerifyDate="dverifysystime",Maker="cMaker",Warehouse=null,LineId="iDLsID",LineNo="irowno",Inventory="cInvCode",Quantity="iQuantity",Batch="cBatch",LineWarehouse="cWhCode",Location="cPosition",PartnerLabel="客户",PartnerExpression="isnull(nullif(h.cCusName,N''),isnull(h.cCusCode,N''))" };
+            if (Eq(type, DocumentTypeCodes.SalesDelivery) || Eq(type, DocumentTypeCodes.SalesReturn))
+            {
+                bool returns = Eq(type, DocumentTypeCodes.SalesReturn);
+                return new Profile
+                {
+                    Type = returns ? DocumentTypeCodes.SalesReturn : DocumentTypeCodes.SalesDelivery,
+                    Header = "DispatchList", Line = "DispatchLists", HeaderId = "DLID", LineHeaderId = "DLID",
+                    Code = "cDLCode", Date = "dDate", Verifier = "cVerifier", VerifyDate = "dverifysystime",
+                    Maker = "cMaker", LineId = "iDLsID", LineNo = "irowno", Inventory = "cInvCode",
+                    Quantity = "iQuantity", Batch = "cBatch", LineWarehouse = "cWhCode", Location = "cPosition",
+                    PartnerLabel = "客户", PartnerExpression = "isnull(nullif(h.cCusName,N''),isnull(h.cCusCode,N''))",
+                    BusinessFilter = returns ? "h.bReturnFlag=1" : "isnull(h.bReturnFlag,0)=0"
+                };
+            }
             if (Eq(type, DocumentTypeCodes.SalesOutbound)) return Rd(type,"RdRecord32","RdRecords32","客户","isnull((select top (1) c.cCusName from dbo.Customer c where c.cCusCode=h.cCusCode),isnull(h.cCusCode,N''))");
             if (Eq(type, DocumentTypeCodes.MaterialOutbound)) return Rd(type,"RdRecord11","RdRecords11","部门","isnull((select top (1) d.cDepName from dbo.Department d where d.cDepCode=h.cDepCode),isnull(h.cDepCode,N''))");
             if (Eq(type, DocumentTypeCodes.Transfer)) return new Profile { Type=DocumentTypeCodes.Transfer,Header="TransVouch",Line="TransVouchs",HeaderId="ID",LineHeaderId="ID",Code="cTVCode",Date="dTVDate",Verifier="cVerifyPerson",VerifyDate="dVerifyDate",Maker="cMaker",Warehouse="cOWhCode",LineId="autoID",LineNo="irowno",Inventory="cInvCode",Quantity="iTVQuantity",Batch="cTVBatch",Location="coutposcode",TargetLocation="cinposcode",PartnerLabel="调入仓库",PartnerExpression="isnull((select top (1) w.cWhName from dbo.Warehouse w where w.cWhCode=h.cIWhCode),isnull(h.cIWhCode,N''))" };

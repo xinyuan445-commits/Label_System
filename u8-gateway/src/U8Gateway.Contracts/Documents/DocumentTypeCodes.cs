@@ -8,6 +8,7 @@ namespace U8Gateway.Contracts.Documents
         public const string SubcontractArrival = "subcontract-arrival";
         public const string PurchaseReceipt = "purchase-receipt";
         public const string SalesDelivery = "sales-delivery";
+        public const string SalesReturn = "sales-return";
         public const string SalesOutbound = "sales-outbound";
         public const string MaterialOutbound = "material-outbound";
         public const string Transfer = "transfer";

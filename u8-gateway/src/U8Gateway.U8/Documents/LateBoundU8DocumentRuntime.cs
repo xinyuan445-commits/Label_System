@@ -617,6 +617,10 @@ namespace U8Gateway.U8.Documents
                 options,
                 execution.Profile,
                 voucherId.Value);
+            if (execution.Profile.DocumentType == DocumentTypeCodes.SalesDelivery &&
+                execution.Request?.Options?.ContainsKey("approvalRedVoucher") == true &&
+                before.RedVoucher != OptionBoolean(execution.Request.Options, "approvalRedVoucher"))
+                return Failure("APPROVAL_DOCUMENT_TYPE_MISMATCH", "单据不属于当前审核类型。", execution.VoucherCode);
             // Recovery may skip the old parent version, but must still finish its linked vouchers.
             bool countRecovery = execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount &&
                 InventoryCountSaveRules.AuditAlreadyConfirmed(execution.Operation, before.Verified,
@@ -1652,15 +1656,15 @@ namespace U8Gateway.U8.Documents
             U8DocumentProfile profile,
             long voucherId)
         {
-            string idColumn = string.Equals(
+            bool salesDelivery = string.Equals(
                 profile.DocumentType,
                 DocumentTypeCodes.SalesDelivery,
-                StringComparison.OrdinalIgnoreCase)
-                ? "DLID"
-                : "ID";
+                StringComparison.OrdinalIgnoreCase);
+            string idColumn = salesDelivery ? "DLID" : "ID";
             string verifiedColumn = VerifiedColumn(profile.DocumentType);
             string sql = "select top (1) [" + verifiedColumn + "], " +
-                "master.dbo.fn_varbintohexstr([ufts]) from [dbo].[" +
+                "master.dbo.fn_varbintohexstr([ufts])" +
+                (salesDelivery ? ",convert(bit,isnull([bReturnFlag],0))" : "") + " from [dbo].[" +
                 profile.HeaderTable + "] where [" + idColumn + "]=@id";
             using (var connection = new SqlConnection(ConnectionString(options)))
             using (var command = new SqlCommand(sql, connection))
@@ -1680,6 +1684,7 @@ namespace U8Gateway.U8.Documents
                         Verified = verified != null &&
                             verified != DBNull.Value &&
                             !string.IsNullOrWhiteSpace(Convert.ToString(verified)),
+                        RedVoucher = salesDelivery && reader.GetBoolean(2),
                         Version = reader.IsDBNull(1)
                             ? null
                             : reader.GetString(1)
@@ -1983,6 +1988,7 @@ namespace U8Gateway.U8.Documents
         {
             public bool Exists { get; set; }
             public bool Verified { get; set; }
+            public bool RedVoucher { get; set; }
             public string Version { get; set; }
         }
 
