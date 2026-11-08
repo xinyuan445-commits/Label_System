@@ -41,6 +41,27 @@ public sealed class TraceBackSyncPlannerTests
         Assert.Null(Payload(partial).TargetWarehouseCode);
     }
 
+    [Theory]
+    [InlineData(false, "SALES_OUTBOUND_ISSUE", -4)]
+    [InlineData(true, "SALES_OUTBOUND_RETURN", 4)]
+    public void SalesOutboundPersistsStableStockEvent(bool red, string role, int quantity)
+    {
+        var operation = Operation("sales-outbound", 10, 4);
+        var task = TraceBackSyncPlanner.Build(operation, Result(), red, Rows(), "操作员", "888").Single();
+        var repeated = TraceBackSyncPlanner.Build(operation, Result(), red, Rows(), "操作员", "888").Single();
+        var payload = Payload(task);
+
+        Assert.Equal(role, task.EventRole);
+        Assert.Equal(quantity, payload.Quantity);
+        Assert.Equal("销售出库单", payload.OrderType);
+        Assert.Equal(5001L, payload.ExpectedLatestFlowId);
+        Assert.Equal(10m, payload.ExpectedBalance);
+        Assert.Equal("9001", payload.ErpDetailId);
+        Assert.Equal(repeated.EventKey, task.EventKey);
+        Assert.Equal(repeated.PdaGoodsUuid, task.PdaGoodsUuid);
+        Assert.Equal(red ? "WH1" : null, payload.TargetWarehouseCode);
+    }
+
     private static TraceBackSyncEventRequest Payload(TraceBackSyncTaskDraft task) =>
         JsonSerializer.Deserialize<TraceBackSyncEventRequest>(
             task.PayloadJson, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;

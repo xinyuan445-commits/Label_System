@@ -78,6 +78,9 @@ public sealed class MaterialOutboundExecutionService(
             if (!pending && !reconciling)
                 throw new ApiException(StatusCodes.Status409Conflict,
                     "OPERATION_NOT_PENDING", "业务操作不能上传，需要先核对状态。");
+            if (pending && item.SalesOutboundSource is not null)
+                await DocumentPrepareService.ValidateSourceLinesAsync(gateway, item.SalesOutboundSource,
+                    "sales-outbound", cancellationToken);
             if (!reconciling || item.Operation.ErpDocumentType != "inventory-count")
                 await traceBack.ValidateBeforeU8Async(item.Operation.ErpDocumentType, item.Operation.Lines,
                     item.RedVoucher, cancellationToken);
@@ -302,10 +305,20 @@ public sealed class MaterialOutboundExecutionService(
                         InventoryCountUploadRules.Build(operation, document, erp, previous), false));
                     continue;
                 }
+                DocumentPrepareRequest? outboundSource = null;
+                if (operation.ErpDocumentType == "sales-outbound" && operation.Status == "PENDING" &&
+                    !string.IsNullOrWhiteSpace(operation.SourceDocumentType))
+                {
+                    if (!int.TryParse(operation.SourceDocumentId, out var sourceId)) throw InvalidArchive();
+                    var sourceLines = document.Lines.Where(line => line.SourceType == operation.SourceDocumentType &&
+                        line.SourceDocumentId == sourceId).ToArray();
+                    if (sourceLines.Length != operation.Lines.Count) throw InvalidArchive();
+                    outboundSource = document with { Lines = sourceLines };
+                }
                 result.Add(new PreparedGatewayOperation(
                     operation,
                     DocumentGatewayRequestBuilder.Build(operation, document, erp),
-                    document.Header.DocumentDirection == "RED"));
+                    document.Header.DocumentDirection == "RED", outboundSource));
             }
         }
         return result;
@@ -629,7 +642,8 @@ public sealed class MaterialOutboundExecutionService(
     private sealed record PreparedGatewayOperation(
         MaterialOutboundExecutionOperation Operation,
         GatewayDocumentRequest Request,
-        bool RedVoucher);
+        bool RedVoucher,
+        DocumentPrepareRequest? SalesOutboundSource = null);
 
     private sealed record NormalizedRequest(
         DateOnly DocumentDate,

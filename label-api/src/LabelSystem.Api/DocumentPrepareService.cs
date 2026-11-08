@@ -93,7 +93,7 @@ public sealed class DocumentPrepareService(
         var payloadJson = JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var payloadHash = Hashing.Sha256(payloadJson);
         if (SalesDocumentRules.Applies(documentType)) SalesDocumentRules.RequireDirection(documentType, request.Header.DocumentDirection);
-        if (count || SalesDocumentRules.Applies(documentType))
+        if (count || SalesDocumentRules.Applies(documentType) || documentType == "sales-outbound")
         {
             if (count) InventoryCountUploadRules.RequireContext(request, options.CurrentValue);
             var existing = await operations.FindExistingAsync(request.ClientRequestId, payloadHash,
@@ -109,7 +109,7 @@ public sealed class DocumentPrepareService(
         await ValidateManualReturnLinesAsync(request, definition, cancellationToken);
 
         if (hasSource)
-            await ValidateSourceLinesAsync(request, definition.DocumentType, cancellationToken);
+            await ValidateSourceLinesAsync(u8, request, definition.DocumentType, cancellationToken);
 
         var archiveResult = await archive.CreateAsync(
             definition.DocumentType, definition.Title, "prepare", requestId, request, cancellationToken);
@@ -119,12 +119,17 @@ public sealed class DocumentPrepareService(
             requestId, cancellationToken);
     }
 
-    private async Task ValidateSourceLinesAsync(
+    internal static async Task ValidateSourceLinesAsync(
+        U8GatewayClient u8,
         DocumentPrepareRequest request,
         string documentType,
         CancellationToken cancellationToken)
     {
         var lines = request.Lines;
+        if (documentType == "sales-outbound" && lines.Any(line =>
+                line.SourceType is not ("sales-delivery" or "sales-order") ||
+                line.SourceType != request.Header.SourceType))
+            throw new ApiException(400, "SALES_OUTBOUND_SOURCE_INVALID", "请选择发货单或销售订单。");
         if (lines.Any(line => string.IsNullOrWhiteSpace(line.SourceType) ||
                               !line.SourceDocumentId.HasValue || !line.SourceLineId.HasValue ||
                               string.IsNullOrWhiteSpace(line.SourceDocumentNo) ||
@@ -156,6 +161,9 @@ public sealed class DocumentPrepareService(
                 if (requestGroup.Sum(line => line.RequestedQty) > source.OrderQuantity)
                     throw new ApiException(StatusCodes.Status409Conflict,
                         "SOURCE_QUANTITY_EXCEEDED", "处理数量超过源单可用数量。");
+                if (documentType == "sales-outbound" && !string.IsNullOrWhiteSpace(source.PartnerCode) &&
+                    !string.Equals(request.Header.PartnerCode?.Trim(), source.PartnerCode.Trim(), StringComparison.OrdinalIgnoreCase))
+                    throw new ApiException(409, "SALES_OUTBOUND_CUSTOMER_CHANGED", "客户与原单不一致。");
             }
         }
     }
@@ -271,7 +279,8 @@ public sealed class DocumentPrepareService(
                 "LINE_REMARK_REQUIRED", "请输入行备注。");
             if (line.RequestedQty < 0 || (!definition.AllowZeroQuantity && line.RequestedQty <= 0))
                 throw new ApiException(StatusCodes.Status400BadRequest, "QUANTITY_INVALID", "明细数量无效。");
-            if (!hasSource && !objects.Add($"{line.ObjectType}:{line.LabelCode.Trim()}"))
+            if ((!hasSource || definition.DocumentType == "sales-outbound") &&
+                !objects.Add($"{line.ObjectType}:{line.LabelCode.Trim()}"))
                 throw new ApiException(StatusCodes.Status400BadRequest, "OBJECT_DUPLICATED", "标签重复。");
         }
     }
@@ -318,7 +327,7 @@ public sealed class DocumentPrepareService(
         "delivery-note" or "sales-return" or "sales-outbound";
 
     public Task<MaterialOutboundPrepareResult?> FindExistingSalesAsync(string type, DocumentPrepareRequest request, CancellationToken ct) =>
-        SalesDocumentRules.Applies(type) ? operations.FindExistingAsync(request.ClientRequestId,
+        SalesDocumentRules.Applies(type) || type == "sales-outbound" ? operations.FindExistingAsync(request.ClientRequestId,
             Hashing.Sha256(JsonSerializer.Serialize(request, new JsonSerializerOptions(JsonSerializerDefaults.Web))),
             options.CurrentValue.U8WritesEnabled, ct) : Task.FromResult<MaterialOutboundPrepareResult?>(null);
 

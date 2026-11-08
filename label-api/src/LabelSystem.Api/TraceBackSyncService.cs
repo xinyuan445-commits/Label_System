@@ -82,6 +82,7 @@ public static class TraceBackSyncPlanner
         var orderType = operation.ErpDocumentType switch
         {
             "material-outbound" => "材料出库",
+            "sales-outbound" => "销售出库单",
             "transfer" => "调拨单",
             "location-adjustment" => "货位调整单",
             "inventory-count" => "盘点单",
@@ -101,9 +102,11 @@ public static class TraceBackSyncPlanner
                 targetWarehouse = InventoryCountUploadRules.TargetWarehouse(line);
                 targetLocation = InventoryCountUploadRules.TargetLocation(line) ?? "";
             }
-            else if (operation.ErpDocumentType == "material-outbound")
+            else if (operation.ErpDocumentType is "material-outbound" or "sales-outbound")
             {
-                role = redVoucher ? "MATERIAL_RETURN" : "MATERIAL_ISSUE";
+                role = operation.ErpDocumentType == "sales-outbound"
+                    ? redVoucher ? "SALES_OUTBOUND_RETURN" : "SALES_OUTBOUND_ISSUE"
+                    : redVoucher ? "MATERIAL_RETURN" : "MATERIAL_ISSUE";
                 quantity = redVoucher ? line.RequestedQty : -line.RequestedQty;
                 if (redVoucher)
                 {

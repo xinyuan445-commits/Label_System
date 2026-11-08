@@ -1,5 +1,11 @@
 # U8 Gateway API 设计
 
+## 销售出库来源（0.12.2）
+
+`sales-delivery` 返回已审核、未关闭的正数量发货行。`plannedQuantity` 取 `DispatchLists.iQuantity`，`processedQuantity` 取 `fOutQuantity`，余量为两者之差。`orderQuantity` 保持可用量兼容字段。余量为零的行不返回。
+
+参照发货单创建 `sales-outbound` 时，表头 `cdlcode` 传数字DLID，`cbuscode` 传发货单号，明细 `idlsid` 传发货行ID。追溯写入支持销售出库负数及红字正数事件。888实测范围见[销售出库发布](../../docs/DEPLOYMENT_2026-11-08_SALES_OUTBOUND.md)。
+
 资料与部署/实测：2026-11-06；开发9881/888为0.12.1（test），销售有原单基础实写/审核及合同通过；原单已退量包含未开票关联累计，生产不变。见[发布记录](../../docs/DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。
 
 ## 销售来源与退货（0.12.1）

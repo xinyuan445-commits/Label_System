@@ -1,5 +1,7 @@
 # TraceBack 三表并行运行与迁移方案
 
+2026-11-08销售出库已接入888。ERP确认保存后按稳定事件键写SALES_OUTBOUND_ISSUE，TraceBackOnlyCode追加负数量并刷新镜像。原请求可恢复追溯写入失败，复用原ERP单号。红字任务角色已加入约束，实写待验。见[销售出库发布](DEPLOYMENT_2026-11-08_SALES_OUTBOUND.md)。
+
 当前盘点JSON按[旧样本合同](TRACEBACK_COUNT_JSON_CONTRACT.md)适配，API0.12.11/Gateway0.11.8同步本次确认目标位置、接通盘点自动审核；托盘业务全局移除；019通用基线及上传开启保持，见[当前发布](DEPLOYMENT_2026-11-05_PRODUCT_ONLY_COUNT_SWITCHES.md)。其他事件完整JSON后续逐类检查。
 
 资料复核：2026-11-05。材料出库、调拨、货位调整及888盘点差异已部署；盘点新累计/余额规则实写待用户重测，见[本次记录](DEPLOYMENT_2026-11-05_COUNT_TOTALS.md)。首打/补打与恢复已有888/PDF阶段证据，008打印未发布。

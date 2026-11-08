@@ -197,10 +197,11 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                     processed = "isnull(d.[fretquantity],0)";
                     planned = remaining + "+" + processed;
                 }
+                bool dispatchReturn = string.Equals(profile.SourceType, SourceDocumentTypeCodes.SalesDeliveryReturn, StringComparison.OrdinalIgnoreCase);
                 string orderAvailable = profile.ReturnOrder ? "isnull(d.[iFHQuantity],0)" :
-                    profile.Sales && profile.HeaderTable == "DispatchList" ?
+                    dispatchReturn ?
                     "(select s.iFHQuantity from dbo.SO_SODetails s where s.iSOsID=d.iSOsID)" : "cast(null as decimal(28,6))";
-                if (profile.Sales && profile.HeaderTable == "DispatchList")
+                if (dispatchReturn)
                 {
                     // Uninvoiced returns use iCorIdlsID and do not increment iRetQuantity.
                     processed += "+(select isnull(sum(abs(r.iQuantity)),0) from dbo.DispatchLists r join dbo.DispatchList rh on rh.DLID=r.DLID where rh.bReturnFlag=1 and r.iCorIdlsID=d.iDLsID and isnull(r.iCorID,0)=0)";
@@ -322,7 +323,7 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                      string.Equals(sourceType, SourceDocumentTypeCodes.SalesOrderReturn, StringComparison.OrdinalIgnoreCase))
                 profile = new SourceProfile { SourceType=sourceType, HeaderTable="SO_SOMain", LineTable="SO_SODetails", HeaderId="ID", DocumentCode="cSOCode", DocumentDate="dDate", LineId="iSOsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iFHQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cSCloser", Sales=true, ReturnOrder=string.Equals(sourceType,SourceDocumentTypeCodes.SalesOrderReturn,StringComparison.OrdinalIgnoreCase) };
             else if (string.Equals(sourceType, SourceDocumentTypeCodes.SalesDelivery, StringComparison.OrdinalIgnoreCase))
-                profile = new SourceProfile { SourceType=sourceType, HeaderTable="DispatchList", LineTable="DispatchLists", HeaderId="DLID", DocumentCode="cDLCode", DocumentDate="dDate", LineId="iDLsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iSOutQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cSCloser", BusinessTypeColumn="cBusType", BusinessTypeValue="普通销售" };
+                profile = new SourceProfile { SourceType=sourceType, HeaderTable="DispatchList", LineTable="DispatchLists", HeaderId="DLID", DocumentCode="cDLCode", DocumentDate="dDate", LineId="iDLsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="fOutQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", HeaderCloseColumn="cCloser", LineCloseColumn="cSCloser", BusinessTypeColumn="cBusType", BusinessTypeValue="普通销售", Sales=true };
             else if (string.Equals(sourceType, SourceDocumentTypeCodes.SalesDeliveryReturn, StringComparison.OrdinalIgnoreCase))
                 profile = new SourceProfile { SourceType=sourceType, HeaderTable="DispatchList", LineTable="DispatchLists", HeaderId="DLID", DocumentCode="cDLCode", DocumentDate="dDate", LineId="iDLsID", LineNo="iRowNo", InventoryCode="cInvCode", Quantity="iQuantity", UsedQuantity="iRetQuantity", DepartmentCode="cDepCode", AuditColumn="cVerifier", BusinessTypeColumn="cBusType", BusinessTypeValue="普通销售", Sales=true };
             else if (string.Equals(sourceType, SourceDocumentTypeCodes.OutsourcingOrder, StringComparison.OrdinalIgnoreCase) || string.Equals(sourceType, SourceDocumentTypeCodes.SubcontractOrder, StringComparison.OrdinalIgnoreCase))
@@ -349,7 +350,7 @@ order by v.CreateDate_a desc, v.MoCode_a desc, v.SortSeq_b, v.MoDId_b";
                 OptionalColumn(connection, profile.LineTable, profile.UsedQuantity, "iArrQTY", "iReceivedQTY", "iFHQuantity", "iSOutQuantity");
             profile.DepartmentCode = OptionalColumn(connection, profile.HeaderTable, profile.DepartmentCode, "cDepCode");
             profile.AuditColumn = OptionalColumn(connection, profile.HeaderTable, profile.AuditColumn, "cVerifier", "cAuditor");
-            bool returnView = profile.ReturnOrder || profile.Sales && profile.HeaderTable == "DispatchList";
+            bool returnView = profile.ReturnOrder || string.Equals(sourceType, SourceDocumentTypeCodes.SalesDeliveryReturn, StringComparison.OrdinalIgnoreCase);
             profile.HeaderCloseColumn = returnView ? null : OptionalColumn(connection, profile.HeaderTable, profile.HeaderCloseColumn, "cCloser");
             profile.LineCloseColumn = returnView ? null : OptionalColumn(connection, profile.LineTable, profile.LineCloseColumn, "cbCloser", "cSCloser", "cCloser", "bClose");
             profile.BusinessTypeColumn = OptionalColumn(connection, profile.HeaderTable, profile.BusinessTypeColumn, "cBusType");

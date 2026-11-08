@@ -68,7 +68,7 @@ public sealed class TraceBackSnapshotService(
     TraceBackMirrorRepository mirrors)
 {
     private static readonly HashSet<string> TraceBackDocuments = new(
-        ["material-outbound", "transfer-order", "location-adjustment", "inventory-count", "delivery-note", "sales-return"],
+        ["material-outbound", "transfer-order", "location-adjustment", "inventory-count", "delivery-note", "sales-return", "sales-outbound"],
         StringComparer.OrdinalIgnoreCase);
 
     public async Task<InventoryLookupResult> LookupAsync(
@@ -119,7 +119,7 @@ public sealed class TraceBackSnapshotService(
         bool redVoucher,
         CancellationToken cancellationToken)
     {
-        if (erpDocumentType is not "material-outbound" and not "transfer" and not "location-adjustment" and not "inventory-count" and not "sales-delivery")
+        if (erpDocumentType is not "material-outbound" and not "transfer" and not "location-adjustment" and not "inventory-count" and not "sales-delivery" and not "sales-outbound")
             return;
         var products = lines.Where(line => line.ObjectType == "PRODUCT_LABEL").ToArray();
         if (products.Length == 0) return;

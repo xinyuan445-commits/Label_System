@@ -46,7 +46,7 @@ public sealed class MaterialOutboundSubmissionService(
         CancellationToken cancellationToken)
     {
         documentType = documentType.Trim().ToLowerInvariant();
-        if (SalesDocumentRules.Applies(documentType))
+        if (SalesDocumentRules.Applies(documentType) || documentType == "sales-outbound")
         {
             SalesDocumentRules.RequireDirection(documentType, request.Header.DocumentDirection);
             EnsureSubmissionAllowed();

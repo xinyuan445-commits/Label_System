@@ -1,5 +1,11 @@
 # Label System API
 
+## 销售出库（0.13.2）
+
+`POST /api/v1/operations/documents/sales-outbound/submit?autoApprove=...` 复用共用单据合同。发货原单通过 `sales-delivery` 查询，`orderQuantity` 和 `remainingQuantity` 为可出量。上传前重新查询原单和旧表标签，按原单行合计数量，检查客户、流水版本、余额和位置。相同完整标签码仅允许出现一次。
+
+ERP保存后写入稳定的追溯任务。相同请求号和内容返回或恢复原操作，内容变更返回 `IDEMPOTENCY_CONFLICT`。ERP成功而追溯失败时返回 `NEEDS_RECONCILIATION`，重试原请求继续扣量和镜像更新。888部署、实测和待测范围见[销售出库发布](../../docs/DEPLOYMENT_2026-11-08_SALES_OUTBOUND.md)。
+
 资料与部署/实测：2026-11-06；开发API0.13.1/Dev020；136通过/1跳过，有原单销售基础实写通过，生产未更新。见[发布记录](../../docs/DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。
 
 ## 发货与独立退货（0.13.1）

@@ -122,8 +122,10 @@ internal static class DocumentGatewayRequestBuilder
                 header["ccuscode"] = Empty(value.PartnerCode);
                 header["cstcode"] = AdditionalText(value.AdditionalFields, "salesTypeCode");
                 header["csource"] = SourceTitle(operation.SourceDocumentType, "库存");
-                header["cbuscode"] = Empty(operation.SourceDocumentNo);
-                header["cdlcode"] = operation.SourceDocumentType == "sales-delivery" ? Empty(operation.SourceDocumentNo) : null;
+                header["cbustype"] = "普通销售";
+                if (Empty(operation.SourceDocumentNo) is { } sourceNo) header["cbuscode"] = sourceNo;
+                if (operation.SourceDocumentType == "sales-delivery" && TrySourceId(operation.SourceDocumentId, out var dispatchId))
+                    header["cdlcode"] = dispatchId;
                 header["cordercode"] = operation.SourceDocumentType == "sales-order" ? Empty(operation.SourceDocumentNo) : null;
                 header["cdeliverunit"] = AdditionalText(value.AdditionalFields, "deliveryUnit");
                 header["cshipaddress"] = AdditionalText(value.AdditionalFields, "deliveryAddress");

@@ -801,3 +801,7 @@ API0.12.10沿用019及通用业务结构。business_operation_line来源仓库/�
 055/020已在LabelSystem_Dev安装：仅向system_function和system_setting插入退货功能及三个默认关闭的设置，不复制权限。业务沿用business_operation（SALES_RETURN/SALES_DELIVERY）、明细、事件和草稿；原单价格等快照进入原归档salesSourceLines。发/退货不生成TraceBack数量任务，不新增专表、数量流水或直接写U8；扫码镜像初始化仍来源旧表。实际U8保存审核尚受许可阻塞，不能据迁移成功认定业务验收。见[发布记录](../DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。
 
 2026-11-06同日实写补充：055/020结构不变，API0.13.1/Gateway0.12.1有原单销售保存/审核通过。已开票原发货关联iCorID，未开票使用iCorIdlsID，其数量不进原行iRetQuantity，读取预算需额外扣减关联累计；本次退完来源的新提交已拦截。镜像初始化后单据处理未新增inventory_flow/traceback_sync_task或旧三表数量流水。探测失败状态保留审计并收口，没有删除业务记录，详见[发布记录](../DEPLOYMENT_2026-11-06_SALES_DOCUMENTS.md)。
+
+### 021 销售出库追溯事件
+
+[056迁移](056_sales_outbound_traceback_roles.sql)复用 `traceback_sync_task`，扩展 `CK_traceback_sync_task_role` 支持 `SALES_OUTBOUND_ISSUE` 和 `SALES_OUTBOUND_RETURN`。稳定事件键、尝试次数、错误和完成时间沿用既有任务字段。2026-11-08已在 `LabelSystem_Dev` 安装并实测蓝字扣量。见[发布记录](../DEPLOYMENT_2026-11-08_SALES_OUTBOUND.md)。

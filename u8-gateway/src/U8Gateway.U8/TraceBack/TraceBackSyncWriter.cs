@@ -166,10 +166,12 @@ namespace U8Gateway.U8.TraceBack
             switch (request.EventRole)
             {
                 case "MATERIAL_ISSUE":
+                case "SALES_OUTBOUND_ISSUE":
                 case "PARTIAL_SOURCE":
                     if (request.Quantity >= 0) throw InvalidQuantity();
                     break;
                 case "MATERIAL_RETURN":
+                case "SALES_OUTBOUND_RETURN":
                 case "PRINT_TARGET":
                     if (request.Quantity <= 0) throw InvalidQuantity();
                     if (string.IsNullOrWhiteSpace(request.TargetWarehouseCode))

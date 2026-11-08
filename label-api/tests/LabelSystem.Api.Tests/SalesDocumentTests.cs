@@ -144,15 +144,17 @@ public sealed class SalesDocumentTests
         Assert.Equal("1000031711", rows[1].LineId);
     }
 
-    [Fact]
-    public async Task BeforeU8ShipmentRechecksLatestTraceBackFlowAndBlocksChangedLabel()
+    [Theory]
+    [InlineData("sales-delivery")]
+    [InlineData("sales-outbound")]
+    public async Task BeforeU8SalesRechecksLatestTraceBackFlowAndBlocksChangedLabel(string erpDocumentType)
     {
         var snapshot = new TraceBackLabelSnapshot("TAG1", null, 4, 42, "g", "o", "M1", "Material", "B1", "U1", "Unit",
             "W1", "Warehouse", "L1", "Location", null, null, null, "identity", "AVAILABLE", []);
         var handler = new Snapshots(snapshot);
         var service = new TraceBackSnapshotService(new U8GatewayClient(new Factory(handler), new Monitor<U8GatewayOptions>(
             new() { BaseUrl = "http://test", ApiKey = "test-only" })), null!);
-        await Assert.ThrowsAsync<ApiException>(() => service.ValidateBeforeU8Async("sales-delivery", Operation(Request()).Lines, false, default));
+        await Assert.ThrowsAsync<ApiException>(() => service.ValidateBeforeU8Async(erpDocumentType, Operation(Request()).Lines, false, default));
         Assert.Equal(1, handler.Calls);
     }
 
