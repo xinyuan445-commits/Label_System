@@ -1,5 +1,9 @@
 # U8 Gateway API 设计
 
+## 采购与盘点审核（0.12.12）
+
+采购到货与委外到货按 cBusType 区分。审核/弃审回查业务类型、版本、审核人和日期。盘点需主单及关联出入库均已审核才显示已审。未分配货位的盘点弃审先处理关联单，主单拒绝时尝试恢复原已审核的关联单。已分配货位在任何关联写入前拒绝。
+
 ## 销售单据手工审核（0.12.3）
 
 审核列表和详情中，sales-delivery 只返回蓝字发货单，sales-return 只返回红字退货单。写操作复用 sales-delivery 的 U8 适配器，手工审核请求通过 options.approvalRedVoucher 携带预期方向。Gateway 回查 U8 单据方向与版本，方向不符返回 APPROVAL_DOCUMENT_TYPE_MISMATCH，再按实际原生方向调用 U8。原自动审核仍由原业务组发起。

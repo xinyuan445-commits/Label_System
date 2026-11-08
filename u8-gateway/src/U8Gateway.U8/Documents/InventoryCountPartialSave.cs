@@ -32,7 +32,7 @@ namespace U8Gateway.U8.Documents
     public static class InventoryCountSaveRules
     {
         public static bool AllowsOperation(string operation, bool partialSave) =>
-            operation == DocumentOperationCodes.Verify || partialSave &&
+            operation == DocumentOperationCodes.Verify || operation == DocumentOperationCodes.Unverify || partialSave &&
             (operation == DocumentOperationCodes.Add || operation == DocumentOperationCodes.Edit);
 
         public static bool AuditAlreadyConfirmed(string operation, bool verified, bool recovering) =>

@@ -6,6 +6,22 @@ namespace LabelSystem.Api;
 
 public sealed class LabelSystemRepository(SqlConnectionFactory connections)
 {
+    public async Task<bool> HasUnfinishedCountUploadAsync(string documentNo, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT TOP(1) 1 FROM dbo.business_operation o
+            WHERE o.erp_account_id='888' AND o.erp_document_type='inventory-count'
+              AND o.erp_document_no=@document_no
+              AND (o.status IN ('PENDING','WRITING_ERP','PENDING_APPROVAL','NEEDS_RECONCILIATION')
+                OR EXISTS (SELECT 1 FROM dbo.traceback_sync_task t WHERE t.operation_id=o.id AND t.status<>'COMPLETED'));
+            """;
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@document_no", SqlDbType.NVarChar, 100).Value = documentNo;
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
+
     public async Task<bool> CanConnectAsync(CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();

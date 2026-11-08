@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Linq;
 using U8Gateway.Contracts.Approvals;
 using U8Gateway.Contracts.Documents;
+using U8Gateway.U8.Documents;
 
 namespace U8Gateway.U8.Approvals
 {
@@ -94,8 +95,11 @@ namespace U8Gateway.U8.Approvals
         public ApprovalDocumentDetail Get(string documentType, long id)
         {
             Profile p = RequireProfile(documentType);
+            string canUnaudit = Eq(p.Type, DocumentTypeCodes.InventoryCount)
+                ? "convert(bit,case when " + InventoryCountApproval.AssignedPositionPredicate + " then 0 else 1 end)"
+                : "convert(bit,1)";
             string headerSql = "select top (1) " + HeaderSelect(p) + "," +
-                "isnull(x.LineCount,0) LineCount,isnull(x.TotalQuantity,0) TotalQuantity " +
+                "isnull(x.LineCount,0) LineCount,isnull(x.TotalQuantity,0) TotalQuantity," + canUnaudit + " CanUnaudit " +
                 "from dbo." + Q(p.Header) + " h " +
                 "outer apply (select count(*) LineCount,sum(isnull(d." + Q(p.Quantity) + ",0)) TotalQuantity " +
                 "from dbo." + Q(p.Line) + " d where d." + Q(p.LineHeaderId) + "=h." + Q(p.HeaderId) + ") x " +
@@ -133,7 +137,8 @@ namespace U8Gateway.U8.Approvals
                             WarehouseCode = summary.WarehouseCode, CreatedBy = summary.CreatedBy,
                             Status = summary.Status, AuditedBy = summary.AuditedBy,
                             AuditedAt = summary.AuditedAt, Version = summary.Version,
-                            LineCount = summary.LineCount, TotalQuantity = summary.TotalQuantity
+                            LineCount = summary.LineCount, TotalQuantity = summary.TotalQuantity,
+                            CanUnaudit = Convert.ToBoolean(reader["CanUnaudit"])
                         };
                     }
                 }
@@ -180,6 +185,18 @@ namespace U8Gateway.U8.Approvals
         {
             string parent = "nullif(ltrim(rtrim(convert(nvarchar(100),h." +
                 Q(p.Verifier) + "))),N'') is not null";
+            if (Eq(p.Type, DocumentTypeCodes.InventoryCount))
+            {
+                const string link = "r.cSource=N'盘点' and r.cBusCode=h.cCVCode and r.cWhCode=h.cWhCode";
+                const string pending = " and nullif(ltrim(rtrim(isnull(r.cHandler,N''))),N'') is null";
+                return "(" + parent +
+                    " and (not exists (select 1 from dbo.CheckVouchs d where d.ID=h.ID and d.iCVCQuantity>d.iCVQuantity)" +
+                    " or exists (select 1 from dbo.RdRecord08 r where " + link + "))" +
+                    " and (not exists (select 1 from dbo.CheckVouchs d where d.ID=h.ID and d.iCVCQuantity<d.iCVQuantity)" +
+                    " or exists (select 1 from dbo.RdRecord09 r where " + link + "))" +
+                    " and not exists (select 1 from dbo.RdRecord08 r where " + link + pending + ")" +
+                    " and not exists (select 1 from dbo.RdRecord09 r where " + link + pending + "))";
+            }
             if (!Eq(p.Type, DocumentTypeCodes.Transfer)) return parent;
 
             string outboundLink = "(r9.cBusCode=h.cTVCode or r9.cSourceCodeLs=h.cTVCode)";
@@ -257,7 +274,7 @@ namespace U8Gateway.U8.Approvals
         {
             if (string.IsNullOrWhiteSpace(type)) return null;
             if (Eq(type, DocumentTypeCodes.PurchaseArrival) || Eq(type, DocumentTypeCodes.SubcontractArrival))
-                return new Profile { Type=Eq(type, DocumentTypeCodes.PurchaseArrival)?DocumentTypeCodes.PurchaseArrival:DocumentTypeCodes.SubcontractArrival, Header="PU_ArrivalVouch",Line="PU_ArrivalVouchs",HeaderId="ID",LineHeaderId="ID",Code="cCode",Date="dDate",Verifier="cVerifier",VerifyDate=null,Maker="cMaker",Warehouse=null,LineId="Autoid",LineNo="irowno",Inventory="cInvCode",Quantity="iQuantity",Batch="cBatch",LineWarehouse="cWhCode",PartnerLabel="供应商",PartnerExpression="isnull((select top (1) v.cVenName from dbo.Vendor v where v.cVenCode=h.cVenCode),isnull(h.cVenCode,N''))",BusinessFilter=Eq(type, DocumentTypeCodes.PurchaseArrival)?"isnull(h.cBusType,N'')<>N'委外加工'":"isnull(h.cBusType,N'')=N'委外加工'" };
+                return new Profile { Type=Eq(type, DocumentTypeCodes.PurchaseArrival)?DocumentTypeCodes.PurchaseArrival:DocumentTypeCodes.SubcontractArrival, Header="PU_ArrivalVouch",Line="PU_ArrivalVouchs",HeaderId="ID",LineHeaderId="ID",Code="cCode",Date="dDate",Verifier="cVerifier",VerifyDate="cAuditDate",Maker="cMaker",Warehouse=null,LineId="Autoid",LineNo="irowno",Inventory="cInvCode",Quantity="iQuantity",Batch="cBatch",LineWarehouse="cWhCode",PartnerLabel="供应商",PartnerExpression="isnull((select top (1) v.cVenName from dbo.Vendor v where v.cVenCode=h.cVenCode),isnull(h.cVenCode,N''))",BusinessFilter=Eq(type, DocumentTypeCodes.PurchaseArrival)?"isnull(h.cBusType,N'')<>N'委外加工'":"isnull(h.cBusType,N'')=N'委外加工'" };
             if (Eq(type, DocumentTypeCodes.PurchaseReceipt)) return Rd(type,"RdRecord01","RdRecords01","供应商","isnull((select top (1) v.cVenName from dbo.Vendor v where v.cVenCode=h.cVenCode),isnull(h.cVenCode,N''))");
             if (Eq(type, DocumentTypeCodes.SalesDelivery) || Eq(type, DocumentTypeCodes.SalesReturn))
             {

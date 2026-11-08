@@ -23,7 +23,7 @@
 | 制单开关 `/work/:code/switches` | BusinessDocumentSettingsView.vue | 单据策略与保存 | 盘点显示自动添加、自动上传、自动审核；所有单据移除托盘设置 | dev.95已部署，自动验证通过，实机待验 |
 | 单据字段 `/work/:code/document-settings` | DocumentFieldSettingsView.vue | 表头/表体字段显示、必填及默认配置 | 盘点原单只读字段不误接为可编辑表头 | 已有发布，未改 |
 | 盘点 `/work/inventory-count` | OutboundDocumentView.vue（共用） | 原单可选→扫码确认→完成→管理 | 按原单/表头仓库盘点；数量确认选择目标货位，完成按开关上传；失败保留 | dev.94已部署，46项测试/构建通过，实机待验 |
-| 审核 `/work/approval-:code` | ApprovalDocumentView.vue | 条件查询、状态、单据详情、审核/弃审确认 | 888发货与退货独立授权、分开查询，共用模板 | dev.96 页面沿用，实机待验 |
+| 审核 `/work/approval-:code` | ApprovalDocumentView.vue | 条件查询、状态、单据详情、审核/弃审确认 | 888盘点需主单和关联单均已审才进入已审列表，已分配货位的盘点单在详情提示先到U8处理 | 5175已加载，实机待验 |
 | 标签查询 `/work/label-query` | LabelQueryView.vue | 扫码、身份/余额/位置及状态 | 无本轮改动；不将查询当作制单授权 | 已有发布，未改 |
 | 设置 `/settings` | SettingsView.vue | 管理和设备功能入口 | 无本轮改动 | 已有发布，未改 |
 | 地址 `/settings/address` | AddressSettingsView.vue | 档位、地址、保存/切换 | 客户端档位不决定服务器账套，详细说明保留在文档 | 已有发布，未改 |

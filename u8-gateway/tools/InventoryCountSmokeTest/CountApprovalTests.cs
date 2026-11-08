@@ -55,6 +55,23 @@ internal static class CountApprovalTests
             () => { throw new CountApprovalException("PARENT_REJECTED", "rejected"); },
             () => { readCalled = true; return state; }, verify));
         Require(!readCalled);
+        var states = new Dictionary<long, bool> { [1] = true, [2] = true };
+        bool assigned = true;
+        CountApprovalSnapshot ReadUnverify() => new CountApprovalSnapshot
+        {
+            ParentVerified = true, HasAssignedPositions = assigned,
+            Linked = new[] { Child("08", 1, states[1]), Child("09", 2, states[2]) }
+        };
+        Action<CountLinkedVoucher> unverify = item => states[item.Id] = false;
+        Action<CountLinkedVoucher> restore = item => states[item.Id] = true;
+        Reject("U8_COUNT_POSITIONS_ASSIGNED",
+            () => InventoryCountApproval.Unverify(() => { }, ReadUnverify, unverify, restore));
+        Require(states.Values.All(x => x));
+        assigned = false;
+        Reject("PARENT_REJECTED", () => InventoryCountApproval.Unverify(
+            () => { throw new CountApprovalException("PARENT_REJECTED", "rejected"); },
+            ReadUnverify, unverify, restore));
+        Require(states.Values.All(x => x));
         Console.WriteLine("inventory count linked audit contracts passed (retry, partial failure, readiness, final readback)");
     }
     private static CountLinkedVoucher Child(string type, long id, bool audited = false) =>

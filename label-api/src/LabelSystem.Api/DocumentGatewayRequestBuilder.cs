@@ -66,17 +66,23 @@ internal static class DocumentGatewayRequestBuilder
                 header["cptcode"] = AdditionalText(value.AdditionalFields, "purchaseTypeCode") ?? value.CategoryCode;
                 header["cvencode"] = Empty(value.PartnerCode);
                 header["cdepcode"] = Empty(value.DepartmentCode);
-                header["cpocode"] = operation.SourceDocumentType == "purchase-order" ? Empty(operation.SourceDocumentNo) : null;
+                header["cpocode"] = Empty(operation.SourceDocumentNo);
                 header["cpaycode"] = AdditionalText(value.AdditionalFields, "paymentCode");
                 header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyName") ?? "人民币";
                 header["cexch_code"] = AdditionalText(value.AdditionalFields, "currencyCode") ?? "RMB";
                 header["iexchrate"] = AdditionalDecimal(value.AdditionalFields, "exchangeRate") ?? 1m;
-                header["itaxrate"] = AdditionalDecimal(value.AdditionalFields, "taxRate");
+                if (AdditionalDecimal(value.AdditionalFields, "taxRate") is { } arrivalTaxRate)
+                    header["itaxrate"] = arrivalTaxRate;
                 header["cmemo"] = Empty(request.Reason);
                 header["cbustype"] = operation.ErpDocumentType == "subcontract-arrival" ? "委外加工" : "普通采购";
-                header["bnegative"] = red;
+                header["bnegative"] = red ? 1 : 0;
+                header["idiscounttaxtype"] = AdditionalDecimal(value.AdditionalFields, "discountTaxType") ?? 0;
+                header["ibilltype"] = AdditionalDecimal(value.AdditionalFields, "billType") ?? 0;
                 break;
             case "purchase-receipt":
+                header["cvouchtype"] = "01";
+                header["brdflag"] = 1;
+                header["cbustype"] = "普通采购";
                 header["ddate"] = date;
                 header["cwhcode"] = operation.WarehouseCode;
                 header["crdcode"] = Empty(value.CategoryCode);
@@ -85,7 +91,8 @@ internal static class DocumentGatewayRequestBuilder
                 header["cvencode"] = Empty(value.PartnerCode);
                 header["cexch_name"] = AdditionalText(value.AdditionalFields, "currencyName") ?? "人民币";
                 header["iexchrate"] = AdditionalDecimal(value.AdditionalFields, "exchangeRate") ?? 1m;
-                header["itaxrate"] = AdditionalDecimal(value.AdditionalFields, "taxRate");
+                if (AdditionalDecimal(value.AdditionalFields, "taxRate") is { } receiptTaxRate)
+                    header["itaxrate"] = receiptTaxRate;
                 header["cmemo"] = Empty(request.Reason);
                 header["csource"] = SourceTitle(operation.SourceDocumentType, "库存");
                 header["cbuscode"] = Empty(operation.SourceDocumentNo);
@@ -191,11 +198,12 @@ internal static class DocumentGatewayRequestBuilder
                 row["iquantity"] = quantity;
                 row["ivouchrowno"] = line.LineNo;
                 row["cbmemo"] = Empty(line.Remark);
-                if (operation.SourceDocumentType == "purchase-order") row["iposid"] = line.SourceLineId;
-                if (operation.SourceDocumentType is "outsourcing-order" or "subcontract-order")
+                if (AdditionalDecimal(request.Header.AdditionalFields, "taxRate") is { } lineTaxRate)
+                    row["itaxrate"] = lineTaxRate;
+                if (operation.SourceDocumentType is "purchase-order" or "outsourcing-order" or "subcontract-order")
                 {
+                    row["iposid"] = line.SourceLineId;
                     row["cordercode"] = Empty(operation.SourceDocumentNo);
-                    row["iorderdid"] = line.SourceLineId;
                 }
                 break;
             case "purchase-receipt":

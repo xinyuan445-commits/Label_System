@@ -30,6 +30,7 @@ export interface ApprovalDocument {
   auditedBy: string
   auditedAt: string | null
   version: string
+  canUnaudit?: boolean
   lineCount: number
   totalQuantity: number
   lines: ApprovalDocumentLine[]

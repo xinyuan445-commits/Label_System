@@ -822,6 +822,7 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
     string action,
     ApprovalActionRequest request,
     UserRepository users,
+    LabelSystemRepository repository,
     U8GatewayClient gateway,
     IOptionsMonitor<LabelSystemOptions> options,
     CancellationToken cancellationToken) =>
@@ -829,8 +830,8 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
     var functionCode = DocumentFunctionCode(documentType);
     await RequireFunctionAsync(context, users, $"approval-{functionCode}", cancellationToken);
     var operation = action.Trim().ToLowerInvariant();
-    if (functionCode == "inventory-count" && options.CurrentValue.ErpAccountId == "888")
-        throw new ApiException(409, "COUNT_APPROVAL_NOT_READY", "盘点审核暂未开放。");
+    if (functionCode == "inventory-count" && options.CurrentValue.ErpAccountId != "888")
+        throw new ApiException(409, "COUNT_APPROVAL_TEST_ONLY", "盘点审核仅开放888测试账套。");
     if (operation is not ("audit" or "unaudit"))
         throw new ApiException(StatusCodes.Status400BadRequest,
             "APPROVAL_ACTION_INVALID", "审核操作无效。");
@@ -841,6 +842,9 @@ app.MapPost("/api/v1/approval-documents/{documentType}/{voucherCode}/{action}", 
         string.IsNullOrWhiteSpace(request.ExpectedVersion))
         throw new ApiException(StatusCodes.Status400BadRequest,
             "APPROVAL_REQUEST_INVALID", "请求参数不完整。");
+    if (functionCode == "inventory-count" &&
+        await repository.HasUnfinishedCountUploadAsync(voucherCode, cancellationToken))
+        throw new ApiException(409, "COUNT_UPLOAD_NOT_COMPLETE", "请先在单据管理完成原上传。");
     var current = RequestContext.User(context);
     var erp = await users.GetErpOperatorAsync(current.Id, cancellationToken);
     var payload = JsonSerializer.Serialize(new

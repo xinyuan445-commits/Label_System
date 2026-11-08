@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.CSharp.RuntimeBinder;
+using Newtonsoft.Json;
 using ADODB;
 using Info_PU;
 using MSXML2;
@@ -324,6 +325,38 @@ namespace U8Gateway.U8.Documents
             if (definition == null) return Failure("DOCUMENT_TYPE_NOT_FOUND", "单据类型不存在。", null);
             if (execution.Request == null) return Failure("REQUEST_REQUIRED", "请求体不能为空。", null);
 
+            const string numberCard = "26";
+            using (var db = new SqlConnection(ConnectionString(options)))
+            using (var query = new SqlCommand(@"
+select distinct DEF_ID from dbo.vouchers where CardNumber=@card;
+select i.cInvCode,convert(bit,isnull(i.bInvQuality,0)) from dbo.Inventory i
+join openjson(@materials) m on m.value=i.cInvCode;", db))
+            {
+                query.Parameters.AddWithValue("@card", numberCard);
+                var rows = execution.Request.Lines;
+                query.Parameters.Add("@materials", System.Data.SqlDbType.NVarChar, -1).Value =
+                    JsonConvert.SerializeObject(rows.Select(row => Convert.ToString(row["cinvcode"])).Distinct());
+                db.Open();
+                using (var reader = query.ExecuteReader())
+                {
+                    if (!reader.Read() || reader.IsDBNull(0))
+                        return Failure("U8_PURCHASE_TEMPLATE_MISSING", "U8 到货单模板未配置。", null);
+                    execution.Request.Header["ivtid"] = Convert.ToInt32(reader.GetValue(0));
+                    var inspection = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                    reader.NextResult();
+                    while (reader.Read()) inspection[reader.GetString(0).Trim()] = reader.GetBoolean(1);
+                    foreach (var row in rows)
+                    {
+                        string material = Convert.ToString(row["cinvcode"]).Trim();
+                        if (!inspection.TryGetValue(material, out bool needsInspection))
+                            return Failure("U8_PURCHASE_MATERIAL_NOT_FOUND", "到货物料档案不存在。", null);
+                        row["bgsp"] = needsInspection ? 1 : 0;
+                        row["binspect"] = 0;
+                        row["editprop"] = "A";
+                    }
+                }
+            }
+            execution.Request.Header["editprop"] = "A";
             U8XmlPacket packet = _codec.Encode(definition, new DocumentPayload
             {
                 Header = execution.Request.Header,
@@ -374,7 +407,7 @@ namespace U8Gateway.U8.Documents
                         ? Convert.ToString(purchaseType)
                         : string.Empty);
 
-                string voucherType = execution.Profile.ComponentDocumentType;
+                string voucherType = numberCard;
                 string error = string.Empty;
                 bool getFormatOnly = false;
                 bool selfFormat = false;
@@ -393,6 +426,7 @@ namespace U8Gateway.U8.Documents
                 if (!numbered || string.IsNullOrWhiteSpace(voucherCode))
                     return Failure("U8_CREATE_REJECTED", Empty(error, "U8 未生成单据号。"), voucherCode);
 
+                head.loadXML(SetFirstRowAttribute(head.xml, "ccode", voucherCode.Trim()));
                 object currentId = null;
                 string overDetails = string.Empty;
                 message = new DOMDocument26Class();
@@ -402,11 +436,14 @@ namespace U8Gateway.U8.Documents
 
                 long? confirmedId = WaitForVoucherId(options, execution.Profile, voucherCode);
                 if (!confirmedId.HasValue)
-                    return Failure("U8_WRITE_NOT_CONFIRMED",
-                        Empty(saveMessage, MessageText(message, "U8 新增后回查未确认。")),
-                        voucherCode, false);
+                    return string.IsNullOrWhiteSpace(saveMessage)
+                        ? Failure("U8_WRITE_NOT_CONFIRMED", MessageText(message, "U8 新增后回查未确认。"), voucherCode, false)
+                        : Failure("U8_CREATE_REJECTED", saveMessage, voucherCode);
                 VoucherState state = ReadVoucherState(options, execution.Profile, confirmedId.Value);
-                U8XmlPacket saved = QueryPurchase(options.U8, execution.Profile, confirmedId.Value);
+                string locateWhere = string.Empty;
+                object savedId = confirmedId.Value;
+                voucher.GetVoucherDataById(ref head, ref body, string.Empty, savedId, ref locateWhere);
+                U8XmlPacket saved = Packet(head, body, null);
                 return new DocumentOperationResult
                 {
                     Confirmed = state.Exists,
@@ -621,6 +658,10 @@ namespace U8Gateway.U8.Documents
                 execution.Request?.Options?.ContainsKey("approvalRedVoucher") == true &&
                 before.RedVoucher != OptionBoolean(execution.Request.Options, "approvalRedVoucher"))
                 return Failure("APPROVAL_DOCUMENT_TYPE_MISMATCH", "单据不属于当前审核类型。", execution.VoucherCode);
+            if (execution.Profile.Component == "VoucherCO_PU" && !deleting &&
+                (execution.Profile.DocumentType == DocumentTypeCodes.SubcontractArrival) !=
+                string.Equals(before.PurchaseBusinessType, "委外加工", StringComparison.OrdinalIgnoreCase))
+                return Failure("APPROVAL_DOCUMENT_TYPE_MISMATCH", "单据不属于当前审核类型。", execution.VoucherCode);
             // Recovery may skip the old parent version, but must still finish its linked vouchers.
             bool countRecovery = execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount &&
                 InventoryCountSaveRules.AuditAlreadyConfirmed(execution.Operation, before.Verified,
@@ -648,6 +689,8 @@ namespace U8Gateway.U8.Documents
                 StringComparison.OrdinalIgnoreCase);
             if (verifying && execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount)
                 return VerifyInventoryCount(options, execution, voucherId.Value);
+            if (unverifying && execution.Profile.DocumentType == DocumentTypeCodes.InventoryCount)
+                return UnverifyInventoryCount(options, execution, voucherId.Value);
             if ((verifying || unverifying) &&
                 string.Equals(execution.Profile.DocumentType, DocumentTypeCodes.Transfer,
                     StringComparison.OrdinalIgnoreCase))
@@ -690,7 +733,8 @@ namespace U8Gateway.U8.Documents
                         options.U8,
                         execution.Profile,
                         voucherId.Value,
-                        execution.Operation);
+                        execution.Operation,
+                        before);
                 }
                 else if (string.Equals(execution.Profile.Component, "VoucherCO_SA",
                     StringComparison.OrdinalIgnoreCase))
@@ -1176,7 +1220,8 @@ namespace U8Gateway.U8.Documents
             U8ConnectionOptions options,
             U8DocumentProfile profile,
             long voucherId,
-            string operation)
+            string operation,
+            VoucherState state)
         {
             U8Login.clsLogin login = null;
             object common = null;
@@ -1195,9 +1240,9 @@ namespace U8Gateway.U8.Documents
                 connection = ConvertConnection(commonLogin.AccountConnection);
                 voucher = new clsVoucherCO_PUClass();
                 ClsS_Infor information = null;
-                bool positive = true;
+                bool positive = !state.RedVoucher;
                 string billType = string.Empty;
-                string businessType = profile.BusinessType ?? string.Empty;
+                string businessType = Empty(state.PurchaseBusinessType, profile.BusinessType ?? string.Empty);
                 UseMode useMode = UseMode.CS;
                 voucher.Init(
                     (vouchertype)2,
@@ -1209,7 +1254,7 @@ namespace U8Gateway.U8.Documents
                     ref businessType,
                     ref useMode,
                     businessType,
-                    string.Empty);
+                    state.PurchaseTypeCode ?? string.Empty);
                 head = new DOMDocument26Class();
                 body = new DOMDocument26Class();
                 string locateWhere = string.Empty;
@@ -1661,10 +1706,12 @@ namespace U8Gateway.U8.Documents
                 DocumentTypeCodes.SalesDelivery,
                 StringComparison.OrdinalIgnoreCase);
             string idColumn = salesDelivery ? "DLID" : "ID";
+            bool purchaseArrival = profile.Component == "VoucherCO_PU";
             string verifiedColumn = VerifiedColumn(profile.DocumentType);
+            string extraColumns = salesDelivery ? ",convert(bit,isnull([bReturnFlag],0))" :
+                purchaseArrival ? ",convert(bit,isnull([bNegative],0)),[cBusType],[cPTCode]" : "";
             string sql = "select top (1) [" + verifiedColumn + "], " +
-                "master.dbo.fn_varbintohexstr([ufts])" +
-                (salesDelivery ? ",convert(bit,isnull([bReturnFlag],0))" : "") + " from [dbo].[" +
+                "master.dbo.fn_varbintohexstr([ufts])" + extraColumns + " from [dbo].[" +
                 profile.HeaderTable + "] where [" + idColumn + "]=@id";
             using (var connection = new SqlConnection(ConnectionString(options)))
             using (var command = new SqlCommand(sql, connection))
@@ -1684,7 +1731,9 @@ namespace U8Gateway.U8.Documents
                         Verified = verified != null &&
                             verified != DBNull.Value &&
                             !string.IsNullOrWhiteSpace(Convert.ToString(verified)),
-                        RedVoucher = salesDelivery && reader.GetBoolean(2),
+                        RedVoucher = (salesDelivery || purchaseArrival) && reader.GetBoolean(2),
+                        PurchaseBusinessType = purchaseArrival ? Convert.ToString(reader.GetValue(3)).Trim() : null,
+                        PurchaseTypeCode = purchaseArrival ? Convert.ToString(reader.GetValue(4)).Trim() : null,
                         Version = reader.IsDBNull(1)
                             ? null
                             : reader.GetString(1)
@@ -1989,6 +2038,8 @@ namespace U8Gateway.U8.Documents
             public bool Exists { get; set; }
             public bool Verified { get; set; }
             public bool RedVoucher { get; set; }
+            public string PurchaseBusinessType { get; set; }
+            public string PurchaseTypeCode { get; set; }
             public string Version { get; set; }
         }
 

@@ -65,7 +65,7 @@ internal static class Program
             Equal(true, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Verify, false));
             Equal(true, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Add, true));
             Equal(false, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Add, false));
-            Equal(false, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Unverify, true));
+            Equal(true, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Unverify, false));
             Equal(false, InventoryCountSaveRules.AllowsOperation(DocumentOperationCodes.Delete, true));
             Equal(false, InventoryCountSaveRules.AuditAlreadyConfirmed(DocumentOperationCodes.Verify, true, false));
             Equal(true, InventoryCountSaveRules.AuditAlreadyConfirmed(DocumentOperationCodes.Verify, true, true));

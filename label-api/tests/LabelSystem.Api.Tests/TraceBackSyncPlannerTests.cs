@@ -62,6 +62,16 @@ public sealed class TraceBackSyncPlannerTests
         Assert.Equal(red ? "WH1" : null, payload.TargetWarehouseCode);
     }
 
+    [Theory]
+    [InlineData("purchase-arrival")]
+    [InlineData("subcontract-arrival")]
+    [InlineData("purchase-receipt")]
+    public void PurchaseDocumentWithExistingMirrorDoesNotQueueStockChange(string type)
+    {
+        Assert.Empty(TraceBackSyncPlanner.Build(
+            Operation(type, 10, 1), Result(), false, Rows(), "操作员", "888"));
+    }
+
     private static TraceBackSyncEventRequest Payload(TraceBackSyncTaskDraft task) =>
         JsonSerializer.Deserialize<TraceBackSyncEventRequest>(
             task.PayloadJson, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;

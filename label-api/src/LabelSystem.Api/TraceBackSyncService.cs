@@ -71,8 +71,9 @@ public static class TraceBackSyncPlanner
     {
         if (string.IsNullOrWhiteSpace(result.VoucherCode))
             throw new InvalidOperationException("U8 单据号缺失。");
-        // Dispatch/return documents only record the business; physical sales stock moves own quantity events.
-        if (operation.ErpDocumentType == "sales-delivery") return [];
+        // These flows use the label for input and leave label quantity changes to the supported stock flows.
+        if (operation.ErpDocumentType is "sales-delivery" or "purchase-arrival" or "subcontract-arrival" or "purchase-receipt")
+            return [];
         var products = operation.Lines.Where(line =>
             line.ObjectType == "PRODUCT_LABEL" && line.LabelId.HasValue &&
             line.TraceBackLatestFlowId.HasValue).ToArray();

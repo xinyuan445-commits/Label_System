@@ -42,6 +42,7 @@ namespace U8Gateway.Contracts.Approvals
 
     public sealed class ApprovalDocumentDetail : ApprovalDocumentSummary
     {
+        public bool CanUnaudit { get; set; }
         public IList<ApprovalDocumentLine> Lines { get; set; } =
             new List<ApprovalDocumentLine>();
     }
