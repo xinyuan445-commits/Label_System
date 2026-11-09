@@ -1,0 +1,242 @@
+{
+  "artifact": "用友 U8 仓库扫码与条码打印产品宣传手册",
+  "content_review_date": "2026-11-09",
+  "purpose": "面向使用用友 U8 的制造企业，说明客户问题、业务价值、产品特点和落地建议。",
+  "entry": "index.html",
+  "editing": {
+    "copy": "index.html 中相邻的 lang=zh-CN 与 lang=en 文案逐段对应。",
+    "layout": "styles.css",
+    "interaction": "brochure.js",
+    "distribution": "HTML、CSS、JS 和 assets 目录应保持在同一文件夹中。直接打开 index.html 即可。",
+    "print_layout": "print.css：A4分页、打印隐藏控件、目录页码展示；beforeprint/afterprint负责展开及恢复附录。"
+  },
+  "preserved_version": "../product-brochure/index.html",
+  "screenshot_provenance": {
+    "source_directory": "../product-brochure/assets",
+    "count": 12,
+    "method": "复用此前通过本地实际编译应用页面与示例响应数据生成的截图，图片文件逐字节复制，无生成式图片。",
+    "display": "保留原界面文字，手册正文、标题、图注和交互文案提供中英文。",
+    "scope": "截图证明页面展示内容，不代表真实客户案例、生产交易或实体设备验收。"
+  },
+  "claim_evidence": [
+    {
+      "theme": "产品范围与状态",
+      "sources": [
+        "../PROJECT_STATUS.md",
+        "../features/README.md"
+      ]
+    },
+    {
+      "theme": "现场查询、盘点与作业",
+      "sources": [
+        "../features/标签查询.md",
+        "../features/盘点单.md",
+        "../features/材料出库.md",
+        "../features/调拨单.md",
+        "../features/货位调整.md"
+      ]
+    },
+    {
+      "theme": "采购与委外",
+      "sources": [
+        "../features/采购到货.md",
+        "../features/委外到货.md",
+        "../features/采购入库.md",
+        "../DEPLOYMENT_2026-11-08_APPROVAL_MANAGEMENT.md"
+      ],
+      "wording": "强调来源查询、信息核对、单据准备及已有审核能力，不宣传采购/委外到货新增全流程已经通过。"
+    },
+    {
+      "theme": "销售作业",
+      "sources": [
+        "../features/销售出库单.md",
+        "../features/发货单.md",
+        "../features/退货单.md",
+        "../DEPLOYMENT_2026-11-08_SALES_OUTBOUND.md",
+        "../DEPLOYMENT_2026-11-08_SALES_APPROVAL.md"
+      ]
+    },
+    {
+      "theme": "管理与人员权限",
+      "sources": [
+        "../features/草稿与单据管理.md",
+        "../features/审核与弃审.md",
+        "../features/用户与权限.md"
+      ]
+    },
+    {
+      "theme": "标签设计、打印与补打",
+      "sources": [
+        "../features/标签打印.md",
+        "../../New_Label_Print_System/README.md"
+      ]
+    }
+  ],
+  "editorial_rules": [
+    "主线为客户问题、解决方式、业务场景、产品价值、落地建议，不编写按钮操作教程。",
+    "不虚构客户、客户证言、收益比例、性能指标、实施周期、认证或官方合作关系。",
+    "实施路径是建议，具体业务范围需结合企业 U8 配置、权限及适配确认。",
+    "本次仅制作宣传文件，不变更应用、服务、数据库、部署或既有验收记录。",
+    "未获得品牌联系信息，不虚构销售联系方式或预约成功；收尾提供业务场景与功能附录的真实浏览入口。"
+  ],
+  "validation": [
+    "中英文目录、场景切换、键盘操作、功能展开、图片放大与关闭、语言记忆。",
+    "320、390、768、1024、1440 像素宽度，两种语言均无横向溢出。",
+    "原版 HTML 与其 47 张截图的 SHA-256 校验值未改变。",
+    "当前结构为8章正文、无编号收尾、默认折叠附录；48项能力与12张实际页面截图保留。"
+  ],
+  "customer_review": {
+    "date": "2026-11-09",
+    "findings": [
+      "封面收益不够醒目，痛点缺少返工与时间成本的解释。",
+      "产品价值出现较晚，模板发布和打印说明仍偏功能介绍。",
+      "缺少采购决策关注的 U8 配合、现有设备适配与投入评估内容。",
+      "结尾偏准备事项，未明确客户演示时应验证的改善。"
+    ],
+    "changes": [
+      "强化封面三项收益与四类痛点的工作影响。",
+      "产品价值前移至第03章，目录与编号同步。",
+      "扫码、打印和管理正文改为收益先行，保留具体能力依据。",
+      "加入三项采购常见问题，结尾改为三项演示评估标准。"
+    ],
+    "limits": "只调整宣传表达与阅读顺序；未增加业务能力或未经验证的效益数字。",
+    "validation": "中英文10章目录顺序与编号、3项购买问题、双语段落、页面交互及320—1440px响应式检查通过；旧版文件校验值未变。"
+  },
+  "tail_revision": {
+    "date": "2026-11-09",
+    "structure": "01—08 正文、无编号收尾、默认折叠的功能附录。",
+    "changes": [
+      "08精简为U8衔接、设备标签适配、重点业务试点三点。",
+      "09的48项功能原文全部移入收尾之后的附录，默认收起，入口可展开。",
+      "10取消编号与演示评估清单，改成一句主张、简短说明和实际浏览入口。",
+      "删除重复的三项能力总结、场景导语、管理口号，保留各产品场景中的能力依据。"
+    ],
+    "preserved": "原操作版、12张真实界面截图、48项功能、中英文切换和原有场景交互保持。",
+    "validation": "中英文8章目录、无编号收尾和附录入口核对通过；附录默认折叠、点击展开、分组深链接、键盘与图片交互、320—1440px排版均通过。48项能力的中英文名称与介绍逐项保持一致，原操作版文件校验值未变。"
+  },
+  "final_editorial_audit": {
+    "date": "2026-11-09",
+    "verdict": "正文按问题、方案、岗位价值和业务场景展开，功能细节位于折叠附录，整体定位为产品宣传资料。",
+    "changes": [
+      "删除痛点、打印及收尾的重复导语；方案章节讲产品关系，价值章节讲岗位改善。",
+      "采购和销售场景正文保留工作方式，结果条保留客户利益，避免同一卖点连续重复。",
+      "模板设计图片周边改为尺寸、字段和条码内容，发布管理留在附录。",
+      "审核内容改为待审跟进和人员授权，消除英文by role可能暗示独立角色管理的歧义。",
+      "修正warehouse/shop-floor、receipt and issue、标签尺寸等英文表述；销售截图图注、alt、放大标题同步。",
+      "按用户反馈删除四个场景中解释业务常识的铺垫段落，中英文同步；保留场景主张、产品能力和收益。"
+    ],
+    "screenshots": [
+      {
+        "file": "bill-print.png",
+        "observed": "采购入库单明细、标签模板及打印选项",
+        "supports": "以采购入库明细为标签数据来源"
+      },
+      {
+        "file": "label-query.png",
+        "observed": "料号、批次、24件、仓库与货位",
+        "supports": "当前标签信息查询"
+      },
+      {
+        "file": "inventory-count.png",
+        "observed": "已加入的标签、盘点数量24",
+        "supports": "逐码采集盘点数量；重复扫码拦截由功能文档支持，图片不声称展示拦截提示"
+      },
+      {
+        "file": "purchase-arrival-source.png",
+        "observed": "采购订单来源选择和订单明细数量",
+        "supports": "采购来源查询；不把此图当作委外或到货新增成功凭据"
+      },
+      {
+        "file": "material-outbound.png",
+        "observed": "材料出库扫码记录及本标签使用数量",
+        "supports": "生产领料现场采集示例"
+      },
+      {
+        "file": "transfer-order.png",
+        "observed": "原材料仓可用量24、目标线边仓、目标货位、调拨数量8",
+        "supports": "来源、目标和部分调拨数量确认"
+      },
+      {
+        "file": "sales-outbound-scan.png",
+        "observed": "销售出库扫码物料、批次、仓库货位、本标签使用数量24",
+        "supports": "出库采集；剩余可出量复核为文档支持的业务能力，不声称该图已展示复核结果"
+      },
+      {
+        "file": "template-editor.png",
+        "observed": "标签尺寸、物料文字、数量与条码布局",
+        "supports": "标签版式设计；不作为发布或编码规则页面展示"
+      },
+      {
+        "file": "label-reprint.png",
+        "observed": "原打印信息、原条码、原标签数量、补打入口",
+        "supports": "依据原记录补打"
+      },
+      {
+        "file": "draft-reconciliation.png",
+        "observed": "待核对状态的盘点单据",
+        "supports": "提交结果未确认时有记录可查"
+      },
+      {
+        "file": "erp-document-result.png",
+        "observed": "已完成状态和ERP单号",
+        "supports": "业务结果与U8单号回传"
+      },
+      {
+        "file": "approval-list.png",
+        "observed": "待审核、已审核分类及待审核单据",
+        "supports": "审核状态查询；人员授权来自功能档案，不声称该图为权限配置页"
+      }
+    ],
+    "scope": "仅复核宣传文字、实际页面截图及HTML展示，不新增业务或生产验收结论。"
+  },
+  "concise_copy_review": {
+    "date": "2026-11-09",
+    "scope": "从封面至附录、页脚逐段复核中英文；仅修改宣传文案。",
+    "changes": [
+      "删除4段痛点解释、3段重复章节导语和4条重复场景总结。",
+      "缩短封面与方案说明，标题突出问题或收益，正文提供具体能力。",
+      "四个业务场景删去泛化的业务铺垫；打印和管理章节去除重复收益。",
+      "精简附录与页脚，保留48项功能、权限及适用范围等必要信息。"
+    ],
+    "paired_revisions": 54,
+    "validation": "中英文逐段配对复核；8章目录、收尾及附录跳转、场景切换、图片放大、语言记忆、320—1440px排版检查通过；原操作版与47张原图校验值未变。",
+    "reduction": "按正文各章节语言节点字符数计（不含目录及附录），中文减少约31%，英文减少约32%。"
+  },
+  "print_edition": {
+    "date": "2026-11-09",
+    "changes": [
+      "05改为连续展示的05.1—05.4，替换原标签切换；正文和目录均提供小节锚点。",
+      "新增独立A4打印样式；四个场景各占一页，管理章节完整保留一页。",
+      "打印时展开全部附录并隐藏网页控件，打印后恢复阅读状态；移除PDF中指向本地图片的无效链接。",
+      "中文与英文各导出18页PDF，目录含页码和内部跳转。"
+    ],
+    "outputs": [
+      "../../output/pdf/u8-product-brochure-zh.pdf",
+      "../../output/pdf/u8-product-brochure-en.pdf"
+    ],
+    "page_map": {
+      "cover": 1,
+      "contents": 2,
+      "challenges": 3,
+      "solution": 4,
+      "advantages": 5,
+      "scanning": 6,
+      "panel-incoming": 7,
+      "panel-production": 8,
+      "panel-movement": 9,
+      "panel-sales": 10,
+      "printing": 11,
+      "control": 13,
+      "adoption": 14,
+      "next": 14,
+      "capabilities": 15
+    },
+    "validation": [
+      "两种语言18页均渲染并查看，修正首轮管理章节跨页及标题拆分。",
+      "核对14个目录入口的PDF目标页与印刷页码一致。",
+      "HTML中英文切换、全部场景可见、目录跳转、图片放大、打印前后状态恢复、320—1440px排版通过。",
+      "12张真实界面图及48项附录能力保留；旧操作版和47张原截图SHA-256一致。"
+    ],
+    "scope": "只调整宣传手册的排版及导出，不涉及应用、服务、部署或生产验收。"
+  }
+}

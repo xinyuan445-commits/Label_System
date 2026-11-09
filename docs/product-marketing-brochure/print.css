@@ -1,0 +1,122 @@
+/* A4 edition: the same content, laid out as complete pages. */
+@page{size:A4;margin:14mm 14mm 17mm;@bottom-left{content:"U8 · WAREHOUSE SCANNING & LABEL PRINTING";font-family:"Segoe UI",sans-serif;font-size:7pt;color:#536667}@bottom-right{content:counter(page);font-family:"Segoe UI",sans-serif;font-size:9pt;color:#216a5c}}
+*{print-color-adjust:exact;-webkit-print-color-adjust:exact;box-shadow:none!important;transition:none!important}
+html,body{background:#faf9f5;line-height:1.65;scroll-behavior:auto}
+.topbar,.skip,.hero-actions,.zoom-icon,.scenario-nav,.closing-actions,.detail-plus,dialog,.read-progress,footer a,.toc-arrow{display:none!important}
+.wrap{width:100%;max-width:none;margin:0}
+section,nav[id]{scroll-margin-top:0}
+.section,.hero,.contents{break-before:page;padding:0;break-inside:auto}
+.hero{break-before:auto;padding:12mm 9mm;min-height:262mm;overflow:visible}
+h2{font-size:27pt;letter-spacing:-.035em}h3{font-size:16pt}
+.section-head{max-width:none;margin-bottom:10mm}
+.eyebrow{font-size:9pt;gap:12px;margin-bottom:6mm}.index{font-size:9pt}
+.small-label{font-size:9pt;margin-bottom:5mm}
+p,.intro{orphans:3;widows:3}
+h2,h3,.eyebrow,.small-label,summary,figcaption{break-after:avoid}
+.screen,article,.u8-node,.product-nodes,.print-footnote{break-inside:avoid}
+a{text-decoration:none}.screen .zoom{cursor:default;border-radius:3mm}
+.screen figcaption{font-size:8pt;margin-top:3mm;break-before:avoid}
+.hero-grid{display:block;min-height:0;padding:0}
+.hero .eyebrow{font-size:8pt;max-width:none;margin-bottom:10mm}
+.hero h1{font-size:38pt;max-width:none;line-height:1.18}
+.hero-lead{font-size:12pt;max-width:none;margin-top:7mm}
+.hero-benefits{font-size:10pt;margin-top:7mm;padding-top:5mm;gap:12px;max-width:none}
+.hero-visual{width:100%;max-width:none;min-height:107mm;padding:17mm 0 0;margin:7mm 0 0;display:block}
+.hero-visual:before{inset:0 0 0 8mm;border-radius:20mm 0 0 3mm}
+.visual-label{top:7mm;left:17mm;font-size:7pt}
+.hero-desktop{margin-left:9mm;width:calc(100% - 12mm)}
+.hero-phone{width:31%;max-width:none;top:53mm;left:0}
+.visual-note{font-size:7pt;right:0;bottom:-2mm}
+.contents{min-height:258mm;border:0;padding-top:5mm}
+.contents-heading{font-size:13pt;gap:8mm;padding-bottom:8mm;border-bottom:2px solid var(--teal)}
+.contents ol{display:block;margin-top:7mm}
+.contents ol>li{border-bottom:1px solid var(--line);padding:2.5mm 0}
+.contents a{font-size:12pt;gap:5mm;padding:1.8mm 0;align-items:baseline}
+.toc-page{display:block;margin-left:auto;font-family:Consolas,monospace;font-size:10pt;color:var(--teal)}
+.contents .toc-subsections{padding-left:10mm;margin:1mm 0}
+.contents .toc-subsections a{font-size:9.5pt;padding:1mm 0}
+.contents-more{display:block;border:0;padding:0;margin-top:3mm}
+.contents-more a{font-size:11pt;padding:3mm 0}
+.contents-more a>span[aria-hidden]:not(.toc-page){display:none}
+.pain-grid{grid-template-columns:1fr 1fr}
+.pain{padding:9mm 7mm;min-height:72mm}
+.pain h3{font-size:18pt}.pain-no{font-size:10pt;margin-bottom:6mm}
+.pain .direction{font-size:11pt;margin-top:8mm;gap:3mm}
+.dark{padding:10mm 8mm;min-height:258mm}
+.solution-map{margin-top:12mm}
+.u8-node{padding:9mm 5mm;gap:7mm}.u8-name{font-size:35pt;padding-right:7mm}
+.u8-node h3{font-size:17pt}.u8-node p{font-size:10pt}
+.map-branches{gap:7mm}.map-branches>div{font-size:9pt;padding:5mm 2mm 2mm}
+.product-nodes{grid-template-columns:1fr 1fr;gap:7mm}
+.product-nodes article{padding:8mm 5mm}.product-label{font-size:8pt;margin-bottom:5mm}
+.product-nodes h3{font-size:19pt}.product-nodes p{font-size:11pt;margin-top:5mm}
+.label-bridge{font-size:9pt;margin:0 6%;gap:5mm;padding:5mm 2mm}
+.section-note{font-size:9pt;margin-top:7mm}
+.value-grid{grid-template-columns:1fr;gap:10mm}
+.value-grid article{display:grid;grid-template-columns:37mm 1fr;gap:3mm 8mm;padding:7mm 0 0}
+.value-grid .small-label{grid-row:span 2;margin:1mm 0 0;font-size:9pt}
+.value-grid h3{font-size:22pt}.value-grid p:not(.small-label){font-size:12pt;margin:0;max-width:110mm}
+.scan-split{display:block}.split .section-head{margin-bottom:7mm}
+.benefit-list{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm}
+.benefit-list article{gap:2mm;padding:5mm 0}.benefit-list h3{font-size:13pt}
+.benefit-list p{font-size:10pt;margin-top:3mm}
+.phone-stage{max-width:142mm;width:100%;margin:6mm auto 0;padding:6mm;gap:8mm;grid-template-columns:1fr 1fr}
+.phone-stage .query-screen{margin-top:10mm}.phone-stage figcaption{font-size:8pt}
+#scenarios>.wrap>.section-head{margin-bottom:7mm}
+.scenario-panel{grid-template-columns:1fr 1fr;gap:7mm;padding:8mm 6mm;min-height:202mm;margin:0;border:1px solid #d5ded3;break-before:page;break-inside:avoid;align-items:center}
+.scenario-panel:first-of-type{break-before:auto}
+.scenario-copy h3{font-size:24pt;max-width:none}
+.scenario-copy>p:not(.small-label){font-size:11pt;margin-top:7mm}
+.scenario-copy .tags{font-size:8.5pt!important;margin-top:8mm}
+.scenario-image{width:100%;max-width:76mm;padding:3mm;border-radius:4mm}
+.scenario-image .zoom{border-width:1mm;border-radius:3mm}
+.scenario-number{margin-right:4mm}
+#panel-production,#panel-movement,#panel-sales{min-height:250mm}
+.print-feature{display:flex;flex-direction:column;align-items:stretch;gap:8mm;padding:7mm;margin-top:9mm}
+.print-feature>.screen{order:2}.print-copy{padding:0}.print-copy h3{font-size:23pt}
+.print-copy>p:not(.small-label){font-size:12pt;margin-top:5mm}.text-tags{font-size:9pt;gap:5mm;margin-top:5mm}
+.print-pair{break-before:page;display:flex;flex-direction:column;gap:8mm;margin-top:0}
+.print-pair article{display:grid;grid-template-columns:1fr 1.55fr;gap:3mm 7mm;align-items:start}
+.print-pair h3{font-size:18pt;grid-column:1;grid-row:1}
+.print-pair p{font-size:11pt;grid-column:1;grid-row:2;margin:0}
+.print-pair .screen{grid-column:2;grid-row:1 / span 3;padding:3mm}
+.print-footnote{margin-top:9mm;padding:5mm 0;grid-template-columns:43mm 1fr;gap:5mm}
+.print-footnote .small-label{font-size:9pt}.print-footnote p{font-size:10pt}
+.control-grid{display:flex;flex-direction:column;gap:7mm}
+.control-grid article{display:grid;grid-template-columns:1fr 57mm;column-gap:10mm;row-gap:3mm;padding-top:5mm;align-items:start}
+.control-grid h3{font-size:18pt;grid-column:1;grid-row:1}
+.control-grid article>p{font-size:11pt;grid-column:1;grid-row:2;margin:0}
+.control-grid .screen{grid-column:2;grid-row:1 / span 3;width:100%;max-width:57mm}
+.control-grid .screen img{max-height:54mm;width:100%;object-fit:contain}
+.control-grid .zoom{border:1mm solid #58746e;border-radius:3mm}
+.control-grid figcaption{font-size:7.5pt}
+.deployment-compact{padding:7mm 0 0}.deployment-compact h2{font-size:26pt}
+.deployment-compact .section-head{margin-bottom:9mm}
+.deployment-points{display:block}.deployment-points article{padding:6mm 0;margin-bottom:5mm}
+.deployment-points h3{font-size:16pt}.deployment-points p{font-size:11pt;margin-top:3mm}
+.closing-compact{break-before:auto;margin-top:12mm;padding:12mm 8mm}
+.closing-compact h2{font-size:26pt}.closing-compact .eyebrow{font-size:8pt}
+.appendix-section{padding:0}.appendix-disclosure{border:0}
+.appendix-disclosure>summary{padding:0 0 6mm;gap:5mm;flex-wrap:nowrap}
+.appendix-title{font-size:20pt}.appendix-count{font-size:9pt}
+.appendix-body{padding:0}.appendix-heading{display:none}.appendix-intro{font-size:9pt;margin:0 0 8mm}
+.capabilities{border-top:0}.capabilities details{display:block;border-bottom:1px solid var(--line);margin-bottom:7mm}
+.capabilities details:nth-child(odd){break-before:page}
+.capabilities details:first-child{break-before:auto}
+.capabilities summary{padding:5mm 0;gap:5mm;cursor:default;break-after:avoid}
+.capabilities summary strong{font-size:16pt}.summary-sub{font-size:9pt;margin-top:2mm}
+.capability-items{grid-template-columns:1fr 1fr;padding:3mm 0 7mm;gap:5mm 7mm}
+.capability-items article{padding-left:4mm;break-inside:avoid}
+.capability-items h3{font-size:11pt}.capability-items p{font-size:9pt;margin-top:2mm}
+footer{break-before:auto;padding:7mm 5mm;margin-top:5mm}
+.footer-inner{grid-template-columns:1fr 1fr;gap:5mm;font-size:8pt}.footer-inner strong{font-size:9pt}
+/* Keep the management overview together and preserve full screenshot proportions. */
+h1,h2,h3,.section-head{break-inside:avoid}
+.control-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5mm}
+.control-grid article{display:flex;flex-direction:column;gap:0;padding-top:6mm;align-items:stretch}
+.control-grid h3{font-size:16pt;min-height:17mm}
+.control-grid article>p{font-size:10pt;margin:4mm 0 7mm;min-height:39mm;flex:none}
+.control-grid .screen{width:100%;max-width:none;margin-top:0}
+.control-grid .screen img{max-height:none;height:auto;width:100%;object-fit:initial}
+.control-grid figcaption{font-size:8pt}
+html,body{overflow:visible!important}

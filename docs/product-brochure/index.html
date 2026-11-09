@@ -1,0 +1,1062 @@
+<!doctype html>
+<html lang="zh-CN" data-language="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#142a3c">
+  <title>用友 U8 仓库扫码与条码打印方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #142a3c;
+      --muted: #4c6274;
+      --paper: #f6f7f4;
+      --white: #fff;
+      --line: #d8e0e2;
+      --accent: #b7efdc;
+      --teal: #086b60;
+      --wrap: 1160px;
+      font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; color: var(--ink); background: var(--paper); line-height: 1.65; }
+    html[data-language="zh"] [lang="en"], html[data-language="en"] [lang="zh-CN"] { display: none; }
+    a { color: inherit; }
+    button { font: inherit; }
+    :focus-visible { outline: 3px solid #1b9186; outline-offset: 4px; }
+    .wrap { width: min(var(--wrap), calc(100% - 64px)); margin-inline: auto; }
+    .topbar { position: sticky; top: 0; z-index: 5; background: #f6f7f4; border-bottom: 1px solid var(--line); }
+    .topbar-inner { display: flex; align-items: center; justify-content: space-between; min-height: 68px; gap: 22px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; font-weight: 750; font-size: 15px; text-decoration: none; }
+    .mark { width: 30px; height: 29px; padding: 6px; border-radius: 5px; color: var(--accent); background: var(--ink); }
+    .navigation { display: flex; gap: 17px; font-size: 14px; color: var(--muted); }
+    .navigation a { text-decoration: none; }
+    .navigation a:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 5px; }
+    .topbar-actions { flex: 0 0 auto; display: flex; gap: 8px; align-items: center; }
+    .toc-shortcut { padding: 5px 11px; border: 1px solid #c9ddd7; border-radius: 5px; background: #e5f5ed; color: var(--teal); font-size: 13px; font-weight: 750; text-decoration: none; white-space: nowrap; }
+    .toc-shortcut:hover { background: var(--accent); }
+    .language { display: flex; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; white-space: nowrap; }
+    .language button { color: var(--muted); border: 0; background: transparent; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 13px; font-weight: 650; }
+    .language [aria-pressed="true"] { background: var(--ink); color: var(--white); }
+    main section, .function-card, .steps li, .feature { scroll-margin-top: 86px; }
+    h1, h2, h3, p, figure { margin: 0; }
+    h1, h2, h3 { text-wrap: balance; line-height: 1.15; }
+    h1 { font-size: clamp(42px, 5vw, 72px); letter-spacing: -.052em; }
+    h2 { font-size: clamp(30px, 4vw, 48px); letter-spacing: -.04em; }
+    h3 { font-size: 19px; letter-spacing: -.02em; }
+    .chapter-heading { display: flex; align-items: baseline; gap: 14px; text-wrap: initial; }
+    .chapter-number { flex: 0 0 auto; padding: 6px 8px; border: 1px solid #c9ddd7; border-radius: 5px; background: #e5f5ed; color: var(--teal); font-size: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+    .eyebrow { font-size: 13px; font-weight: 750; letter-spacing: .075em; color: var(--teal); display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
+    .section-number { font-variant-numeric: tabular-nums; padding-right: 12px; border-right: 1px solid currentColor; }
+    .hero { background: var(--ink); color: var(--white); overflow: hidden; }
+    .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; min-height: 550px; padding-block: 74px 66px; }
+    .hero .eyebrow, .highlight { color: var(--accent); }
+    .hero-title-line { display: block; }
+    .hero-copy { color: #e0eaee; max-width: 42ch; margin-top: 24px; font-size: 17px; }
+    .hero-link { display: inline-flex; align-items: center; gap: 12px; margin-top: 28px; padding: 10px 17px; color: var(--ink); background: var(--accent); font-weight: 700; border-radius: 5px; text-decoration: none; }
+    .hero-link:hover { background: #d0f7ea; }
+    .hero-gallery { position: relative; padding: 28px 0 41px 29px; }
+    .hero-gallery::before { content: ""; position: absolute; inset: 0 -45vw 0 0; border: 1px solid #3d5668; border-radius: 12px 0 0 12px; background: radial-gradient(ellipse at 22% 48%, #264961, #142a3c 70%); }
+    .hero-desktop { position: relative; width: 100%; height: auto; border: 5px solid #273c4c; border-radius: 9px; box-shadow: 0 20px 50px #0a1d2e80; display: block; }
+    .hero-mobile { position: absolute; bottom: 10px; left: 1px; width: 30%; height: auto; border: 5px solid #223a4e; border-radius: 13px; box-shadow: 0 12px 32px #0a1d2eaa; }
+    .hero-note { position: absolute; right: 0; bottom: 11px; font-size: 12px; color: #e0eaee; }
+    .band { padding-block: 82px; border-bottom: 1px solid var(--line); }
+    .toc { padding-block: 54px; background: #edf3f0; }
+    .toc-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 22px 0 0; padding: 0; list-style: none; }
+    .toc-list > li { padding: 15px 17px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); }
+    .toc-list > li:first-child { grid-column: 1 / -1; padding: 0; background: transparent; border: 0; }
+    .toc-chapter { display: inline-flex; align-items: baseline; gap: 10px; font-size: 17px; font-weight: 750; text-decoration: none; }
+    .toc-number, .toc-subnumber { flex: 0 0 auto; color: var(--teal); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .toc-children { display: grid; gap: 2px; list-style: none; margin: 9px 0 0; padding: 0; }
+    .toc-children a { display: flex; align-items: baseline; gap: 9px; padding-block: 3px; color: var(--muted); font-size: 14px; text-decoration: none; }
+    .toc a:hover { color: var(--teal); text-decoration: underline; text-underline-offset: 4px; }
+    .overview { background: var(--white); }
+    .intro { color: var(--muted); max-width: 68ch; margin-top: 16px; font-size: 17px; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); list-style: none; padding: 0; margin: 37px 0 0; gap: 28px; }
+    .steps li { position: relative; padding: 21px 24px 25px; border: 1px solid var(--line); border-radius: 8px; }
+    .steps li:not(:last-child)::after { content: "→"; position: absolute; top: 31px; right: -25px; color: var(--teal); font-size: 21px; font-weight: 700; }
+    .step-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 17px; }
+    .step-number { font-weight: 700; font-size: 13px; color: var(--teal); }
+    .step-icon { width: 37px; height: 37px; border-radius: 7px; padding: 7px; color: var(--teal); background: #e5f5ed; }
+    .steps p, .feature p { color: var(--muted); margin-top: 8px; font-size: 15px; }
+    .product-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 55px; align-items: center; }
+    .product-grid > * { min-width: 0; }
+    .features { margin-top: 24px; }
+    .feature { padding-block: 16px; border-top: 1px solid var(--line); }
+    .capture-board { padding: 23px; background: #e8eeed; border: 1px solid var(--line); border-radius: 12px; }
+    .captures { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 14px; }
+    .capture { min-width: 0; }
+    .capture a { display: block; border: 1px solid #ccd7de; border-radius: 7px; overflow: hidden; background: var(--white); }
+    .capture a:hover { border-color: var(--teal); }
+    .capture img { display: block; width: 100%; height: auto; }
+    .capture figcaption, .capture-note { color: var(--muted); font-size: 13px; margin-top: 9px; }
+    .capture figcaption { font-weight: 650; }
+    .capture-note { margin-top: 13px; }
+    .print-band { background: var(--white); }
+    .function-links a { text-decoration-thickness: 1px; text-underline-offset: 4px; }
+    .function-links a:hover { color: var(--teal); }
+    .function-band { background: #eef2ef; }
+    .function-band.print-band { background: var(--white); }
+    #approval, #sales { background: #f5f8f7; }
+    .function-links { display: flex; gap: 6px 19px; flex-wrap: wrap; margin: 25px 0 22px; font-size: 14px; font-weight: 650; }
+    .function-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    .function-card { display: grid; gap: 15px; padding: 20px; background: var(--white); border: 1px solid var(--line); border-radius: 10px; }
+    .function-card:target, .steps li:target, .feature:target { outline: 2px solid #1b9186; outline-offset: 4px; }
+    .warehouse-functions .function-card { grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); align-items: center; gap: 22px; }
+    .print-functions .function-card { grid-template-rows: 1fr auto; background: var(--paper); }
+    .function-heading { display: flex; align-items: baseline; gap: 9px; text-wrap: initial; }
+    .function-number { flex: 0 0 auto; color: var(--teal); font-size: 13px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+    .function-copy h3 { font-size: clamp(18px, 2vw, 24px); }
+    .function-lead { margin-top: 9px; font-size: 16px; font-weight: 650; line-height: 1.4; }
+    .function-detail { color: var(--muted); margin-top: 10px; font-size: 15px; }
+    .function-capture figcaption { font-size: 12px; }
+    .workflow-functions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .workflow-functions .function-card { grid-template-rows: 1fr auto; }
+    .workflow-functions .function-capture { justify-self: center; width: min(100%, 240px); }
+    .settings-functions .function-card { grid-template-rows: auto auto; align-content: start; }
+    .footer { background: var(--ink); color: #e0eaee; font-size: 13px; }
+    .footer-inner { display: flex; justify-content: space-between; padding-block: 24px; gap: 16px; }
+    @media (max-width: 1200px) {
+      .navigation { display: none; }
+    }
+    @media (max-width: 960px) {
+      .hero-grid, .product-grid { gap: 32px; }
+      .capture-board { padding: 15px; }
+      .warehouse-functions { grid-template-columns: 1fr; }
+      .warehouse-functions .function-capture { width: min(100%, 210px); justify-self: end; }
+      .workflow-functions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .toc-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      .wrap { width: calc(100% - 36px); }
+      .topbar-inner { min-height: 58px; }
+      main section, .function-card, .steps li, .feature { scroll-margin-top: 72px; }
+      .brand { font-size: 13px; gap: 8px; }
+      .hero-grid, .product-grid, .steps, .function-grid { grid-template-columns: 1fr; }
+      .hero-grid { gap: 34px; padding-block: 46px 32px; min-height: auto; }
+      .hero-gallery { padding-top: 18px; }
+      .hero-copy { font-size: 16px; }
+      .band { padding-block: 50px; }
+      .steps { gap: 12px; margin-top: 24px; }
+      .steps li:not(:last-child)::after { content: none; }
+      .function-card { padding: 16px; }
+      .warehouse-functions .function-card { gap: 12px; }
+    }
+    @media (max-width: 520px) {
+      .warehouse-functions .function-card { grid-template-columns: 1fr; }
+      .warehouse-functions .function-capture { justify-self: center; }
+      .toc-list { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 360px) {
+      .brand > span { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#cover" aria-label="封面" data-aria-label-en="Cover">
+        <svg class="mark" viewBox="0 0 18 18" aria-hidden="true"><path fill="currentColor" d="M1 2h2v14H1zm4 0h1v14H5zm3 0h3v14H8zm5 0h1v14h-1zm3 0h1v14h-1z"/></svg>
+        <span lang="zh-CN">仓库扫码与条码打印</span><span lang="en">Warehouse Labels &amp; Scanning</span>
+      </a>
+      <nav class="navigation" aria-label="章节" data-aria-label-en="Sections">
+        <a href="#overview"><span lang="zh-CN">方案总览</span><span lang="en">Overview</span></a>
+        <a href="#scanning"><span lang="zh-CN">仓库扫码</span><span lang="en">Warehouse Scanning</span></a>
+        <a href="#warehouse"><span lang="zh-CN">仓库作业</span><span lang="en">Warehouse Operations</span></a>
+        <a href="#documents"><span lang="zh-CN">单据管理</span><span lang="en">Documents</span></a>
+        <a href="#approval"><span lang="zh-CN">审核管理</span><span lang="en">Approval</span></a>
+        <a href="#printing"><span lang="zh-CN">条码打印</span><span lang="en">Label Printing</span></a>
+      </nav>
+      <div class="topbar-actions">
+        <a class="toc-shortcut" href="#contents"><span lang="zh-CN">目录</span><span lang="en">Contents</span></a>
+        <div class="language" role="group" aria-label="切换语言" data-aria-label-en="Language">
+          <button type="button" data-set-language="zh" aria-pressed="true">中文</button>
+          <button type="button" data-set-language="en" aria-pressed="false">English</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 中文和英文文案逐段对应。修改时编辑相邻的两个语言版本。 -->
+    <section class="hero" id="cover" aria-labelledby="cover-title">
+      <div class="wrap hero-grid">
+        <div>
+          <div class="eyebrow"><span class="section-number" aria-hidden="true">01</span><span lang="zh-CN">面向用友 U8 制造企业</span><span lang="en">FOR MANUFACTURERS USING YONYOU U8</span></div>
+          <h1 id="cover-title">
+            <span lang="zh-CN"><span class="hero-title-line">扫码查货，现场做单</span><span class="hero-title-line highlight">原码补打</span></span>
+            <span lang="en"><span class="hero-title-line">Scan stock.</span><span class="hero-title-line">Record work.</span><span class="hero-title-line highlight">Reprint the same code.</span></span>
+          </h1>
+          <p class="hero-copy">
+            <span lang="zh-CN">仓库人员用手持终端查货、盘点和做单，电脑端设计、打印和补打标签。现场作业结果按已开通的流程提交至 U8。</span>
+            <span lang="en">Look up stock, count inventory, and prepare documents on handheld devices. Design, print, and reprint labels at the workstation. Submit warehouse transactions to U8 through enabled workflows.</span>
+          </p>
+          <a class="hero-link" href="#contents"><span lang="zh-CN">查看目录</span><span lang="en">View contents</span><span aria-hidden="true">↓</span></a>
+        </div>
+        <figure class="hero-gallery">
+          <img class="hero-desktop" src="assets/bill-print.png" alt="单据打印页面" data-alt-en="Document printing screen" width="2040" height="1230">
+          <img class="hero-mobile" src="assets/label-query.png" alt="标签查询页面" data-alt-en="Label lookup screen" width="820" height="864">
+          <figcaption class="hero-note"><span lang="zh-CN">系统页面 · 示例数据</span><span lang="en">Application screens · Sample data</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="band toc" id="contents" aria-labelledby="contents-title">
+      <div class="wrap">
+        <h2 id="contents-title"><span lang="zh-CN">目录</span><span lang="en">Contents</span></h2>
+        <nav aria-labelledby="contents-title">
+          <ol class="toc-list">
+            <li>
+              <a class="toc-chapter" href="#cover"><span class="toc-number" aria-hidden="true">01</span><span lang="zh-CN">封面</span><span lang="en">Cover</span></a>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#overview"><span class="toc-number" aria-hidden="true">02</span><span lang="zh-CN">方案总览</span><span lang="en">Solution Overview</span></a>
+              <ul class="toc-children">
+                <li><a href="#print-and-label"><span class="toc-subnumber" aria-hidden="true">02.01</span><span lang="zh-CN">打印贴标</span><span lang="en">Print and label</span></a></li>
+                <li><a href="#scan-on-floor"><span class="toc-subnumber" aria-hidden="true">02.02</span><span lang="zh-CN">现场扫码</span><span lang="en">Scan on the floor</span></a></li>
+                <li><a href="#submit-workflow"><span class="toc-subnumber" aria-hidden="true">02.03</span><span lang="zh-CN">提交 U8</span><span lang="en">Submit to U8</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#scanning"><span class="toc-number" aria-hidden="true">03</span><span lang="zh-CN">仓库扫码系统</span><span lang="en">Warehouse Scanning</span></a>
+              <ul class="toc-children">
+                <li><a href="#lookup-stock"><span class="toc-subnumber" aria-hidden="true">03.01</span><span lang="zh-CN">查数量和位置</span><span lang="en">Look up stock and location</span></a></li>
+                <li><a href="#scan-counting"><span class="toc-subnumber" aria-hidden="true">03.02</span><span lang="zh-CN">逐张盘点，防止重复计数</span><span lang="en">Count each label once</span></a></li>
+                <li><a href="#scan-documents"><span class="toc-subnumber" aria-hidden="true">03.03</span><span lang="zh-CN">现场做单，按权限审核</span><span lang="en">Prepare and approve documents</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#warehouse"><span class="toc-number" aria-hidden="true">04</span><span lang="zh-CN">仓库作业</span><span lang="en">Warehouse Operations</span></a>
+              <ul class="toc-children">
+                <li><a href="#material-issue"><span class="toc-subnumber" aria-hidden="true">04.01</span><span lang="zh-CN">材料出库单</span><span lang="en">Material Issue</span></a></li>
+                <li><a href="#material-return"><span class="toc-subnumber" aria-hidden="true">04.02</span><span lang="zh-CN">材料退料</span><span lang="en">Material Return</span></a></li>
+                <li><a href="#warehouse-transfer"><span class="toc-subnumber" aria-hidden="true">04.03</span><span lang="zh-CN">调拨单</span><span lang="en">Warehouse Transfer</span></a></li>
+                <li><a href="#bin-move"><span class="toc-subnumber" aria-hidden="true">04.04</span><span lang="zh-CN">货位调整</span><span lang="en">Bin Move</span></a></li>
+                <li><a href="#stock-count"><span class="toc-subnumber" aria-hidden="true">04.05</span><span lang="zh-CN">盘点单</span><span lang="en">Inventory Count</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#documents"><span class="toc-number" aria-hidden="true">05</span><span lang="zh-CN">单据管理</span><span lang="en">Document Management</span></a>
+              <ul class="toc-children">
+                <li><a href="#save-draft"><span class="toc-subnumber" aria-hidden="true">05.01</span><span lang="zh-CN">保存草稿与继续编辑</span><span lang="en">Save and Resume Drafts</span></a></li>
+                <li><a href="#submit-to-u8"><span class="toc-subnumber" aria-hidden="true">05.02</span><span lang="zh-CN">上传 ERP</span><span lang="en">Submit to U8</span></a></li>
+                <li><a href="#check-u8-result"><span class="toc-subnumber" aria-hidden="true">05.03</span><span lang="zh-CN">查看单号与状态</span><span lang="en">Check the U8 Document Number and Status</span></a></li>
+                <li><a href="#reconcile-document"><span class="toc-subnumber" aria-hidden="true">05.04</span><span lang="zh-CN">待核对单据</span><span lang="en">Review Unconfirmed Submissions</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#approval"><span class="toc-number" aria-hidden="true">06</span><span lang="zh-CN">审核管理</span><span lang="en">Approval Management</span></a>
+              <ul class="toc-children">
+                <li><a href="#approval-by-type"><span class="toc-subnumber" aria-hidden="true">06.01</span><span lang="zh-CN">按单据类型审核</span><span lang="en">Approval by Document Type</span></a></li>
+                <li><a href="#find-for-approval"><span class="toc-subnumber" aria-hidden="true">06.02</span><span lang="zh-CN">查询待审核单据</span><span lang="en">Find Documents for Approval</span></a></li>
+                <li><a href="#approve-document"><span class="toc-subnumber" aria-hidden="true">06.03</span><span lang="zh-CN">确认审核</span><span lang="en">Confirm Approval</span></a></li>
+                <li><a href="#reverse-approval"><span class="toc-subnumber" aria-hidden="true">06.04</span><span lang="zh-CN">弃审</span><span lang="en">Reverse Approval</span></a></li>
+                <li><a href="#linked-approval"><span class="toc-subnumber" aria-hidden="true">06.05</span><span lang="zh-CN">关联单审核</span><span lang="en">Approve Related Documents</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#printing"><span class="toc-number" aria-hidden="true">07</span><span lang="zh-CN">条码打印系统</span><span lang="en">Barcode Label Printing</span></a>
+              <ul class="toc-children">
+                <li><a href="#document-print"><span class="toc-subnumber" aria-hidden="true">07.01</span><span lang="zh-CN">单据打印</span><span lang="en">Print from Documents</span></a></li>
+                <li><a href="#inventory-print"><span class="toc-subnumber" aria-hidden="true">07.02</span><span lang="zh-CN">存货打印</span><span lang="en">Print from Stock</span></a></li>
+                <li><a href="#pending-labels"><span class="toc-subnumber" aria-hidden="true">07.03</span><span lang="zh-CN">待打印标签</span><span lang="en">Pending Labels</span></a></li>
+                <li><a href="#reprint-label"><span class="toc-subnumber" aria-hidden="true">07.04</span><span lang="zh-CN">标签补打</span><span lang="en">Reprint a Label</span></a></li>
+                <li><a href="#print-jobs"><span class="toc-subnumber" aria-hidden="true">07.05</span><span lang="zh-CN">打印记录</span><span lang="en">Print History</span></a></li>
+                <li><a href="#label-templates"><span class="toc-subnumber" aria-hidden="true">07.06</span><span lang="zh-CN">模板设计</span><span lang="en">Template Design</span></a></li>
+                <li><a href="#publish-label-template"><span class="toc-subnumber" aria-hidden="true">07.07</span><span lang="zh-CN">模板发布与停用</span><span lang="en">Publish or Disable Templates</span></a></li>
+                <li><a href="#label-library"><span class="toc-subnumber" aria-hidden="true">07.08</span><span lang="zh-CN">模板库</span><span lang="en">Template Library</span></a></li>
+                <li><a href="#code-rules"><span class="toc-subnumber" aria-hidden="true">07.09</span><span lang="zh-CN">编码规则</span><span lang="en">Barcode Rules</span></a></li>
+                <li><a href="#printing-assistant"><span class="toc-subnumber" aria-hidden="true">07.10</span><span lang="zh-CN">打印助手</span><span lang="en">Print Assistant</span></a></li>
+                <li><a href="#local-printer-settings"><span class="toc-subnumber" aria-hidden="true">07.11</span><span lang="zh-CN">打印机管理</span><span lang="en">Printer Management</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#purchasing"><span class="toc-number" aria-hidden="true">08</span><span lang="zh-CN">采购与委外</span><span lang="en">Purchasing and Subcontracting</span></a>
+              <ul class="toc-children">
+                <li><a href="#purchase-arrival"><span class="toc-subnumber" aria-hidden="true">08.01</span><span lang="zh-CN">采购到货</span><span lang="en">Purchase Arrival</span></a></li>
+                <li><a href="#outsourcing-arrival"><span class="toc-subnumber" aria-hidden="true">08.02</span><span lang="zh-CN">委外到货</span><span lang="en">Subcontract Arrival</span></a></li>
+                <li><a href="#purchase-inbound"><span class="toc-subnumber" aria-hidden="true">08.03</span><span lang="zh-CN">采购入库</span><span lang="en">Purchase Receipt</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#sales"><span class="toc-number" aria-hidden="true">09</span><span lang="zh-CN">销售作业</span><span lang="en">Sales Operations</span></a>
+              <ul class="toc-children">
+                <li><a href="#sales-delivery"><span class="toc-subnumber" aria-hidden="true">09.01</span><span lang="zh-CN">发货单</span><span lang="en">Delivery Note</span></a></li>
+                <li><a href="#sales-return"><span class="toc-subnumber" aria-hidden="true">09.02</span><span lang="zh-CN">退货单</span><span lang="en">Sales Return</span></a></li>
+                <li><a href="#sales-issue"><span class="toc-subnumber" aria-hidden="true">09.03</span><span lang="zh-CN">销售出库单</span><span lang="en">Sales Issue</span></a></li>
+              </ul>
+            </li>
+            <li>
+              <a class="toc-chapter" href="#system-settings"><span class="toc-number" aria-hidden="true">10</span><span lang="zh-CN">系统设置</span><span lang="en">System Settings</span></a>
+              <ul class="toc-children">
+                <li><a href="#user-accounts"><span class="toc-subnumber" aria-hidden="true">10.01</span><span lang="zh-CN">用户管理</span><span lang="en">User Management</span></a></li>
+                <li><a href="#user-permissions"><span class="toc-subnumber" aria-hidden="true">10.02</span><span lang="zh-CN">功能权限</span><span lang="en">User Permissions</span></a></li>
+                <li><a href="#erp-operator"><span class="toc-subnumber" aria-hidden="true">10.03</span><span lang="zh-CN">U8 操作员对应</span><span lang="en">U8 Operator Mapping</span></a></li>
+                <li><a href="#feature-switches"><span class="toc-subnumber" aria-hidden="true">10.04</span><span lang="zh-CN">功能开关</span><span lang="en">Feature Switches</span></a></li>
+                <li><a href="#reference-data-sync"><span class="toc-subnumber" aria-hidden="true">10.05</span><span lang="zh-CN">数据同步</span><span lang="en">Master Data Sync</span></a></li>
+                <li><a href="#draft-retention"><span class="toc-subnumber" aria-hidden="true">10.06</span><span lang="zh-CN">草稿保留</span><span lang="en">Draft Retention</span></a></li>
+                <li><a href="#pda-status"><span class="toc-subnumber" aria-hidden="true">10.07</span><span lang="zh-CN">PDA 状态</span><span lang="en">Handheld Device Status</span></a></li>
+                <li><a href="#favorite-functions"><span class="toc-subnumber" aria-hidden="true">10.08</span><span lang="zh-CN">常用功能</span><span lang="en">Favorites</span></a></li>
+                <li><a href="#workspace-layout"><span class="toc-subnumber" aria-hidden="true">10.09</span><span lang="zh-CN">首页模式</span><span lang="en">Home Screen Layout</span></a></li>
+                <li><a href="#pda-sign-in"><span class="toc-subnumber" aria-hidden="true">10.10</span><span lang="zh-CN">PDA 登录</span><span lang="en">Handheld Sign-In</span></a></li>
+                <li><a href="#device-address"><span class="toc-subnumber" aria-hidden="true">10.11</span><span lang="zh-CN">地址设置</span><span lang="en">Connection Settings</span></a></li>
+                <li><a href="#label-recognition-rules"><span class="toc-subnumber" aria-hidden="true">10.12</span><span lang="zh-CN">标签编码规则</span><span lang="en">Label Recognition Rules</span></a></li>
+                <li><a href="#document-field-settings"><span class="toc-subnumber" aria-hidden="true">10.13</span><span lang="zh-CN">单据设置</span><span lang="en">Document Field Settings</span></a></li>
+                <li><a href="#document-workflow-switches"><span class="toc-subnumber" aria-hidden="true">10.14</span><span lang="zh-CN">制单开关设置</span><span lang="en">Document Workflow Switches</span></a></li>
+                <li><a href="#scan-test"><span class="toc-subnumber" aria-hidden="true">10.15</span><span lang="zh-CN">扫码测试</span><span lang="en">Scanner Test</span></a></li>
+                <li><a href="#scan-feedback"><span class="toc-subnumber" aria-hidden="true">10.16</span><span lang="zh-CN">扫码反馈</span><span lang="en">Scan Feedback</span></a></li>
+              </ul>
+            </li>
+          </ol>
+        </nav>
+      </div>
+    </section>
+
+    <section class="band overview" id="overview" aria-labelledby="overview-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="overview-title"><span class="chapter-number" aria-hidden="true">02</span><span lang="zh-CN">方案总览</span><span lang="en">Solution Overview</span></h2>
+        <p class="intro"><span lang="zh-CN">从一张标签，到一笔仓库业务。</span><span lang="en">From a label to a warehouse transaction.</span></p>
+        <ol class="steps">
+          <li id="print-and-label">
+            <div class="step-head"><span class="step-number">02.01</span><svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M7 8V3h10v5M7 17H4V8h16v9h-3M7 14h10v7H7zM7 11h2"/></svg></div>
+            <h3><span lang="zh-CN">打印贴标</span><span lang="en">Print and label</span></h3>
+            <p><span lang="zh-CN">从 U8 单据或库存记录选取明细，套用已发布的模板，打印货物标签。</span><span lang="en">Select lines from a U8 document or stock record and print labels using a published template.</span></p>
+          </li>
+          <li id="scan-on-floor">
+            <div class="step-head"><span class="step-number">02.02</span><svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 8V4h4m8 0h4v4M4 16v4h4m8 0h4v-4M3 12h18M8 8v8m4-8v8m4-8v8"/></svg></div>
+            <h3><span lang="zh-CN">现场扫码</span><span lang="en">Scan on the floor</span></h3>
+            <p><span lang="zh-CN">扫码查看物料、批次、可用量和位置。做单时确认本次数量和所需货位。</span><span lang="en">Scan to see the item, lot, available quantity, and location. Confirm the quantity and required bin details as you work.</span></p>
+          </li>
+          <li id="submit-workflow">
+            <div class="step-head"><span class="step-number">02.03</span><svg class="step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M8 14l3 3 5-6M5 3h10l4 4v14H5zm10 0v5h4"/></svg></div>
+            <h3><span lang="zh-CN">提交 U8</span><span lang="en">Submit to U8</span></h3>
+            <p><span lang="zh-CN">完成作业后先保存草稿，再按业务流程上传，并查看 U8 返回的单号和处理状态。</span><span lang="en">Save a draft and submit it through the configured workflow. Check the U8 document number and processing status.</span></p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="band" id="scanning" aria-labelledby="scan-title">
+      <div class="wrap product-grid">
+        <div>
+          <h2 class="chapter-heading" id="scan-title"><span class="chapter-number" aria-hidden="true">03</span><span lang="zh-CN">仓库扫码系统</span><span lang="en">Warehouse Scanning</span></h2>
+          <p class="intro"><span lang="zh-CN">到了货架前，扫码就能查货。</span><span lang="en">Check stock right at the shelf.</span></p>
+          <div class="features">
+            <div class="feature" id="lookup-stock">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">03.01</span><span lang="zh-CN">查数量和位置</span><span lang="en">Look up stock and location</span></h3>
+              <p><span lang="zh-CN">扫描或输入完整标签码，在线查看物料、批次、可用量、仓库和货位。标签资料有异常时，系统提示核对。</span><span lang="en">Scan or enter the full barcode to see the item, lot, available quantity, warehouse, and bin. The system flags label data that needs review.</span></p>
+            </div>
+            <div class="feature" id="scan-counting">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">03.02</span><span lang="zh-CN">逐张盘点，防止重复计数</span><span lang="en">Count each label once</span></h3>
+              <p><span lang="zh-CN">选取 U8 盘点单，或选择仓库开始新盘点。逐张扫码并确认实盘数量，必要时选择盘点货位。同一张标签重复扫描时会提示。</span><span lang="en">Start from a U8 count document or begin a new count for a warehouse. Scan each label, confirm the count, and select a bin where required. Repeat scans are flagged.</span></p>
+            </div>
+            <div class="feature" id="scan-documents">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">03.03</span><span lang="zh-CN">现场做单，按权限审核</span><span lang="en">Prepare and approve documents</span></h3>
+              <p><span lang="zh-CN">支持材料出库、跨仓调拨和同仓货位调整等作业。草稿可以继续编辑，提交后可查看 U8 单号。有权限的人员可按单据类型审核或弃审。</span><span lang="en">Handle material issues, warehouse transfers, and bin moves. Resume editing drafts, check U8 document numbers after submission, and approve or reverse approval for eligible documents.</span></p>
+            </div>
+          </div>
+        </div>
+        <div class="capture-board">
+          <div class="captures">
+            <figure class="capture">
+              <a href="assets/label-query.png" target="_blank" rel="noopener"><img src="assets/label-query.png" alt="标签查询显示可用量、仓库和货位" data-alt-en="Label lookup showing available quantity and bin" width="820" height="864" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">标签查询</span><span lang="en">Label lookup</span></figcaption>
+            </figure>
+            <figure class="capture">
+              <a href="assets/inventory-count.png" target="_blank" rel="noopener"><img src="assets/inventory-count.png" alt="盘点单录入页面" data-alt-en="Inventory count entry screen" width="820" height="1380" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">盘点单</span><span lang="en">Inventory count</span></figcaption>
+            </figure>
+          </div>
+          <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击看大图</span><span lang="en">Application screens · Sample data · Open to enlarge</span></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="band function-band" id="warehouse" aria-labelledby="warehouse-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="warehouse-title"><span class="chapter-number" aria-hidden="true">04</span><span lang="zh-CN">仓库作业</span><span lang="en">Warehouse Operations</span></h2>
+        <p class="intro"><span lang="zh-CN">选对应的单据，扫产品标签，确认数量和位置。</span><span lang="en">Choose the right document, scan the product label, and confirm the quantity and location.</span></p>
+        <nav class="function-links" aria-label="仓库作业目录" data-aria-label-en="Warehouse operations contents">
+          <a href="#material-issue"><span lang="zh-CN">材料出库单</span><span lang="en">Material Issue</span></a>
+          <a href="#material-return"><span lang="zh-CN">材料退料</span><span lang="en">Material Return</span></a>
+          <a href="#warehouse-transfer"><span lang="zh-CN">调拨单</span><span lang="en">Warehouse Transfer</span></a>
+          <a href="#bin-move"><span lang="zh-CN">货位调整</span><span lang="en">Bin Move</span></a>
+          <a href="#stock-count"><span lang="zh-CN">盘点单</span><span lang="en">Inventory Count</span></a>
+        </nav>
+        <div class="function-grid warehouse-functions">
+          <article class="function-card" id="material-issue">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">04.01</span><span lang="zh-CN">材料出库单</span><span lang="en">Material Issue</span></h3>
+              <p class="function-lead"><span lang="zh-CN">扫码确认本次领料量</span><span lang="en">Scan and confirm the material issue quantity</span></p>
+              <p class="function-detail"><span lang="zh-CN">生产线需要一批安装支架。仓管员可选生产订单，扫标签确认本次领料数量，并在单据管理中查看上传结果。需要超领时，按单据开关和原单要求确认数量及归属。</span><span lang="en">When the production line needs brackets, the operator can select a production order, scan the label, and confirm the issue quantity. The upload result appears in Document Management. For an excess issue, follow the document settings and source order to confirm the extra quantity and its allocation.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/material-outbound.png" target="_blank" rel="noopener"><img src="assets/material-outbound.png" alt="材料出库扫码" data-alt-en="Material issue scanning" width="820" height="1380" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">材料出库扫码</span><span lang="en">Material issue scanning</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="material-return">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">04.02</span><span lang="zh-CN">材料退料</span><span lang="en">Material Return</span></h3>
+              <p class="function-lead"><span lang="zh-CN">把生产剩料退回仓库</span><span lang="en">Return leftover materials to the warehouse</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「材料出库单」选择红字。扫原标签，填写本次退料数量和退回位置。没有原标签时，可选择物料登记退料，成功后生成待打印标签。</span><span lang="en">Select the red-letter return type in Material Issue. Scan the original label and enter the quantity and return location. For unlabeled materials, select the item manually. A successful return creates a pending label.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/material-return.png" target="_blank" rel="noopener"><img src="assets/material-return.png" alt="扫描原标签后确认退料数量" data-alt-en="Confirm the return quantity after scanning the original label" width="820" height="1280" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">扫描原标签后确认退料数量</span><span lang="en">Confirm the return quantity after scanning the original label</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="warehouse-transfer">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">04.03</span><span lang="zh-CN">调拨单</span><span lang="en">Warehouse Transfer</span></h3>
+              <p class="function-lead"><span lang="zh-CN">把一部分货移到线边仓</span><span lang="en">Move part of a batch to line-side stock</span></p>
+              <p class="function-detail"><span lang="zh-CN">原材料仓有 24 件，本次调拨 8 件。扫码后确认数量、调入仓库和货位。调拨成功后，原标签可用量变为 16 件，移走的 8 件进入待打印。全量调拨则沿用原标签。</span><span lang="en">There are 24 units in the raw materials warehouse. Scan the label and confirm the 8 units to move, the destination warehouse, and the bin. After the transfer, the original label has an available quantity of 16 units and the 8 moved units get a pending label. A full transfer keeps the original label.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/transfer-order.png" target="_blank" rel="noopener"><img src="assets/transfer-order.png" alt="调拨数量与调入位置" data-alt-en="Transfer quantity and destination" width="820" height="1380" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">调拨数量与调入位置</span><span lang="en">Transfer quantity and destination</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="bin-move">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">04.04</span><span lang="zh-CN">货位调整</span><span lang="en">Bin Move</span></h3>
+              <p class="function-lead"><span lang="zh-CN">在同一个仓库内换货位</span><span lang="en">Move stock to another bin in the same warehouse</span></p>
+              <p class="function-detail"><span lang="zh-CN">把一箱支架从 A-03-02 移到 A-05-01。扫码带出原货位，再选择目标货位。整箱移动时沿用原条码，之后扫同一个码即可查看新货位。</span><span lang="en">Move a box of brackets from A-03-02 to A-05-01. Scan the label to see the source bin, then choose the destination. When the whole box moves, the barcode stays the same and the next lookup shows the new bin.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/location-adjustment.png" target="_blank" rel="noopener"><img src="assets/location-adjustment.png" alt="原货位与目标货位" data-alt-en="Source and destination bins" width="820" height="1380" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">原货位与目标货位</span><span lang="en">Source and destination bins</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="stock-count">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">04.05</span><span lang="zh-CN">盘点单</span><span lang="en">Inventory Count</span></h3>
+              <p class="function-lead"><span lang="zh-CN">沿货架逐张盘点</span><span lang="en">Count stock label by label</span></p>
+              <p class="function-detail"><span lang="zh-CN">可选 U8 盘点单，也可按仓库开始新盘点。逐张扫码、确认实盘数量，按需要选择盘点货位。同一张标签重复扫描时会提示。已登录且打开盘点页面后，断网时可继续记录，恢复网络后再核验和提交。</span><span lang="en">Start from a U8 count document or begin a new warehouse count. Scan each label, confirm the counted quantity, and select a bin where required. Repeat scans are flagged. If you are signed in and the count is already open, you can continue recording scans offline. Reconnect to validate and submit.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/inventory-count.png" target="_blank" rel="noopener"><img src="assets/inventory-count.png" alt="盘点扫码记录" data-alt-en="Inventory count scan record" width="820" height="1380" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">盘点扫码记录</span><span lang="en">Inventory count scan record</span></figcaption>
+            </figure>
+          </article>
+        </div>
+        <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击截图查看大图</span><span lang="en">Application screens · Sample data · Select an image to enlarge it</span></p>
+      </div>
+    </section>
+
+    <section class="band function-band workflow-band" id="documents" aria-labelledby="documents-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="documents-title"><span class="chapter-number" aria-hidden="true">05</span><span lang="zh-CN">单据管理</span><span lang="en">Document Management</span></h2>
+        <p class="intro"><span lang="zh-CN">以原材料仓的 24 件安装支架为例，看看一张盘点单怎么从草稿提交到 U8。</span><span lang="en">Follow a count of 24 mounting brackets in the raw materials warehouse from draft to U8 submission.</span></p>
+        <nav class="function-links" aria-label="单据管理" data-aria-label-en="Document Management">
+          <a href="#save-draft"><span lang="zh-CN">保存草稿与继续编辑</span><span lang="en">Save and Resume Drafts</span></a>
+          <a href="#submit-to-u8"><span lang="zh-CN">上传 ERP</span><span lang="en">Submit to U8</span></a>
+          <a href="#check-u8-result"><span lang="zh-CN">查看单号与状态</span><span lang="en">Check the U8 Document Number and Status</span></a>
+          <a href="#reconcile-document"><span lang="zh-CN">待核对单据</span><span lang="en">Review Unconfirmed Submissions</span></a>
+        </nav>
+        <div class="function-grid workflow-functions">
+          <article class="function-card" id="save-draft">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">05.01</span><span lang="zh-CN">保存草稿与继续编辑</span><span lang="en">Save and Resume Drafts</span></h3>
+              <p class="function-lead"><span lang="zh-CN">盘点还没做完，下次接着做</span><span lang="en">Pause a count and pick up where you left off</span></p>
+              <p class="function-detail"><span lang="zh-CN">盘点明细确认后保存在本机。点「完成做单」先保存草稿；待上传的单据可以从「单据管理」继续编辑。已同步的草稿可用同一账号在另一台设备继续处理。</span><span lang="en">Confirmed count lines are saved on the device. Select Finish Document to save a draft. Open an unsubmitted draft in Document Management to resume editing. Synced drafts can also be reopened on another device using the same account.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/inventory-count.png" target="_blank" rel="noopener"><img src="assets/inventory-count.png" alt="盘点明细与「完成做单」" data-alt-en="Count lines and the Finish Document action" width="820" height="1380" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">盘点明细与「完成做单」</span><span lang="en">Count lines and the Finish Document action</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="submit-to-u8">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">05.02</span><span lang="zh-CN">上传 ERP</span><span lang="en">Submit to U8</span></h3>
+              <p class="function-lead"><span lang="zh-CN">数量核对好，再提交给 U8</span><span lang="en">Check the quantities, then submit to U8</span></p>
+              <p class="function-detail"><span lang="zh-CN">卡片上的「已同步」表示草稿已保存到服务器。核对数量后，在「未提交」中点击「上传 ERP」，把盘点单提交给 U8。</span><span lang="en">The Synced badge means the draft is saved on the server. Check the quantities, then select Upload ERP under Unsubmitted to send the count to U8.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/draft-upload.png" target="_blank" rel="noopener"><img src="assets/draft-upload.png" alt="未提交草稿与「上传 ERP」" data-alt-en="An unsubmitted draft with the Upload ERP action" width="820" height="1240" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">未提交草稿与「上传 ERP」</span><span lang="en">An unsubmitted draft with the Upload ERP action</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="check-u8-result">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">05.03</span><span lang="zh-CN">查看单号与状态</span><span lang="en">Check the U8 Document Number and Status</span></h3>
+              <p class="function-lead"><span lang="zh-CN">上传后，用单号查结果</span><span lang="en">Use the document number to find the result</span></p>
+              <p class="function-detail"><span lang="zh-CN">上传成功后，在单据管理里查看 U8 返回的单号。需要审核时，到对应审核入口按单号查状态。</span><span lang="en">After a successful upload, find the document number returned by U8 in Document Management. To check approval, look up the same number in the relevant approval screen.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/erp-document-result.png" target="_blank" rel="noopener"><img src="assets/erp-document-result.png" alt="单据管理显示 ERP 单号" data-alt-en="The ERP document number in Document Management" width="820" height="1240" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">单据管理显示 ERP 单号</span><span lang="en">The ERP document number in Document Management</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="reconcile-document">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">05.04</span><span lang="zh-CN">待核对单据</span><span lang="en">Review Unconfirmed Submissions</span></h3>
+              <p class="function-lead"><span lang="zh-CN">上传结果未确认时，先查原单</span><span lang="en">Check the original submission when the result is unclear</span></p>
+              <p class="function-detail"><span lang="zh-CN">上传超时或结果未确认时，从「待核对」打开原记录，点击「刷新」查看处理结果。U8 已收单时，可按返回的单号继续处理。</span><span lang="en">If an upload times out or its result is unclear, open the original record under Needs Review and select Refresh. If U8 accepted it, use the returned document number to continue.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/draft-reconciliation.png" target="_blank" rel="noopener"><img src="assets/draft-reconciliation.png" alt="待核对记录及刷新入口" data-alt-en="A record that needs review and its Refresh action" width="820" height="1280" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">待核对记录及刷新入口</span><span lang="en">A record that needs review and its Refresh action</span></figcaption>
+            </figure>
+          </article>
+        </div>
+        <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击截图查看大图</span><span lang="en">Application screens · Sample data · Select an image to enlarge it</span></p>
+      </div>
+    </section>
+
+    <section class="band function-band workflow-band" id="approval" aria-labelledby="approval-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="approval-title"><span class="chapter-number" aria-hidden="true">06</span><span lang="zh-CN">审核管理</span><span lang="en">Approval Management</span></h2>
+        <p class="intro"><span lang="zh-CN">用 U8 返回的单号 PD-DEMO-001 找到这张盘点单，核对明细，再审核或继续处理关联单。</span><span lang="en">Look up the count using its U8 document number, PD-DEMO-001. Check the lines, then approve the count or continue with related documents.</span></p>
+        <nav class="function-links" aria-label="审核管理" data-aria-label-en="Approval Management">
+          <a href="#approval-by-type"><span lang="zh-CN">按单据类型审核</span><span lang="en">Approval by Document Type</span></a>
+          <a href="#find-for-approval"><span lang="zh-CN">查询待审核单据</span><span lang="en">Find Documents for Approval</span></a>
+          <a href="#approve-document"><span lang="zh-CN">确认审核</span><span lang="en">Confirm Approval</span></a>
+          <a href="#reverse-approval"><span lang="zh-CN">弃审</span><span lang="en">Reverse Approval</span></a>
+          <a href="#linked-approval"><span lang="zh-CN">关联单审核</span><span lang="en">Approve Related Documents</span></a>
+        </nav>
+        <div class="function-grid workflow-functions">
+          <article class="function-card" id="approval-by-type">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">06.01</span><span lang="zh-CN">按单据类型审核</span><span lang="en">Approval by Document Type</span></h3>
+              <p class="function-lead"><span lang="zh-CN">先选对应的审核入口</span><span lang="en">Open the approval screen for the document type</span></p>
+              <p class="function-detail"><span lang="zh-CN">「审核管理」按单据类型提供入口，覆盖采购、委外、销售和库存业务。发货单、退货单和销售出库单分别查找，入口及可执行操作按权限开放。</span><span lang="en">Approval Management groups entries by document type across purchasing, subcontracting, sales, and inventory. Look up delivery notes, sales returns, and sales issues separately. Access and available actions depend on permissions.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/approval-menu.png" target="_blank" rel="noopener"><img src="assets/approval-menu.png" alt="按单据类型分开的审核入口" data-alt-en="Approval entries grouped by document type" width="764" height="910" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">按单据类型分开的审核入口</span><span lang="en">Approval entries grouped by document type</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="find-for-approval">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">06.02</span><span lang="zh-CN">查询待审核单据</span><span lang="en">Find Documents for Approval</span></h3>
+              <p class="function-lead"><span lang="zh-CN">按单号找回刚上传的盘点单</span><span lang="en">Find the uploaded count by its document number</span></p>
+              <p class="function-detail"><span lang="zh-CN">进入「盘点单审核」，按日期或单号查询。用「待审核」和「已审核」切换列表，点开目标单据，核对物料、批次、数量和货位。</span><span lang="en">Open Inventory Count Approval and search by date or document number. Switch between Pending Approval and Approved, then open the document to check the item, lot, quantity, and bin.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/approval-list.png" target="_blank" rel="noopener"><img src="assets/approval-list.png" alt="按单号查询待审核盘点单" data-alt-en="Finding a pending inventory count by document number" width="820" height="1240" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">按单号查询待审核盘点单</span><span lang="en">Finding a pending inventory count by document number</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="approve-document">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">06.03</span><span lang="zh-CN">确认审核</span><span lang="en">Confirm Approval</span></h3>
+              <p class="function-lead"><span lang="zh-CN">确认单号和明细后再审核</span><span lang="en">Check the document number and lines before approving</span></p>
+              <p class="function-detail"><span lang="zh-CN">有权限的人员打开待审核单据，核对明细后点击「审核」，在确认页核对单号，再确认审核。</span><span lang="en">Authorized users open a pending document, review its lines, and select Approve. Check the document number in the confirmation dialog before approving.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/approval-confirm.png" target="_blank" rel="noopener"><img src="assets/approval-confirm.png" alt="审核前再次确认目标单据" data-alt-en="Confirming the selected document before approval" width="820" height="1240" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">审核前再次确认目标单据</span><span lang="en">Confirming the selected document before approval</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="reverse-approval">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">06.04</span><span lang="zh-CN">弃审</span><span lang="en">Reverse Approval</span></h3>
+              <p class="function-lead"><span lang="zh-CN">已审单据需要调整时，先核对再弃审</span><span lang="en">Check the approved document before reversing approval</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「已审核」里打开符合条件的单据，核对单号后确认弃审。盘点单已分配货位时，页面会提示先在 U8 处理。</span><span lang="en">Open an eligible document under Approved and confirm its number before reversing approval. For a count with bins already assigned, the screen directs you to handle it in U8 first.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/approval-unaudit.png" target="_blank" rel="noopener"><img src="assets/approval-unaudit.png" alt="已审盘点单的弃审确认" data-alt-en="Confirmation before reversing approval of a count" width="820" height="1280" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">已审盘点单的弃审确认</span><span lang="en">Confirmation before reversing approval of a count</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="linked-approval">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">06.05</span><span lang="zh-CN">关联单审核</span><span lang="en">Approve Related Documents</span></h3>
+              <p class="function-lead"><span lang="zh-CN">盘点有盈亏，继续处理关联单</span><span lang="en">Continue with related documents when counts show variances</span></p>
+              <p class="function-detail"><span lang="zh-CN">盘点有盈亏时，U8 会生成对应的其他入库或出库单。盘点主单已审核、关联单仍待审核时，可从原盘点单详情选择「继续审核」。调拨单也按业务流程核对关联单据。</span><span lang="en">When a count has a gain or loss, U8 creates the corresponding inventory receipt or issue. If the count is approved and related documents are still pending, select Continue Approval from the original count. Warehouse transfers also check related documents as part of their workflow.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/approval-linked.png" target="_blank" rel="noopener"><img src="assets/approval-linked.png" alt="原盘点单详情中的「继续审核」" data-alt-en="Continue Approval on the original inventory count" width="820" height="1240" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">原盘点单详情中的「继续审核」</span><span lang="en">Continue Approval on the original inventory count</span></figcaption>
+            </figure>
+          </article>
+        </div>
+        <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击截图查看大图</span><span lang="en">Application screens · Sample data · Select an image to enlarge it</span></p>
+      </div>
+    </section>
+
+    <section class="band function-band print-band" id="printing" aria-labelledby="print-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="print-title"><span class="chapter-number" aria-hidden="true">07</span><span lang="zh-CN">条码打印系统</span><span lang="en">Barcode Label Printing</span></h2>
+        <p class="intro"><span lang="zh-CN">在电脑上选择单据或库存，使用已发布的模板打标。补打时查回原标签，沿用原条码。</span><span lang="en">Select a document or stock record and print with a published template. Look up the original label to reprint it with the same barcode.</span></p>
+        <nav class="function-links" aria-label="条码打印目录" data-aria-label-en="Barcode printing contents">
+          <a href="#document-print"><span lang="zh-CN">单据打印</span><span lang="en">Print from Documents</span></a>
+          <a href="#inventory-print"><span lang="zh-CN">存货打印</span><span lang="en">Print from Stock</span></a>
+          <a href="#pending-labels"><span lang="zh-CN">待打印标签</span><span lang="en">Pending Labels</span></a>
+          <a href="#reprint-label"><span lang="zh-CN">标签补打</span><span lang="en">Reprint a Label</span></a>
+          <a href="#print-jobs"><span lang="zh-CN">打印记录</span><span lang="en">Print History</span></a>
+          <a href="#label-templates"><span lang="zh-CN">模板设计</span><span lang="en">Template Design</span></a>
+          <a href="#publish-label-template"><span lang="zh-CN">模板发布与停用</span><span lang="en">Publish or Disable Templates</span></a>
+          <a href="#label-library"><span lang="zh-CN">模板库</span><span lang="en">Template Library</span></a>
+          <a href="#code-rules"><span lang="zh-CN">编码规则</span><span lang="en">Barcode Rules</span></a>
+          <a href="#printing-assistant"><span lang="zh-CN">打印助手</span><span lang="en">Print Assistant</span></a>
+          <a href="#local-printer-settings"><span lang="zh-CN">打印机管理</span><span lang="en">Printer Management</span></a>
+        </nav>
+        <div class="function-grid print-functions">
+          <article class="function-card" id="document-print">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.01</span><span lang="zh-CN">单据打印</span><span lang="en">Print from Documents</span></h3>
+              <p class="function-lead"><span lang="zh-CN">到货后，按入库明细打标签</span><span lang="en">Print labels from a receipt</span></p>
+              <p class="function-detail"><span lang="zh-CN">查到 U8 采购入库单后，选取需要贴标的明细，确认包装数量和模板。首次打印时生成正式条码，也可先预览标签。</span><span lang="en">Find the U8 purchase receipt and select the lines that need labels. Confirm the pack quantity and template. Preview the label if needed, then generate the barcode on the first print.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/bill-print.png" target="_blank" rel="noopener"><img src="assets/bill-print.png" alt="单据明细与打印选项" data-alt-en="Document lines and print options" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">单据明细与打印选项</span><span lang="en">Document lines and print options</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="inventory-print">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.02</span><span lang="zh-CN">存货打印</span><span lang="en">Print from Stock</span></h3>
+              <p class="function-lead"><span lang="zh-CN">从在库货物中挑选要贴标的批次</span><span lang="en">Select an existing stock lot to label</span></p>
+              <p class="function-detail"><span lang="zh-CN">按仓库、货位、料号或批号查库存。勾选要打印的库存行，再确认数量和模板，适合给现有库存补建标签。</span><span lang="en">Find stock by warehouse, bin, item, or lot. Select the stock rows and confirm quantities and a template to create labels for existing stock.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/stock-print.png" target="_blank" rel="noopener"><img src="assets/stock-print.png" alt="库存筛选与选择" data-alt-en="Stock filters and selection" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">库存筛选与选择</span><span lang="en">Stock filters and selection</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="pending-labels">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.03</span><span lang="zh-CN">待打印标签</span><span lang="en">Pending Labels</span></h3>
+              <p class="function-lead"><span lang="zh-CN">部分调拨后，给移走的货打新标签</span><span lang="en">Print a new label for the stock that moved</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「打印记录」的「待打印标签」里，按来源单号找到需要首打的明细。核对料号、批次和数量，选择正式模板和设备后发起首打。</span><span lang="en">Open Pending Labels in Print History and find the lines by their source document number. Check the item, lot, and quantity, then select a published template and device for the first print.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/print-pending.png" target="_blank" rel="noopener"><img src="assets/print-pending.png" alt="调拨产生的 8 件待打印标签" data-alt-en="A pending label for 8 transferred units" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">调拨产生的 8 件待打印标签</span><span lang="en">A pending label for 8 transferred units</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="reprint-label">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.04</span><span lang="zh-CN">标签补打</span><span lang="en">Reprint a Label</span></h3>
+              <p class="function-lead"><span lang="zh-CN">标签磨损，按原码补一张</span><span lang="en">Replace a worn label with the same barcode</span></p>
+              <p class="function-detail"><span lang="zh-CN">输入完整条码或流水号，核对原标签上的料号、批次和数量，再按原内容补打。条码和库存数量保持原值。</span><span lang="en">Enter the full barcode or serial number, then check the original item, lot, and quantity. Reprint the original content. The barcode and stock quantity stay the same.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/label-reprint.png" target="_blank" rel="noopener"><img src="assets/label-reprint.png" alt="原标签查询与补打" data-alt-en="Original label lookup and reprint" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">原标签查询与补打</span><span lang="en">Original label lookup and reprint</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="print-jobs">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.05</span><span lang="zh-CN">打印记录</span><span lang="en">Print History</span></h3>
+              <p class="function-lead"><span lang="zh-CN">按任务查进度和结果</span><span lang="en">Check progress and results by job</span></p>
+              <p class="function-detail"><span lang="zh-CN">按任务编号查看目标打印机和当前状态。如果发送结果待核对，打开原任务查看结果，并按状态继续处理。</span><span lang="en">Look up a job by its ID to see the target printer and current status. If the result needs checking, open the original job and continue from its current state.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/print-history.png" target="_blank" rel="noopener"><img src="assets/print-history.png" alt="打印任务列表" data-alt-en="Print job list" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">打印任务列表</span><span lang="en">Print job list</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="label-templates">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.06</span><span lang="zh-CN">模板设计</span><span lang="en">Template Design</span></h3>
+              <p class="function-lead"><span lang="zh-CN">把常用标签版式统一下来</span><span lang="en">Standardize frequently used labels</span></p>
+              <p class="function-detail"><span lang="zh-CN">按标签纸尺寸排布料号、批次、数量和条码。先在设计稿里核对版式，再进入模板发布流程。</span><span lang="en">Lay out the item number, lot, quantity, and barcode to fit the label stock. Check the layout in the draft before publishing.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/template-editor.png" target="_blank" rel="noopener"><img src="assets/template-editor.png" alt="物料标签模板设计" data-alt-en="Material label template editor" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">物料标签模板设计</span><span lang="en">Material label template editor</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="publish-label-template">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.07</span><span lang="zh-CN">模板发布与停用</span><span lang="en">Publish or Disable Templates</span></h3>
+              <p class="function-lead"><span lang="zh-CN">发布后才供员工选用</span><span lang="en">Make approved templates available for printing</span></p>
+              <p class="function-detail"><span lang="zh-CN">设计稿确认后发布成正式模板。在模板管理中查看当前版本，可预览、停用或重新启用模板。</span><span lang="en">Publish the approved draft to make it available for printing. In Template Management, view the current version, preview it, or disable and re-enable it as needed.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/template-publication.png" target="_blank" rel="noopener"><img src="assets/template-publication.png" alt="已发布模板、正式版本和停用入口" data-alt-en="Published template, version, and Disable action" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">已发布模板、正式版本和停用入口</span><span lang="en">Published template, version, and Disable action</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="label-library">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.08</span><span lang="zh-CN">模板库</span><span lang="en">Template Library</span></h3>
+              <p class="function-lead"><span lang="zh-CN">从现成版式开始设计</span><span lang="en">Start with an existing layout</span></p>
+              <p class="function-detail"><span lang="zh-CN">有模板维护权限的人员可从内置样式或共享模板创建自己的设计稿，再按现场标签纸和字段要求修改。</span><span lang="en">Template maintainers can copy a built-in or shared layout into their own drafts, then adapt it to the label stock and fields used on site.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/template-library.png" target="_blank" rel="noopener"><img src="assets/template-library.png" alt="模板库中的内置样式" data-alt-en="Built-in layouts in the template library" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">模板库中的内置样式</span><span lang="en">Built-in layouts in the template library</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="code-rules">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.09</span><span lang="zh-CN">编码规则</span><span lang="en">Barcode Rules</span></h3>
+              <p class="function-lead"><span lang="zh-CN">按统一规则给新标签编号</span><span lang="en">Assign new label codes consistently</span></p>
+              <p class="function-detail"><span lang="zh-CN">用料号、批号、流水号等字段配置编码规则，并选择一条规则用于新标签。更新规则后，已有标签仍沿用原条码。</span><span lang="en">Build a barcode rule from fields such as item number, lot, and serial number, and select the rule to use for new labels. Existing labels keep their original barcodes.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/print-rules.png" target="_blank" rel="noopener"><img src="assets/print-rules.png" alt="当前打印编码规则" data-alt-en="Current barcode rule" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">当前打印编码规则</span><span lang="en">Current barcode rule</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="printing-assistant">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.10</span><span lang="zh-CN">打印助手</span><span lang="en">Print Assistant</span></h3>
+              <p class="function-lead"><span lang="zh-CN">把网页上的任务交给打印工位</span><span lang="en">Connect the print workspace to the workstation</span></p>
+              <p class="function-detail"><span lang="zh-CN">在打印工位安装本机打印助手，再从「打印记录 → 打印助手」连接。管理员可按权限登记本机助手，并查看设备是否启用。</span><span lang="en">Install the Print Assistant on the workstation and connect it from the Print Assistant tab in Print History. Authorized administrators can register the local assistant and check whether devices are enabled.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/print-assistant.png" target="_blank" rel="noopener"><img src="assets/print-assistant.png" alt="打印助手的连接、登记与设备状态" data-alt-en="Print Assistant connection, registration, and device status" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">打印助手的连接、登记与设备状态</span><span lang="en">Print Assistant connection, registration, and device status</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="local-printer-settings">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">07.11</span><span lang="zh-CN">打印机管理</span><span lang="en">Printer Management</span></h3>
+              <p class="function-lead"><span lang="zh-CN">选择工位默认打印机</span><span lang="en">Choose the workstation's default printer</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「本机打印机」里刷新设备列表，选择默认打印机，并决定哪些已安装的打印机出现在打印选择列表中。</span><span lang="en">Refresh the device list under Local Printers, choose the default, and decide which installed printers appear in the print selector.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/local-printers.png" target="_blank" rel="noopener"><img src="assets/local-printers.png" alt="本机打印机列表及默认、显示设置" data-alt-en="Local printer list with default and visibility controls" width="2040" height="1230" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">本机打印机列表及默认、显示设置</span><span lang="en">Local printer list with default and visibility controls</span></figcaption>
+            </figure>
+          </article>
+        </div>
+        <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击截图查看大图</span><span lang="en">Application screens · Sample data · Select an image to enlarge it</span></p>
+      </div>
+    </section>
+
+    <section class="band function-band workflow-band" id="purchasing" aria-labelledby="purchasing-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="purchasing-title"><span class="chapter-number" aria-hidden="true">08</span><span lang="zh-CN">采购与委外</span><span lang="en">Purchasing and Subcontracting</span></h2>
+        <p class="intro"><span lang="zh-CN">普通采购到货按采购订单核对，委外加工回厂按委外订单核对。确认收货后，再按企业的 U8 流程办理入库。</span><span lang="en">Check supplier deliveries against purchase orders and returns from subcontractors against subcontract orders. Once the goods are ready to receive, follow your U8 workflow to put them into stock.</span></p>
+        <nav class="function-links" aria-label="采购与委外" data-aria-label-en="Purchasing and Subcontracting">
+          <a href="#purchase-arrival"><span lang="zh-CN">采购到货</span><span lang="en">Purchase Arrival</span></a>
+          <a href="#outsourcing-arrival"><span lang="zh-CN">委外到货</span><span lang="en">Subcontract Arrival</span></a>
+          <a href="#purchase-inbound"><span lang="zh-CN">采购入库</span><span lang="en">Purchase Receipt</span></a>
+        </nav>
+        <div class="function-grid workflow-functions">
+          <article class="function-card" id="purchase-arrival">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">08.01</span><span lang="zh-CN">采购到货</span><span lang="en">Purchase Arrival</span></h3>
+              <p class="function-lead"><span lang="zh-CN">供应商送货时，先对采购订单</span><span lang="en">Match a supplier delivery to its purchase order</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「采购到货」选择 U8 采购订单，核对供应商、物料和本次到货数量。确认后的明细可保存为到货草稿，供后续处理。</span><span lang="en">In Purchase Arrival, select the U8 purchase order and check the supplier, items, and quantities delivered. Save the confirmed lines as an arrival draft for the next step.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/purchase-arrival-source.png" target="_blank" rel="noopener"><img src="assets/purchase-arrival-source.png" alt="采购订单查询与选单" data-alt-en="Find and select a purchase order" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">采购订单查询与选单</span><span lang="en">Find and select a purchase order</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="outsourcing-arrival">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">08.02</span><span lang="zh-CN">委外到货</span><span lang="en">Subcontract Arrival</span></h3>
+              <p class="function-lead"><span lang="zh-CN">加工件回厂，按委外订单收货</span><span lang="en">Receive processed goods against the subcontract order</span></p>
+              <p class="function-detail"><span lang="zh-CN">外协厂送回加工件时，在「委外到货」选对应的委外订单。核对加工件和本次回厂数量，按委外业务单独登记。</span><span lang="en">When processed parts return from a subcontractor, select the relevant subcontract order in Subcontract Arrival. Check the parts and quantities returned, then record the arrival against that order.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/outsourcing-arrival-source.png" target="_blank" rel="noopener"><img src="assets/outsourcing-arrival-source.png" alt="委外订单查询与选单" data-alt-en="Find and select a subcontract order" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">委外订单查询与选单</span><span lang="en">Find and select a subcontract order</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="purchase-inbound">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">08.03</span><span lang="zh-CN">采购入库</span><span lang="en">Purchase Receipt</span></h3>
+              <p class="function-lead"><span lang="zh-CN">货物确认收下后，登记入库仓库</span><span lang="en">Record the receiving warehouse</span></p>
+              <p class="function-detail"><span lang="zh-CN">从采购到货单或采购订单选取原单，确认供应商、入库仓库和类别。按标签核对本次入库数量；需要货位管理时确认货位。</span><span lang="en">Select a purchase arrival document or purchase order, then confirm the supplier, receiving warehouse, and receipt category. Use the labels to check the quantity received and confirm the bin where required.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/purchase-inbound-entry.png" target="_blank" rel="noopener"><img src="assets/purchase-inbound-entry.png" alt="采购入库的来源与仓库" data-alt-en="Source document and warehouse on a purchase receipt" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">采购入库的来源与仓库</span><span lang="en">Source document and warehouse on a purchase receipt</span></figcaption>
+            </figure>
+          </article>
+        </div>
+        <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击截图查看大图</span><span lang="en">Application screens · Sample data · Select an image to enlarge it</span></p>
+      </div>
+    </section>
+
+    <section class="band function-band workflow-band" id="sales" aria-labelledby="sales-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="sales-title"><span class="chapter-number" aria-hidden="true">09</span><span lang="zh-CN">销售作业</span><span lang="en">Sales Operations</span></h2>
+        <p class="intro"><span lang="zh-CN">按销售订单登记发货，按发货单办理实际出库。客户退货走独立的退货单。</span><span lang="en">Record shipments against sales orders, then use the delivery note to process the warehouse issue. Record customer returns on a separate sales return document.</span></p>
+        <nav class="function-links" aria-label="销售作业" data-aria-label-en="Sales Operations">
+          <a href="#sales-delivery"><span lang="zh-CN">发货单</span><span lang="en">Delivery Note</span></a>
+          <a href="#sales-return"><span lang="zh-CN">退货单</span><span lang="en">Sales Return</span></a>
+          <a href="#sales-issue"><span lang="zh-CN">销售出库单</span><span lang="en">Sales Issue</span></a>
+        </nav>
+        <div class="function-grid workflow-functions">
+          <article class="function-card" id="sales-delivery">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">09.01</span><span lang="zh-CN">发货单</span><span lang="en">Delivery Note</span></h3>
+              <p class="function-lead"><span lang="zh-CN">按客户订单确认本次发多少</span><span lang="en">Confirm what to ship against the sales order</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「发货单」选择销售订单，客户和销售资料随原单带入。按可发数量拣货，扫码确认本次发货数量。</span><span lang="en">Select a sales order in Delivery Note to bring in the customer and sales details. Pick against the remaining quantity and scan the labels to confirm how much will ship.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/delivery-note-entry.png" target="_blank" rel="noopener"><img src="assets/delivery-note-entry.png" alt="参照销售订单的发货单" data-alt-en="Delivery note linked to a sales order" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">参照销售订单的发货单</span><span lang="en">Delivery note linked to a sales order</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="sales-return">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">09.02</span><span lang="zh-CN">退货单</span><span lang="en">Sales Return</span></h3>
+              <p class="function-lead"><span lang="zh-CN">客户退回货物，查原单登记</span><span lang="en">Find the original document for a customer return</span></p>
+              <p class="function-detail"><span lang="zh-CN">按业务选择原发货单或销售订单，扫退回货物的标签并填写本次退货数量。退货单记录销售退货，库存按企业的 U8 退库流程处理。</span><span lang="en">Select the original delivery note or sales order, then scan the returned goods and enter the quantity. The sales return records what the customer sent back. Handle stock through your U8 return-to-inventory workflow.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/sales-return-entry.png" target="_blank" rel="noopener"><img src="assets/sales-return-entry.png" alt="参照原发货单登记退货" data-alt-en="Sales return linked to the original delivery note" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">参照原发货单登记退货</span><span lang="en">Sales return linked to the original delivery note</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="sales-issue">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">09.03</span><span lang="zh-CN">销售出库单</span><span lang="en">Sales Issue</span></h3>
+              <p class="function-lead"><span lang="zh-CN">货物离仓，核对发货单剩余量</span><span lang="en">Check what remains before goods leave the warehouse</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「销售出库单」选择发货单，按尚未出库的数量扫码确认本次出库。U8 保存成功后，可回查发货单的已出数量和剩余量。</span><span lang="en">Select the delivery note in Sales Issue and scan the goods leaving the warehouse against the outstanding quantity. Once U8 saves the issue, check how much has been issued and how much remains on the delivery note.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/sales-outbound-scan.png" target="_blank" rel="noopener"><img src="assets/sales-outbound-scan.png" alt="销售出库的扫码记录" data-alt-en="Scanned goods on a sales issue" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">销售出库的扫码记录</span><span lang="en">Scanned goods on a sales issue</span></figcaption>
+            </figure>
+          </article>
+        </div>
+        <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击截图查看大图</span><span lang="en">Application screens · Sample data · Select an image to enlarge it</span></p>
+      </div>
+    </section>
+
+    <section class="band function-band workflow-band" id="system-settings" aria-labelledby="system-settings-title">
+      <div class="wrap">
+        <h2 class="chapter-heading" id="system-settings-title"><span class="chapter-number" aria-hidden="true">10</span><span lang="zh-CN">系统设置</span><span lang="en">System Settings</span></h2>
+        <p class="intro"><span lang="zh-CN">为员工配置账号和作业权限，同步 U8 基础资料，再把手持终端调到适合现场的设置。</span><span lang="en">Set up staff accounts and permissions, sync U8 master data, and configure handheld devices for the warehouse floor.</span></p>
+        <nav class="function-links" aria-label="系统设置" data-aria-label-en="System Settings">
+          <a href="#user-accounts"><span lang="zh-CN">用户管理</span><span lang="en">User Management</span></a>
+          <a href="#user-permissions"><span lang="zh-CN">功能权限</span><span lang="en">User Permissions</span></a>
+          <a href="#erp-operator"><span lang="zh-CN">U8 操作员对应</span><span lang="en">U8 Operator Mapping</span></a>
+          <a href="#feature-switches"><span lang="zh-CN">功能开关</span><span lang="en">Feature Switches</span></a>
+          <a href="#reference-data-sync"><span lang="zh-CN">数据同步</span><span lang="en">Master Data Sync</span></a>
+          <a href="#draft-retention"><span lang="zh-CN">草稿保留</span><span lang="en">Draft Retention</span></a>
+          <a href="#pda-status"><span lang="zh-CN">PDA 状态</span><span lang="en">Handheld Device Status</span></a>
+          <a href="#favorite-functions"><span lang="zh-CN">常用功能</span><span lang="en">Favorites</span></a>
+          <a href="#workspace-layout"><span lang="zh-CN">首页模式</span><span lang="en">Home Screen Layout</span></a>
+          <a href="#pda-sign-in"><span lang="zh-CN">PDA 登录</span><span lang="en">Handheld Sign-In</span></a>
+          <a href="#device-address"><span lang="zh-CN">地址设置</span><span lang="en">Connection Settings</span></a>
+          <a href="#label-recognition-rules"><span lang="zh-CN">标签编码规则</span><span lang="en">Label Recognition Rules</span></a>
+          <a href="#document-field-settings"><span lang="zh-CN">单据设置</span><span lang="en">Document Field Settings</span></a>
+          <a href="#document-workflow-switches"><span lang="zh-CN">制单开关设置</span><span lang="en">Document Workflow Switches</span></a>
+          <a href="#scan-test"><span lang="zh-CN">扫码测试</span><span lang="en">Scanner Test</span></a>
+          <a href="#scan-feedback"><span lang="zh-CN">扫码反馈</span><span lang="en">Scan Feedback</span></a>
+        </nav>
+        <div class="function-grid workflow-functions settings-functions">
+          <article class="function-card" id="user-accounts">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.01</span><span lang="zh-CN">用户管理</span><span lang="en">User Management</span></h3>
+              <p class="function-lead"><span lang="zh-CN">查看仓管和审核人员的账号</span><span lang="en">Manage warehouse and approver accounts</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「用户管理」按名称或账号查询员工，查看启用状态，按需新增、编辑或停用账号。</span><span lang="en">Search User Management by name or login to see whether an account is active. Add, edit, or deactivate accounts as needed.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-user-list.png" target="_blank" rel="noopener"><img src="assets/settings-user-list.png" alt="用户列表与账号状态" data-alt-en="User list and account status" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">用户列表与账号状态</span><span lang="en">User list and account status</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="user-permissions">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.02</span><span lang="zh-CN">功能权限</span><span lang="en">User Permissions</span></h3>
+              <p class="function-lead"><span lang="zh-CN">给制单和审核人员分配各自权限</span><span lang="en">Give operators and approvers their own permissions</span></p>
+              <p class="function-detail"><span lang="zh-CN">打开某个用户的「功能权限」，按业务分组设置允许、禁止或沿用默认。可分别给仓管员开通盘点制单，给审核员开通盘点审核。</span><span lang="en">Open a user's Function Permissions and allow, deny, or inherit access by business function. For example, give warehouse staff access to prepare counts and approvers access to approve them.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-permissions.png" target="_blank" rel="noopener"><img src="assets/settings-permissions.png" alt="按用户设置库存业务权限" data-alt-en="Inventory permissions for an individual user" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">按用户设置库存业务权限</span><span lang="en">Inventory permissions for an individual user</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="erp-operator">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.03</span><span lang="zh-CN">U8 操作员对应</span><span lang="en">U8 Operator Mapping</span></h3>
+              <p class="function-lead"><span lang="zh-CN">让 U8 单据记在对应操作员名下</span><span lang="en">Record U8 transactions under the mapped operator</span></p>
+              <p class="function-detail"><span lang="zh-CN">在用户资料里填写对应的 ERP 账号和名称，让系统按这个对应关系识别制单人员。</span><span lang="en">Enter the corresponding ERP login and name in the user's profile so the system can identify the operator for U8 transactions.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-erp-operator.png" target="_blank" rel="noopener"><img src="assets/settings-erp-operator.png" alt="用户资料中的 ERP 账号和名称" data-alt-en="ERP login and name in the user profile" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">用户资料中的 ERP 账号和名称</span><span lang="en">ERP login and name in the user profile</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="feature-switches">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.04</span><span lang="zh-CN">功能开关</span><span lang="en">Feature Switches</span></h3>
+              <p class="function-lead"><span lang="zh-CN">按业务分组整理菜单</span><span lang="en">Choose which business menus are shown</span></p>
+              <p class="function-detail"><span lang="zh-CN">按采购、销售、库存等分组查看和调整功能入口。员工能执行哪些操作，由账号权限决定。</span><span lang="en">Review and adjust menu entries by group, such as purchasing, sales, and inventory. Each account's permissions control which actions the user can perform.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-feature-switch.png" target="_blank" rel="noopener"><img src="assets/settings-feature-switch.png" alt="采购管理分组的功能开关" data-alt-en="Feature switches for purchasing" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">采购管理分组的功能开关</span><span lang="en">Feature switches for purchasing</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="reference-data-sync">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.05</span><span lang="zh-CN">数据同步</span><span lang="en">Master Data Sync</span></h3>
+              <p class="function-lead"><span lang="zh-CN">让现场选到最新的基础资料</span><span lang="en">Keep warehouse reference data up to date</span></p>
+              <p class="function-detail"><span lang="zh-CN">勾选要更新的项目，如物料、仓位、部门、出入库类别或单据基础档案。同步后查看记录数和最近同步时间。</span><span lang="en">Choose which U8 reference data to update, such as items, bins, departments, transaction categories, and document master data. Check the record counts and latest sync time afterward.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-data-sync.png" target="_blank" rel="noopener"><img src="assets/settings-data-sync.png" alt="基础资料同步项目和状态" data-alt-en="Master data sync options and status" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">基础资料同步项目和状态</span><span lang="en">Master data sync options and status</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="draft-retention">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.06</span><span lang="zh-CN">草稿保留</span><span lang="en">Draft Retention</span></h3>
+              <p class="function-lead"><span lang="zh-CN">分别设置进行中和已结束记录的保留时间</span><span lang="en">Set retention for open and completed records</span></p>
+              <p class="function-detail"><span lang="zh-CN">在「数据同步」下设置活跃草稿和已结束记录各保留多久。可以按天设置，也可以选择永久保留。</span><span lang="en">Under Data Sync, choose how long to keep active drafts and completed records. Set a number of days or keep either group indefinitely.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-draft-retention.png" target="_blank" rel="noopener"><img src="assets/settings-draft-retention.png" alt="活跃草稿和已结束记录的保留设置" data-alt-en="Retention settings for active and completed records" width="764" height="404" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">活跃草稿和已结束记录的保留设置</span><span lang="en">Retention settings for active and completed records</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="pda-status">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.07</span><span lang="zh-CN">PDA 状态</span><span lang="en">Handheld Device Status</span></h3>
+              <p class="function-lead"><span lang="zh-CN">查看手持机最近联机和草稿同步情况</span><span lang="en">Check handheld activity and draft sync status</span></p>
+              <p class="function-detail"><span lang="zh-CN">管理员可以查看手持机最近联机时间、草稿数和待同步数。同步失败的设备会显示失败数量，方便安排核对。</span><span lang="en">Administrators can see when a handheld last connected, how many drafts it holds, and how many are waiting to sync. Failed syncs are counted so they can be checked.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-pda-status.png" target="_blank" rel="noopener"><img src="assets/settings-pda-status.png" alt="手持机最近联机与草稿状态" data-alt-en="Handheld activity and draft sync status" width="764" height="236" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">手持机最近联机与草稿状态</span><span lang="en">Handheld activity and draft sync status</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="favorite-functions">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.08</span><span lang="zh-CN">常用功能</span><span lang="en">Favorites</span></h3>
+              <p class="function-lead"><span lang="zh-CN">把每天用的入口放在首页</span><span lang="en">Put everyday tasks on the home screen</span></p>
+              <p class="function-detail"><span lang="zh-CN">把盘点、标签查询或销售出库等常用功能加入快捷入口。每个账号最多可选六项。</span><span lang="en">Add everyday tasks, such as inventory counts, label lookup, or sales issues, to the home screen. Each account can select up to six favorites.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-favorites.png" target="_blank" rel="noopener"><img src="assets/settings-favorites.png" alt="选择首页常用功能" data-alt-en="Select home-screen favorites" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">选择首页常用功能</span><span lang="en">Select home-screen favorites</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="workspace-layout">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.09</span><span lang="zh-CN">首页模式</span><span lang="en">Home Screen Layout</span></h3>
+              <p class="function-lead"><span lang="zh-CN">在快捷入口和业务分组之间切换</span><span lang="en">Switch between shortcuts and business groups</span></p>
+              <p class="function-detail"><span lang="zh-CN">在首页账号菜单中选择「简约」或「详细」。简约模式显示常用入口，详细模式按采购、销售、库存等业务分组显示可用功能。</span><span lang="en">Choose Compact or Detailed from the home screen's account menu. Compact shows favorites. Detailed groups the available tasks by business area, such as purchasing, sales, and inventory.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/workspace-mode.png" target="_blank" rel="noopener"><img src="assets/workspace-mode.png" alt="账号菜单里的首页模式" data-alt-en="Home screen layout options in the account menu" width="820" height="1280" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">账号菜单里的首页模式</span><span lang="en">Home screen layout options in the account menu</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="pda-sign-in">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.10</span><span lang="zh-CN">PDA 登录</span><span lang="en">Handheld Sign-In</span></h3>
+              <p class="function-lead"><span lang="zh-CN">用个人账号进入自己的作业菜单</span><span lang="en">Sign in to see the tasks available to your account</span></p>
+              <p class="function-detail"><span lang="zh-CN">用分配的账号登录仓库扫码系统，首页按权限显示可用功能。交接班时，从首页的账号菜单退出登录。</span><span lang="en">Sign in to the warehouse scanning system with your assigned account. The home screen shows the tasks you can access. Sign out from the account menu at shift handover.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/pda-login.png" target="_blank" rel="noopener"><img src="assets/pda-login.png" alt="仓库扫码系统的登录页面" data-alt-en="Sign-in screen for warehouse scanning" width="820" height="1280" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">仓库扫码系统的登录页面</span><span lang="en">Sign-in screen for warehouse scanning</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="device-address">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.11</span><span lang="zh-CN">地址设置</span><span lang="en">Connection Settings</span></h3>
+              <p class="function-lead"><span lang="zh-CN">让手持机连接到对应作业地址</span><span lang="en">Connect the handheld to the right workspace</span></p>
+              <p class="function-detail"><span lang="zh-CN">在手持机上填写企业提供的系统地址，选好使用环境后点击「保存并切换」。</span><span lang="en">Enter the system URL provided by your company, select the environment, and choose Save and Switch.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-address.png" target="_blank" rel="noopener"><img src="assets/settings-address.png" alt="手持终端的地址设置" data-alt-en="Connection settings on the handheld" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">手持终端的地址设置</span><span lang="en">Connection settings on the handheld</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="label-recognition-rules">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.12</span><span lang="zh-CN">标签编码规则</span><span lang="en">Label Recognition Rules</span></h3>
+              <p class="function-lead"><span lang="zh-CN">配置扫码端如何识别标签</span><span lang="en">Define how the scanning system reads labels</span></p>
+              <p class="function-detail"><span lang="zh-CN">按标签类型配置编码内容和解析规则。规则可以预览、保存草稿和启用版本。电脑端新标签取号见「条码打印系统」的编码规则小节。</span><span lang="en">Configure the barcode fields and how they are read for each label type. Preview a rule, save it as a draft, and activate a version. See Barcode Rules in the printing chapter for assigning new codes.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-label-rules.png" target="_blank" rel="noopener"><img src="assets/settings-label-rules.png" alt="标签规则中的编码字段" data-alt-en="Barcode fields in a label rule" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">标签规则中的编码字段</span><span lang="en">Barcode fields in a label rule</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="document-field-settings">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.13</span><span lang="zh-CN">单据设置</span><span lang="en">Document Field Settings</span></h3>
+              <p class="function-lead"><span lang="zh-CN">按单据类型安排录入字段</span><span lang="en">Choose which fields appear on each document type</span></p>
+              <p class="function-detail"><span lang="zh-CN">管理员可在制单页进入「单据设置」，查看表头和表体字段，按业务需要调整显示与必填选项。</span><span lang="en">Administrators can open Document Settings from a form to review header and line fields and adjust which fields are shown or required.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/document-fields.png" target="_blank" rel="noopener"><img src="assets/document-fields.png" alt="盘点单的表头与表体字段设置" data-alt-en="Header and line field settings for an inventory count" width="820" height="1280" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">盘点单的表头与表体字段设置</span><span lang="en">Header and line field settings for an inventory count</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="document-workflow-switches">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.14</span><span lang="zh-CN">制单开关设置</span><span lang="en">Document Workflow Switches</span></h3>
+              <p class="function-lead"><span lang="zh-CN">按现场流程设置扫码后怎么处理</span><span lang="en">Set what happens after a scan</span></p>
+              <p class="function-detail"><span lang="zh-CN">在单据的「开关设置」中，按业务需要设置扫码后自动添加、完成自动上传和上传自动审核。自动提交与审核仍按启用流程和权限执行。</span><span lang="en">In a document's Workflow Switches, configure whether scans add lines automatically, completion triggers an upload, and uploaded documents are approved automatically. Upload and approval follow enabled workflows and permissions.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/document-automation.png" target="_blank" rel="noopener"><img src="assets/document-automation.png" alt="盘点单的自动添加、上传和审核开关" data-alt-en="Inventory count switches for automatic line entry, upload, and approval" width="820" height="1280" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">盘点单的自动添加、上传和审核开关</span><span lang="en">Inventory count switches for automatic line entry, upload, and approval</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="scan-test">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.15</span><span lang="zh-CN">扫码测试</span><span lang="en">Scanner Test</span></h3>
+              <p class="function-lead"><span lang="zh-CN">上岗前先确认能读到条码</span><span lang="en">Check barcode capture before starting work</span></p>
+              <p class="function-detail"><span lang="zh-CN">打开「扫码测试」，用手持机扫一张标签。页面会显示读到的条码，便于核对设备是否读对。</span><span lang="en">Open Scanner Test and scan a label with the handheld. The screen shows the captured barcode so you can check that it was read correctly.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-scan-test.png" target="_blank" rel="noopener"><img src="assets/settings-scan-test.png" alt="扫码测试页面显示读到的示例码" data-alt-en="Sample barcode shown on the Scanner Test screen" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">扫码测试页面显示读到的示例码</span><span lang="en">Sample barcode shown on the Scanner Test screen</span></figcaption>
+            </figure>
+          </article>
+          <article class="function-card" id="scan-feedback">
+            <div class="function-copy">
+              <h3 class="function-heading"><span class="function-number" aria-hidden="true">10.16</span><span lang="zh-CN">扫码反馈</span><span lang="en">Scan Feedback</span></h3>
+              <p class="function-lead"><span lang="zh-CN">选现场听得清的提示方式</span><span lang="en">Choose feedback that works on the floor</span></p>
+              <p class="function-detail"><span lang="zh-CN">在提示音、语音播报和关闭之间选择。可分别试听扫码成功和错误的反馈。</span><span lang="en">Choose a tone, voice feedback, or silent mode. Preview the sounds for successful and failed scans.</span></p>
+            </div>
+            <figure class="capture function-capture">
+              <a href="assets/settings-scan-feedback.png" target="_blank" rel="noopener"><img src="assets/settings-scan-feedback.png" alt="选择和试听扫码反馈" data-alt-en="Choose and preview scan feedback" width="820" height="1260" loading="lazy"></a>
+              <figcaption><span lang="zh-CN">选择和试听扫码反馈</span><span lang="en">Choose and preview scan feedback</span></figcaption>
+            </figure>
+          </article>
+        </div>
+        <p class="capture-note"><span lang="zh-CN">系统页面 · 示例数据 · 点击截图查看大图</span><span lang="en">Application screens · Sample data · Select an image to enlarge it</span></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer"><div class="wrap footer-inner">
+    <p><span lang="zh-CN">用友 U8 仓库扫码与条码打印方案</span><span lang="en">Warehouse Scanning and Label Printing for Yonyou U8</span></p>
+    <a href="#cover"><span lang="zh-CN">回到顶部</span><span lang="en">Back to top</span> ↑</a>
+  </div></footer>
+
+  <script>
+    const languageButtons = document.querySelectorAll("[data-set-language]");
+    const localizedLabels = Array.from(document.querySelectorAll("[data-alt-en], [data-aria-label-en]"), (element) => {
+      const attribute = element.hasAttribute("data-alt-en") ? "alt" : "aria-label";
+      return { element, attribute, zh: element.getAttribute(attribute), en: element.getAttribute(`data-${attribute}-en`) };
+    });
+    const titles = {
+      zh: "用友 U8 仓库扫码与条码打印方案",
+      en: "Warehouse Scanning and Label Printing for Yonyou U8",
+    };
+    const languageKey = "label-system-brochure-language";
+
+    function setLanguage(language) {
+      document.documentElement.dataset.language = language;
+      document.documentElement.lang = language === "en" ? "en" : "zh-CN";
+      document.title = titles[language];
+      for (const label of localizedLabels) label.element.setAttribute(label.attribute, label[language]);
+      for (const button of languageButtons) {
+        button.setAttribute("aria-pressed", String(button.dataset.setLanguage === language));
+      }
+      try { localStorage.setItem(languageKey, language); } catch { /* File storage may be unavailable. */ }
+    }
+
+    for (const button of languageButtons) {
+      button.addEventListener("click", () => setLanguage(button.dataset.setLanguage));
+    }
+    try {
+      if (localStorage.getItem(languageKey) === "en") setLanguage("en");
+    } catch { /* Use the default language when file storage is unavailable. */ }
+  </script>
+</body>
+</html>
